@@ -47,7 +47,7 @@ env:
 
 jobs:
   setup:
-    runs-on: ubuntu-latest
+    runs-on: hla1-talos
 
     outputs:
       os-matrix: ${{ steps.os-matrix.outputs.os-matrix }}
@@ -74,8 +74,8 @@ jobs:
       - name: Calculate `os-matrix` output
         id: os-matrix
         env:
-          OS_ALL: '["ubuntu-latest", "macos-latest", "windows-latest"]'
-          OS_LINUX_ONLY: '["ubuntu-latest"]'
+          OS_ALL: '["hla1-talos", "macos-latest", "windows-latest"]'
+          OS_LINUX_ONLY: '["hla1-talos"]'
         run: |
           echo 'os-matrix=${{
             env.OS_MATRIX_IS_FULL && env.OS_ALL || env.OS_LINUX_ONLY
@@ -112,7 +112,7 @@ jobs:
           token: ${{ github.token }}
           node-version: ${{ env.NODE_VERSION }}
 
-      - name: Prefetch test modules for `ubuntu-latest`
+      - name: Prefetch test modules for `hla1-talos`
         id: setup-node
         uses: ./.github/actions/setup-node
         with:
@@ -130,7 +130,7 @@ jobs:
           echo "$(pnpm -s schedule-test-shards)" >> "$GITHUB_OUTPUT"
 
   setup-build:
-    runs-on: ubuntu-latest
+    runs-on: hla1-talos
 
     outputs:
       node-version: ${{ steps.setup-outputs.outputs.node-version }}
@@ -148,7 +148,7 @@ jobs:
         run: |
           echo "node-version=${{ env.NODE_VERSION }}" >> "$GITHUB_OUTPUT"
 
-      - name: Prefetch build modules for `ubuntu-latest`
+      - name: Prefetch build modules for `hla1-talos`
         uses: ./.github/actions/setup-node
         with:
           node-version: ${{ env.NODE_VERSION }}
@@ -198,7 +198,7 @@ jobs:
   lint-eslint:
     needs:
       - setup-build
-    runs-on: ubuntu-latest
+    runs-on: hla1-talos
     timeout-minutes: 15
 
     steps:
@@ -234,7 +234,7 @@ jobs:
   lint-prettier:
     needs:
       - setup-build
-    runs-on: ubuntu-latest
+    runs-on: hla1-talos
     timeout-minutes: 7
 
     steps:
@@ -276,7 +276,7 @@ jobs:
   lint-docs:
     needs:
       - setup-build
-    runs-on: ubuntu-latest
+    runs-on: hla1-talos
     timeout-minutes: 7
 
     steps:
@@ -309,7 +309,7 @@ jobs:
   lint-other:
     needs:
       - setup-build
-    runs-on: ubuntu-latest
+    runs-on: hla1-talos
     timeout-minutes: 7
 
     steps:
@@ -413,7 +413,7 @@ jobs:
 
   codecov:
     needs: [test]
-    runs-on: ubuntu-latest
+    runs-on: hla1-talos
     timeout-minutes: 3
     if: success() && github.event_name != 'merge_group' && github.event.pull_request.draft != true
     steps:
@@ -442,7 +442,7 @@ jobs:
     needs:
       - test
       - setup-build
-    runs-on: ubuntu-latest
+    runs-on: hla1-talos
     timeout-minutes: 3
     if: success() && github.event.pull_request.draft != true
     steps:
@@ -487,7 +487,7 @@ jobs:
       - test
       - codecov
       - coverage-threshold
-    runs-on: ubuntu-latest
+    runs-on: hla1-talos
     timeout-minutes: 1
     if: always()
     steps:
@@ -533,7 +533,7 @@ jobs:
   build:
     needs:
       - setup-build
-    runs-on: ubuntu-latest
+    runs-on: hla1-talos
     timeout-minutes: 15
     if: github.event.pull_request.draft != true
     steps:
@@ -560,7 +560,7 @@ jobs:
   build-docker:
     needs:
       - build
-    runs-on: ubuntu-latest
+    runs-on: hla1-talos-dind
     timeout-minutes: 15
     if: github.event_name != 'pull_request' || contains(github.event.pull_request.labels.*.name, 'ci:fulltest')
     steps:
@@ -599,7 +599,7 @@ jobs:
     needs:
       - lint-docs
       - setup-build
-    runs-on: ubuntu-latest
+    runs-on: hla1-talos
     timeout-minutes: 5
     if: github.event.pull_request.draft != true
     steps:
@@ -644,7 +644,7 @@ jobs:
 
   test-e2e:
     needs: [build]
-    runs-on: 'ubuntu-latest'
+    runs-on: hla1-talos
     timeout-minutes: 7
 
     if: github.event.pull_request.draft != true
@@ -658,7 +658,7 @@ jobs:
       - name: Setup Node.js
         uses: ./.github/actions/setup-node
         with:
-          node-version: ${{ needs.setup-build.outputs.node-version }}
+          node-version: ${{ env.NODE_VERSION }}
           os: ${{ runner.os }}
 
       - name: Download dist
@@ -691,7 +691,7 @@ jobs:
       - coverage-threshold
 
     if: github.event_name != 'pull_request'
-    runs-on: ubuntu-latest
+    runs-on: hla1-talos-dind
     timeout-minutes: 60
     permissions:
       contents: write
