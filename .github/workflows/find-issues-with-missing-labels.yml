@@ -9,7 +9,7 @@ permissions: {}
 
 jobs:
   check-unlabeled-issues:
-    runs-on: ubuntu-latest
+    runs-on: hla1-talos
 
     permissions:
       issues: write

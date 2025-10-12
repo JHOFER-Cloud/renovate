@@ -10,7 +10,7 @@ permissions:
 jobs:
   slack:
     if: contains(github.event.label.name, 'mend-app')
-    runs-on: ubuntu-latest
+    runs-on: hla1-talos
     steps:
       - name: Post to Slack
         id: slack

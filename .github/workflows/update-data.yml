@@ -11,7 +11,7 @@ permissions: {}
 
 jobs:
   update-data:
-    runs-on: ubuntu-latest
+    runs-on: hla1-talos
     permissions:
       contents: write
       pull-requests: write

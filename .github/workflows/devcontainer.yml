@@ -14,7 +14,7 @@ permissions:
 
 jobs:
   devcontainer-test:
-    runs-on: ubuntu-latest
+    runs-on: hla1-talos-dind
     if: github.event.pull_request.draft != true
     steps:
       - name: Checkout

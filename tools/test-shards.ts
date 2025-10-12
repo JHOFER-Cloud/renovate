@@ -80,11 +80,12 @@ if (process.env.FILTER_SHARDS === 'true' && process.env.CHANGED_FILES) {
  *
  * Because of this, we partition shards into groups, given that:
  * - There are 16 shards in total
+ * - We can run 16 hla1-talos (Linux) runners
  * - We can't run more than 10 Windows runners
  * - We can't run more than 5 MacOS runners
  */
 const shardGrouping: Record<string, string[][]> = {
-  'ubuntu-latest': scheduleItems(shardKeys, 16),
+  'hla1-talos': scheduleItems(shardKeys, 16),
 };
 
 if (process.env.ALL_PLATFORMS === 'true') {
@@ -94,14 +95,14 @@ if (process.env.ALL_PLATFORMS === 'true') {
 
 const shardGroups: ShardGroup[] = [];
 for (const [os, groups] of Object.entries(shardGrouping)) {
-  const coverage = os === 'ubuntu-latest';
+  const coverage = os === 'hla1-talos';
 
   const total = groups.length;
   for (let idx = 0; idx < groups.length; idx += 1) {
     const number = idx + 1;
-    const platform = os.replace(/-latest$/, '');
+    const platform = os.replace(/-latest$/, '').replace(/^hla1-/, '');
     const name =
-      platform === 'ubuntu'
+      platform === 'talos'
         ? `test (${number}/${total})`
         : `test-${platform} (${number}/${total})`;
 
@@ -113,7 +114,7 @@ for (const [os, groups] of Object.entries(shardGrouping)) {
 
     const runnerTimeoutMinutes =
       {
-        ubuntu: 10,
+        talos: 10,
         windows: 20,
         macos: 20,
       }[platform] ?? 20;

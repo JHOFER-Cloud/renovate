@@ -22,7 +22,7 @@ export interface ShardConfig {
   matchPaths: string[];
 }
 
-export type RunsOn = 'ubuntu-latest' | 'windows-latest' | 'macos-latest';
+export type RunsOn = 'hla1-talos' | 'windows-latest' | 'macos-latest';
 
 export interface ShardGroup {
   /**

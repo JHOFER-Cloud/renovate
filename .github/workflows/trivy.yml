@@ -9,7 +9,7 @@ permissions: {}
 
 jobs:
   trivy:
-    runs-on: ubuntu-latest
+    runs-on: hla1-talos
     permissions:
       contents: read
       security-events: write
