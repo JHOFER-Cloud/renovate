@@ -27,7 +27,7 @@ void (async () => {
 
   if (meta?.['push-slim']?.['containerimage.digest']) {
     sign(
-      `ghcr.io/renovatebot/renovate@${meta['push-slim']['containerimage.digest']}`,
+      `ghcr.io/ojsef39/renovate@${meta['push-slim']['containerimage.digest']}`,
       opts,
     );
     sign(
@@ -40,7 +40,7 @@ void (async () => {
 
   if (meta?.['push-full']?.['containerimage.digest']) {
     sign(
-      `ghcr.io/renovatebot/renovate@${meta['push-full']['containerimage.digest']}`,
+      `ghcr.io/ojsef39/renovate@${meta['push-full']['containerimage.digest']}`,
       opts,
     );
     sign(

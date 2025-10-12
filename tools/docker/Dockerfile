@@ -84,7 +84,7 @@ RUN set -ex; \
 FROM ${BASE_IMAGE_TYPE}-base
 
 LABEL name="renovate"
-LABEL org.opencontainers.image.source="https://github.com/renovatebot/renovate" \
+LABEL org.opencontainers.image.source="https://github.com/ojsef39/renovate" \
   org.opencontainers.image.url="https://renovatebot.com" \
   org.opencontainers.image.licenses="AGPL-3.0-only"
 
