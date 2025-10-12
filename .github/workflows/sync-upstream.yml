@@ -1,0 +1,128 @@
+name: Sync Fork with Upstream
+
+on:
+  schedule:
+    # Run daily at 7 AM UTC
+    - cron: '0 7 * * *'
+  workflow_dispatch: # Allow manual triggering
+
+permissions:
+  contents: write
+  pull-requests: write
+
+jobs:
+  sync:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Configure Git
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+
+      - name: Add upstream remote
+        run: |
+          git remote add upstream https://github.com/renovatebot/renovate.git || true
+          git fetch upstream
+
+      - name: Check for updates
+        id: check
+        run: |
+          git fetch origin
+          BEHIND=$(git rev-list --count HEAD..upstream/main)
+          echo "commits_behind=$BEHIND" >> $GITHUB_OUTPUT
+          if [ "$BEHIND" -gt 0 ]; then
+            echo "has_updates=true" >> $GITHUB_OUTPUT
+          else
+            echo "has_updates=false" >> $GITHUB_OUTPUT
+          fi
+
+      - name: Create sync branch
+        if: steps.check.outputs.has_updates == 'true'
+        id: sync
+        run: |
+          BRANCH_NAME="sync/upstream-$(date +%Y-%m-%d)"
+          git checkout -b "$BRANCH_NAME"
+
+          if git merge upstream/main --no-edit --no-ff; then
+            echo "merge_success=true" >> $GITHUB_OUTPUT
+            echo "has_conflicts=false" >> $GITHUB_OUTPUT
+          else
+            echo "merge_success=false" >> $GITHUB_OUTPUT
+            echo "has_conflicts=true" >> $GITHUB_OUTPUT
+            # Add conflict markers and commit the conflicted state
+            git add .
+            git commit -m "WIP: Merge conflicts from upstream - requires manual resolution"
+          fi
+
+          git push origin "$BRANCH_NAME"
+          echo "BRANCH_NAME=$BRANCH_NAME" >> $GITHUB_ENV
+
+      - name: Create Pull Request (Clean Sync)
+        if: steps.check.outputs.has_updates == 'true' && steps.sync.outputs.has_conflicts == 'false'
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh pr create \
+            --title "🔄 Sync with upstream renovatebot/renovate ($(date +%Y-%m-%d))" \
+            --body "This PR syncs the fork with the latest changes from upstream [renovatebot/renovate](https://github.com/renovatebot/renovate).
+
+          **Changes:** ${{ steps.check.outputs.commits_behind }} commits behind upstream
+
+          **Automated sync** - Review and merge to keep the fork up to date.
+
+          ---
+          *This PR was automatically created by the [Sync Fork workflow](.github/workflows/sync-upstream.yml)*" \
+            --base main \
+            --head "$BRANCH_NAME" \
+            --reviewer ojsef39
+
+      - name: Create Pull Request (Conflict Resolution)
+        if: steps.check.outputs.has_updates == 'true' && steps.sync.outputs.has_conflicts == 'true'
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh pr create \
+            --title "⚠️ Sync with upstream - CONFLICTS NEED RESOLUTION ($(date +%Y-%m-%d))" \
+            --body "## ⚠️ Manual Conflict Resolution Required
+
+          This PR contains **merge conflicts** that need manual resolution before merging.
+
+          **Upstream changes:** ${{ steps.check.outputs.commits_behind }} commits behind upstream
+
+          ### How to resolve conflicts:
+
+          1. **Check out this branch locally:**
+             \`\`\`bash
+             git fetch origin
+             git checkout $BRANCH_NAME
+             \`\`\`
+
+          2. **Resolve conflicts** in the marked files (look for \`<<<<<<<\`, \`=======\`, \`>>>>>>>\` markers)
+
+          3. **Complete the merge:**
+             \`\`\`bash
+             git add .
+             git commit -m \"Resolve merge conflicts from upstream sync\"
+             git push origin $BRANCH_NAME
+             \`\`\`
+
+          4. **Review and merge** this PR once conflicts are resolved
+
+          ---
+          *This PR was automatically created by the [Sync Fork workflow](.github/workflows/sync-upstream.yml)*
+
+          **⚠️ DO NOT MERGE until conflicts are manually resolved!**" \
+            --base main \
+            --head "$BRANCH_NAME" \
+            --reviewer ojsef39 \
+            --label "conflicts" \
+            --draft
+
+      - name: No updates
+        if: steps.check.outputs.has_updates == 'false'
+        run: echo "✅ Fork is already up to date with upstream"
