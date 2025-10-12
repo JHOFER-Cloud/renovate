@@ -53,7 +53,7 @@ RUN set -ex; \
 
 # prepare pnpm env
 ENV CI=1 npm_config_modules_cache_max_age=0 \
-  npm_config_loglevel=info
+    npm_config_loglevel=info
 
 # replace `amd64` with `x64` for `node`
 ENV ARCH=${TARGETARCH/amd64/x64}
@@ -84,9 +84,9 @@ RUN set -ex; \
 FROM ${BASE_IMAGE_TYPE}-base
 
 LABEL name="renovate"
-LABEL org.opencontainers.image.source="https://github.com/renovatebot/renovate" \
-  org.opencontainers.image.url="https://renovatebot.com" \
-  org.opencontainers.image.licenses="AGPL-3.0-only"
+LABEL org.opencontainers.image.source="https://github.com/JHOFER-Cloud/renovate" \
+    org.opencontainers.image.url="https://renovatebot.com" \
+    org.opencontainers.image.licenses="AGPL-3.0-only"
 
 WORKDIR /usr/src/app
 
@@ -103,8 +103,8 @@ RUN ln -sf /usr/local/renovate/node /bin/node
 
 # ensure default base and cache directories exist.
 # /runner/cache is an alternative cache directory used in both Docker and microVMs.
-RUN mkdir -p /tmp/renovate/cache/renovate/repository /runner/cache/renovate/repository && \
-  chmod -R 777 /tmp/renovate /runner
+RUN mkdir -p /tmp/renovate/cache/renovate/repository /runner/cache/renovate/repository \
+    && chmod -R 777 /tmp/renovate /runner
 
 # test
 RUN set -ex; \
@@ -114,8 +114,8 @@ RUN set -ex; \
   true
 
 LABEL \
-  org.opencontainers.image.version="${RENOVATE_VERSION}" \
-  org.label-schema.version="${RENOVATE_VERSION}"
+    org.opencontainers.image.version="${RENOVATE_VERSION}" \
+    org.label-schema.version="${RENOVATE_VERSION}"
 
 # Numeric user ID for the ubuntu user. Used to indicate a non-root user to OpenShift
 USER 12021
