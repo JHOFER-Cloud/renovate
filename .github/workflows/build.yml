@@ -560,6 +560,7 @@ jobs:
   build-docker:
     needs:
       - build
+      - setup-build
     runs-on: hla1-talos-dind
     timeout-minutes: 15
     if: github.event_name != 'pull_request' || contains(github.event.pull_request.labels.*.name, 'ci:fulltest')
