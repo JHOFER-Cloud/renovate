@@ -1,7 +1,16 @@
 {
   "plugins": [
     "@semantic-release/commit-analyzer",
-    "@semantic-release/release-notes-generator",
+    [
+      "@semantic-release/release-notes-generator",
+      {
+        "preset": "conventionalcommits",
+        "writerOpts": {
+          "maxSubjectLength": 72,
+          "commitLimit": 50
+        }
+      }
+    ],
     [
       "@semantic-release/github",
       {
