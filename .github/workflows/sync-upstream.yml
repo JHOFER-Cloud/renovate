@@ -51,15 +51,15 @@ jobs:
           if git merge upstream/main --no-edit --no-ff; then
             echo "merge_success=true" >> $GITHUB_OUTPUT
             echo "has_conflicts=false" >> $GITHUB_OUTPUT
+            git push origin "$BRANCH_NAME"
           else
             echo "merge_success=false" >> $GITHUB_OUTPUT
             echo "has_conflicts=true" >> $GITHUB_OUTPUT
             # Add conflict markers and commit the conflicted state
             git add .
             git commit -m "WIP: Merge conflicts from upstream - requires manual resolution"
+            git push --force origin "$BRANCH_NAME"
           fi
-
-          git push origin "$BRANCH_NAME"
           echo "BRANCH_NAME=$BRANCH_NAME" >> $GITHUB_ENV
 
       - name: Create Pull Request (Clean Sync)
