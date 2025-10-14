@@ -46,7 +46,12 @@ jobs:
         if: steps.check.outputs.has_updates == 'true'
         id: sync
         run: |
-          BRANCH_NAME="sync/upstream-$(date +%Y-%m-%d)"
+          BRANCH_NAME="sync-upstream"
+
+          # Delete existing branch if it exists (locally and remotely)
+          git branch -D "$BRANCH_NAME" 2>/dev/null || true
+          git push origin --delete "$BRANCH_NAME" 2>/dev/null || true
+
           git checkout -b "$BRANCH_NAME"
 
           if git merge upstream/main --no-edit --no-ff; then
@@ -59,7 +64,7 @@ jobs:
             # Add conflict markers and commit the conflicted state
             git add .
             git commit -m "WIP: Merge conflicts from upstream - requires manual resolution"
-            git push --force origin "$BRANCH_NAME"
+            git push origin "$BRANCH_NAME"
           fi
           echo "BRANCH_NAME=$BRANCH_NAME" >> $GITHUB_ENV
 
@@ -68,8 +73,8 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
-          gh pr create \
-            --title "🔄 Sync with upstream renovatebot/renovate ($(date +%Y-%m-%d))" \
+          gh pr create --repo ${{ github.repository }} \
+            --title "🔄 Sync with upstream renovatebot/renovate" \
             --body "This PR syncs the fork with the latest changes from upstream [renovatebot/renovate](https://github.com/renovatebot/renovate).
 
           **Changes:** ${{ steps.check.outputs.commits_behind }} commits behind upstream
@@ -87,8 +92,8 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
-          gh pr create \
-            --title "⚠️ Sync with upstream - CONFLICTS NEED RESOLUTION ($(date +%Y-%m-%d))" \
+          gh pr create --repo ${{ github.repository }} \
+            --title "⚠️ Sync with upstream - CONFLICTS NEED RESOLUTION" \
             --body "## ⚠️ Manual Conflict Resolution Required
 
           This PR contains **merge conflicts** that need manual resolution before merging.
