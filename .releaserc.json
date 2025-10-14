@@ -24,6 +24,10 @@
         ]
       }
     ],
+<<<<<<< HEAD
+=======
+    "@containerbase/semantic-release-pnpm",
+>>>>>>> upstream/main
     [
       "@semantic-release/exec",
       {
