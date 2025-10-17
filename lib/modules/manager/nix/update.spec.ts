@@ -300,7 +300,8 @@ describe('modules/manager/nix/update', () => {
         },
       });
       expect(result).toBeNull();
-      expect(logger.logger.trace).toHaveBeenCalledExactlyOnceWith(
+      expect(logger.logger.trace).toHaveBeenNthCalledWith(
+        3,
         {
           depName: 'mypackage',
           url: 'git+ssh://git@example.com/org/repo?ref=refs/tags/1.0.0',
@@ -435,7 +436,8 @@ describe('modules/manager/nix/update', () => {
         },
       });
       expect(result).toBeNull();
-      expect(logger.logger.trace).toHaveBeenCalledExactlyOnceWith(
+      expect(logger.logger.trace).toHaveBeenNthCalledWith(
+        3,
         {
           depName: 'nixpkgs-tar',
           url: 'https://nixos.org/channels/nixpkgs-unstable/nixexprs.tar.xz',
