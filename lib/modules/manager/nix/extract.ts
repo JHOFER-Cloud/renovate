@@ -1,6 +1,6 @@
 import { logger } from '../../../logger';
 import { getSiblingFileName, readLocalFile } from '../../../util/fs';
-import { parseGitUrl } from '../../../util/git/url';
+import { getHttpUrl, parseGitUrl } from '../../../util/git/url';
 import { regEx } from '../../../util/regex';
 import { GitRefsDatasource } from '../../datasource/git-refs';
 import { id as nixpkgsVersioning } from '../../versioning/nixpkgs';
@@ -163,6 +163,10 @@ export async function extractPackageFile(
           'https://$<domain>/$<owner>/$<repo>',
         );
         break;
+    }
+
+    if (flakeLocked.type !== 'tarball') {
+      dep.sourceUrl = getHttpUrl(dep.packageName!).replace(/\.git$/, '');
     }
 
     deps.push(dep);

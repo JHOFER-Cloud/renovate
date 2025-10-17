@@ -22,7 +22,7 @@ describe('modules/manager/nix/extract', () => {
   it('returns null when flake.lock cannot be parsed', async () => {
     fs.readLocalFile.mockResolvedValueOnce('{ invalid json');
     expect(await extractPackageFile('', 'flake.nix')).toBeNull();
-    expect(logger.logger.debug).toHaveBeenCalledWith(
+    expect(logger.logger.debug).toHaveBeenCalledExactlyOnceWith(
       { flakeLockFile: 'flake.lock', error: expect.any(ZodError) },
       'invalid flake.lock file',
     );
@@ -36,7 +36,7 @@ describe('modules/manager/nix/extract', () => {
     }`;
     fs.readLocalFile.mockResolvedValueOnce(flakeLock);
     expect(await extractPackageFile('', 'flake.nix')).toBeNull();
-    expect(logger.logger.debug).toHaveBeenCalledWith(
+    expect(logger.logger.debug).toHaveBeenCalledExactlyOnceWith(
       { flakeLockFile: 'flake.lock' },
       'flake.lock is missing "root" node',
     );
@@ -96,7 +96,7 @@ describe('modules/manager/nix/extract', () => {
     }`;
     fs.readLocalFile.mockResolvedValueOnce(flakeLock);
     expect(await extractPackageFile('', 'flake.nix')).toBeNull();
-    expect(logger.logger.debug).toHaveBeenCalledWith(
+    expect(logger.logger.debug).toHaveBeenCalledExactlyOnceWith(
       {
         flakeLockFile: 'flake.lock',
         flakeInput: {
@@ -136,7 +136,7 @@ describe('modules/manager/nix/extract', () => {
     }`;
     fs.readLocalFile.mockResolvedValueOnce(flakeLock);
     expect(await extractPackageFile('', 'flake.nix')).toBeNull();
-    expect(logger.logger.debug).toHaveBeenCalledWith(
+    expect(logger.logger.debug).toHaveBeenCalledExactlyOnceWith(
       {
         flakeLockFile: 'flake.lock',
         flakeInput: {
@@ -180,7 +180,7 @@ describe('modules/manager/nix/extract', () => {
     }`;
     fs.readLocalFile.mockResolvedValueOnce(flakeLock);
     expect(await extractPackageFile('', 'flake.nix')).toBeNull();
-    expect(logger.logger.debug).toHaveBeenCalledWith(
+    expect(logger.logger.debug).toHaveBeenCalledExactlyOnceWith(
       {
         flakeLockFile: 'flake.lock',
         flakeInput: {
@@ -230,7 +230,7 @@ describe('modules/manager/nix/extract', () => {
     }`;
     fs.readLocalFile.mockResolvedValueOnce(flakeLock);
     expect(await extractPackageFile('', 'flake.nix')).toBeNull();
-    expect(logger.logger.debug).toHaveBeenCalledWith(
+    expect(logger.logger.debug).toHaveBeenCalledExactlyOnceWith(
       {
         flakeLockFile: 'flake.lock',
         flakeInput: {
@@ -280,7 +280,7 @@ describe('modules/manager/nix/extract', () => {
     }`;
     fs.readLocalFile.mockResolvedValueOnce(flakeLock);
     expect(await extractPackageFile('', 'flake.nix')).toBeNull();
-    expect(logger.logger.debug).toHaveBeenCalledWith(
+    expect(logger.logger.debug).toHaveBeenCalledExactlyOnceWith(
       {
         flakeLockFile: 'flake.lock',
         flakeInput: {
@@ -326,7 +326,7 @@ describe('modules/manager/nix/extract', () => {
     }`;
     fs.readLocalFile.mockResolvedValueOnce(flakeLock);
     expect(await extractPackageFile('', 'flake.nix')).toBeNull();
-    expect(logger.logger.debug).toHaveBeenCalledWith(
+    expect(logger.logger.debug).toHaveBeenCalledExactlyOnceWith(
       {
         flakeLockFile: 'flake.lock',
         flakeInput: {
@@ -425,6 +425,7 @@ describe('modules/manager/nix/extract', () => {
             datasource: GitRefsDatasource.id,
             depName: 'cachix',
             packageName: 'https://github.com/cachix/cachix.git',
+            sourceUrl: 'https://github.com/cachix/cachix',
           },
         ],
       });
@@ -470,6 +471,7 @@ describe('modules/manager/nix/extract', () => {
             datasource: GitRefsDatasource.id,
             depName: 'cachix',
             packageName: 'https://github.com/cachix/cachix.git',
+            sourceUrl: 'https://github.com/cachix/cachix',
           },
         ],
       });
@@ -517,6 +519,7 @@ describe('modules/manager/nix/extract', () => {
             datasource: GitRefsDatasource.id,
             depName: 'cachix',
             packageName: 'git@github.com:cachix/cachix.git',
+            sourceUrl: 'https://github.com/cachix/cachix',
           },
         ],
       });
@@ -561,6 +564,7 @@ describe('modules/manager/nix/extract', () => {
             datasource: GitRefsDatasource.id,
             depName: 'cachix',
             packageName: 'https://github.com/cachix/cachix.git',
+            sourceUrl: 'https://github.com/cachix/cachix',
           },
         ],
       });
@@ -624,12 +628,14 @@ describe('modules/manager/nix/extract', () => {
             datasource: GitRefsDatasource.id,
             depName: 'nixpkgs-https',
             packageName: 'https://github.com/NixOS/nixpkgs.git',
+            sourceUrl: 'https://github.com/NixOS/nixpkgs',
           },
           {
             currentDigest: '64334fda8d632bec7c80c9bef668ad9633a8dd64',
             datasource: GitRefsDatasource.id,
             depName: 'nixpkgs-ssh',
             packageName: 'git@github.com:NixOS/nixpkgs.git',
+            sourceUrl: 'https://github.com/NixOS/nixpkgs',
           },
         ],
       });
@@ -678,6 +684,7 @@ describe('modules/manager/nix/extract', () => {
             datasource: GitRefsDatasource.id,
             depName: 'flake-parts',
             packageName: 'https://github.com/hercules-ci/flake-parts',
+            sourceUrl: 'https://github.com/hercules-ci/flake-parts',
           },
         ],
       });
@@ -723,6 +730,7 @@ describe('modules/manager/nix/extract', () => {
             datasource: GitRefsDatasource.id,
             depName: 'flake-parts',
             packageName: 'https://github.com/hercules-ci/flake-parts',
+            sourceUrl: 'https://github.com/hercules-ci/flake-parts',
           },
         ],
       });
@@ -770,6 +778,7 @@ describe('modules/manager/nix/extract', () => {
             datasource: GitRefsDatasource.id,
             depName: 'nixpkgs',
             packageName: 'https://github.com/NixOS/nixpkgs',
+            sourceUrl: 'https://github.com/NixOS/nixpkgs',
             versioning: nixpkgsVersioning,
           },
         ],
@@ -816,6 +825,7 @@ describe('modules/manager/nix/extract', () => {
             datasource: GitRefsDatasource.id,
             depName: 'nixpkgs',
             packageName: 'https://github.com/NixOS/nixpkgs',
+            sourceUrl: 'https://github.com/NixOS/nixpkgs',
             versioning: 'nixpkgs',
           },
         ],
@@ -867,6 +877,8 @@ describe('modules/manager/nix/extract', () => {
             depName: 'nixpkgs-extra-pkgs',
             packageName:
               'https://github.corp.example.com/my-org/nixpkgs-extra-pkgs',
+            sourceUrl:
+              'https://github.corp.example.com/my-org/nixpkgs-extra-pkgs',
           },
         ],
       });
@@ -914,6 +926,7 @@ describe('modules/manager/nix/extract', () => {
             datasource: GitRefsDatasource.id,
             depName: 'home-manager',
             packageName: 'https://gitlab.com/rycee/home-manager',
+            sourceUrl: 'https://gitlab.com/rycee/home-manager',
           },
         ],
       });
@@ -963,6 +976,7 @@ describe('modules/manager/nix/extract', () => {
             datasource: GitRefsDatasource.id,
             depName: 'firefox-addons',
             packageName: 'https://git.sr.ht/~rycee/nur-expressions',
+            sourceUrl: 'https://git.sr.ht/~rycee/nur-expressions',
           },
         ],
       });
