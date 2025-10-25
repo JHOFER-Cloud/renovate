@@ -106,6 +106,15 @@ RUN ln -sf /usr/local/renovate/node /bin/node
 RUN mkdir -p /tmp/renovate/cache/renovate/repository /runner/cache/renovate/repository \
     && chmod -R 777 /tmp/renovate /runner
 
+# Fix Nix store path for binary cache compatibility
+RUN mkdir -p /nix && \
+    ln -sf /tmp/containerbase/cache/nix/store /nix/store
+
+# Configure Nix with experimental features and settings
+RUN mkdir -p /etc/nix && \
+    echo "experimental-features = nix-command flakes" >> /etc/nix/nix.conf && \
+    echo "store = /nix/store" >> /etc/nix/nix.conf
+
 # test
 RUN set -ex; \
   renovate --version; \
