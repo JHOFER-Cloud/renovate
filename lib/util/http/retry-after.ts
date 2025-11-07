@@ -56,9 +56,8 @@ export async function wrapWithRetry<T>(
         `Retry-After: will retry ${url} after ${delaySeconds} seconds`,
       );
 
-      const existingDelay = hostDelays.get(key);
       const delay = Promise.all([
-        existingDelay ?? Promise.resolve(),
+        hostDelays.get(key) ?? Promise.resolve(),
         setTimeout(1000 * delaySeconds),
       ]);
       hostDelays.set(key, delay);
