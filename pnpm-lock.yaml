@@ -369,9 +369,6 @@ importers:
       '@containerbase/eslint-plugin':
         specifier: 1.1.18
         version: 1.1.18(eslint-plugin-import@2.32.0)(eslint-plugin-promise@7.2.1(eslint@9.39.1))(eslint@9.39.1)
-      '@containerbase/semantic-release-pnpm':
-        specifier: 1.3.4
-        version: 1.3.4(semantic-release@25.0.1(typescript@5.9.3))
       '@eslint/js':
         specifier: 9.39.1
         version: 9.39.1
@@ -945,12 +942,6 @@ packages:
       eslint: ^9.0.0
       eslint-plugin-import: ^2.31.0
       eslint-plugin-promise: ^7.0.0
-
-  '@containerbase/semantic-release-pnpm@1.3.4':
-    resolution: {integrity: sha512-jPgBICa8KnljJIMZ18/WVFVjPS1cmyFy1fHKftxNiyHpKGvHFLFJp0gS+FTeh1ceypH8MfMjvOA2zdpM5zJ0ag==}
-    engines: {node: ^22.11.0 || ^24}
-    peerDependencies:
-      semantic-release: ^24.0.0 || ^25.0.0
 
   '@emnapi/core@1.7.0':
     resolution: {integrity: sha512-pJdKGq/1iquWYtv1RRSljZklxHCOCAJFJrImO5ZLKPJVJlVUcs8yFwNQlqS0Lo8xT1VAXXTCZocF9n26FWEKsw==}
@@ -4371,8 +4362,8 @@ packages:
   jws@4.0.0:
     resolution: {integrity: sha512-KDncfTmOZoOMTFG4mBlG0qUIOlc03fmzH+ru6RgYVZhPkyiy/92Owlt/8UEN+a4TXR1FQetfIpJE8ApdvdVxTg==}
 
-  katex@0.16.25:
-    resolution: {integrity: sha512-woHRUZ/iF23GBP1dkDQMh1QBad9dmr8/PAwNA54VrSOVYgI12MAcE14TqnDdQOdzyEonGzMepYnqBMYdsoAr8Q==}
+  katex@0.16.24:
+    resolution: {integrity: sha512-g/PXUTqqppA6XL2beQtIxoYBPdO1u3vnc2FHMQqJ53n9L5faHDm7UYa+tlYvnNQRuSX6eVusF30/v7ADkcFC8A==}
     hasBin: true
 
   keyv@4.5.4:
@@ -7504,14 +7495,6 @@ snapshots:
       eslint: 9.39.1
       eslint-plugin-import: 2.32.0(@typescript-eslint/parser@8.46.3(eslint@9.39.1)(typescript@5.9.3))(eslint-import-resolver-typescript@4.4.4)(eslint@9.39.1)
       eslint-plugin-promise: 7.2.1(eslint@9.39.1)
-
-  '@containerbase/semantic-release-pnpm@1.3.4(semantic-release@25.0.1(typescript@5.9.3))':
-    dependencies:
-      '@semantic-release/error': 4.0.0
-      aggregate-error: 5.0.0
-      execa: 9.6.0
-      semantic-release: 25.0.1(typescript@5.9.3)
-      semver: 7.7.2
 
   '@emnapi/core@1.7.0':
     dependencies:
@@ -11244,7 +11227,7 @@ snapshots:
       jwa: 2.0.1
       safe-buffer: 5.2.1
 
-  katex@0.16.25:
+  katex@0.16.24:
     dependencies:
       commander: 8.3.0
 
@@ -11710,7 +11693,7 @@ snapshots:
     dependencies:
       '@types/katex': 0.16.7
       devlop: 1.1.0
-      katex: 0.16.25
+      katex: 0.16.24
       micromark-factory-space: 2.0.1
       micromark-util-character: 2.1.1
       micromark-util-symbol: 2.0.1
