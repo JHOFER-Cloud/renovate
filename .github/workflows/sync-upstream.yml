@@ -42,18 +42,22 @@ jobs:
         id: check
         run: |
           git fetch origin
-          git fetch upstream --tags
+          git fetch upstream --tags --force
 
           # Get latest upstream tag
           LATEST_TAG=$(git describe --tags upstream/main --abbrev=0)
           echo "latest_tag=$LATEST_TAG" >> $GITHUB_OUTPUT
 
           # Check if we're behind
-          if git merge-base --is-ancestor HEAD upstream/main; then
+          # merge-base returns 0 if ancestor, 1 if not - both are valid, not errors
+          set +e
+          git merge-base --is-ancestor HEAD upstream/main
+          if [ $? -eq 0 ]; then
             echo "has_updates=false" >> $GITHUB_OUTPUT
           else
             echo "has_updates=true" >> $GITHUB_OUTPUT
           fi
+          set -e
 
           echo "BRANCH_NAME=sync-upstream" >> $GITHUB_ENV
 
