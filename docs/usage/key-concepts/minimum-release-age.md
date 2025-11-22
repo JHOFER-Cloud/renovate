@@ -115,11 +115,36 @@ It's most likely the case that `major`, `minor`, and `patch` update types will h
 
 Generally, Renovate does not provide release timestamps for `digest` updates.
 
+The `replacement` update type [does not currently](https://github.com/renovatebot/renovate/issues/39400) provide release timestamps.
+
+The `lockFileMaintenance` update type does not provide release timestamps, as the package manager performs the required changes to update package(s).
+
 You can validate which update types may have release timestamps by following something similar to how [verify if the registry you're using](#which-registries-support-release-timestamps).
 
 ### What happens to security updates?
 
 Security updates bypass any `minimumReleaseAge` checks, and so will be raised as soon as Renovate detects them.
+
+### What happens if a package has multiple updates available?
+
+<!-- prettier-ignore -->
+!!! note
+    This is based on the [recommended settings above](#recommended-settings)
+
+Renovate waits for the set duration to pass for each **separate** version.
+
+If Renovate sees that a package has multiple updates available, it will only raise update(s) that are passing the `minimumReleaseAge` check.
+
+Let us consider a repository with `minimumReleaseAge=1 hour`, and with the following timeline:
+
+- 0000: Renovate runs, and sees no updates
+- 0010: Package releases 1.1.0
+- 0030: Renovate runs, and sees 1.1.0 and marks it as pending
+- 0100: Renovate runs, still sees 1.1.0 as pending
+- 0110: Package releases 1.1.1
+- 0130: Renovate runs, and sees 1.1.0 and 1.1.1 releases. As 1.1.0 is now past the `minimumReleaseAge`, Renovate raises a PR, and marks 1.1.1 as pending
+- 0200: Renovate runs, still sees 1.1.1 as pending
+- 0230: No humans have merged the PR for 1.1.0, so when Renovate runs, it sees 1.1.1 is now past the `minimumReleaseAge`, so updates the existing PR to bump the version to 1.1.1
 
 ### What happens to transitive dependencies?
 
@@ -162,22 +187,23 @@ Note that you will also need to [verify if the registry you're using](#which-reg
 
 The below is a non-exhaustive list of public registries which support release timestamps:
 
-| Datasource           | Registry URL                                       | Supported | Notes                                                         |
-| -------------------- | -------------------------------------------------- | --------- | ------------------------------------------------------------- |
-| `docker`             | `https://ghcr.io`                                  | ❌        | [Issue](https://github.com/renovatebot/renovate/issues/39064) |
-| `rubygems`           | `https://rubygems.org`                             | ✅        |                                                               |
-| `docker`             | `https://index.docker.io`                          | ✅        |                                                               |
-| `docker`             | `https://quay.io`                                  | ❌        | [Issue](https://github.com/renovatebot/renovate/issues/38572) |
-| `github-releases`    | `https://github.com`                               | ✅        |                                                               |
-| `terraform-provider` | `https://registry.terraform.io`                    | ✅        | Not always returned                                           |
-| `github-tags`        | `https://github.com`                               | ✅        |                                                               |
-| `go`                 | `https://proxy.golang.org,`                        | ✅        |                                                               |
-| `golang-version`     | `https://raw.githubusercontent.com/golang/website` | ✅        |                                                               |
-| `maven`              | `https://repo1.maven.org/maven2`                   | ✅        |                                                               |
-| `node-version`       | `https://nodejs.org/dist`                          | ✅        |                                                               |
-| `npm`                | `https://registry.npmjs.org`                       | ✅        |                                                               |
-| `pypi`               | `https://pypi.org/pypi/`                           | ✅        |                                                               |
-| `ruby-version`       | `https://www.ruby-lang.org`                        | ✅        |                                                               |
+| Datasource           | Registry URL                                       | Supported | Notes                                                            |
+| -------------------- | -------------------------------------------------- | --------- | ---------------------------------------------------------------- |
+| `docker`             | `https://ghcr.io`                                  | ❌        | [Issue](https://github.com/renovatebot/renovate/issues/39064)    |
+| `rubygems`           | `https://rubygems.org`                             | ✅        |                                                                  |
+| `docker`             | `https://index.docker.io`                          | ✅        |                                                                  |
+| `docker`             | `https://quay.io`                                  | ❌        | [Issue](https://github.com/renovatebot/renovate/issues/38572)    |
+| `github-releases`    | `https://github.com`                               | ✅        |                                                                  |
+| `terraform-provider` | `https://registry.terraform.io`                    | ✅        | Not always returned                                              |
+| `github-tags`        | `https://github.com`                               | ✅        |                                                                  |
+| `go`                 | `https://proxy.golang.org,`                        | ✅        |                                                                  |
+| `golang-version`     | `https://raw.githubusercontent.com/golang/website` | ✅        |                                                                  |
+| `maven`              | `https://repo1.maven.org/maven2`                   | ✅        |                                                                  |
+| `node-version`       | `https://nodejs.org/dist`                          | ✅        |                                                                  |
+| `npm`                | `https://registry.npmjs.org`                       | ✅        |                                                                  |
+| `pypi`               | `https://pypi.org/pypi/`                           | ✅        |                                                                  |
+| `ruby-version`       | `https://www.ruby-lang.org`                        | ✅        |                                                                  |
+| `jsr`                | `https://jsr.io`                                   | ✅        | For packages without explicit timestamps, defaults to 2025-09-18 |
 
 It is _likely_ that if you are using a public registry (i.e. `registry.npmjs.org`, `repo1.maven.org`, etc) the release timestamp data will be present.
 We welcome user contributions to this table.

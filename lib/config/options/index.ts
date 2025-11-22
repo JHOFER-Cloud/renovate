@@ -246,8 +246,6 @@ const options: RenovateOptions[] = [
     default: null,
     globalOnly: true,
     inheritConfigSupport: true,
-    cli: false,
-    env: false,
   },
   {
     name: 'onboardingConfigFileName',
@@ -596,7 +594,7 @@ const options: RenovateOptions[] = [
     description:
       'Change this value to override the default Renovate sidecar image.',
     type: 'string',
-    default: 'ghcr.io/containerbase/sidecar:13.24.1',
+    default: 'ghcr.io/containerbase/sidecar:13.25.1',
     globalOnly: true,
   },
   {

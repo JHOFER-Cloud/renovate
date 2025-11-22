@@ -371,6 +371,8 @@ Renovate also allows users to explicitly configure `baseBranchPatterns`, e.g. fo
 It's possible to add this setting into the `renovate.json` file as part of the "Configure Renovate" onboarding PR.
 If so then Renovate will reflect this setting in its description and use package file contents from the custom base branch(es) instead of default.
 
+Also, check [useBaseBranchConfig](#usebasebranchconfig) if you want to configure different configuration for each base branch.
+
 The simplest approach is exact matches, e.g. `["main", "dev"]`.
 `baseBranchPatterns` also supports Regular Expressions that must begin and end with `/`, e.g.:
 
@@ -596,6 +598,14 @@ All messages are prefixed with `bumpVersions` or `bumpVersions(<name>)` to help 
   ]
 }
 ```
+
+**short versions**
+
+It's possible to bump short versions:
+
+- `1` -> `2` (major)
+- `1.1` -> `2.0` (major)
+- `1.2` -> `1.3` (minor)
 
 ### bumpType
 
@@ -3807,7 +3817,7 @@ For example, GitHub might automerge a Renovate branch even if it's behind the ba
 
 Please check platform specific docs for version requirements.
 
-To learn how to use GitHub's Merge Queue feature with Renovate, read our [Key Concepts, Automerge, GitHub Merge Queue](./key-concepts/automerge.md#github-merge-queue) docs.
+To learn how to use GitHub's Merge Queue feature with Renovate, read our [GitHub Merge Queue](./key-concepts/automerge.md#github-merge-queue) docs.
 
 ## platformCommit
 
