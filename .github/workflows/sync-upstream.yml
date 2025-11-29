@@ -114,6 +114,7 @@ jobs:
               --head "sync-upstream" \
               --reviewer ojsef39
           fi
+          gh pr merge --auto
 
       - name: No updates
         if: steps.check.outputs.has_updates == 'false'
