@@ -594,7 +594,7 @@ const options: RenovateOptions[] = [
     description:
       'Change this value to override the default Renovate sidecar image.',
     type: 'string',
-    default: 'ghcr.io/containerbase/sidecar:13.25.4',
+    default: 'ghcr.io/containerbase/sidecar:13.25.6',
     globalOnly: true,
   },
   {
@@ -3090,6 +3090,17 @@ const options: RenovateOptions[] = [
     type: 'boolean',
     globalOnly: true,
     default: false,
+  },
+  {
+    name: 'allowedUnsafeExecutions',
+    description: `List of possibly unsafe executions which are permitted to run. This enables global control over any implicit commands
+        which are run as part of a renovate run. This is similar to \`allowedCommands\` but is specifically used to control executions
+        which run automatically, and are not explicitly added in \`postUpgradeTasks\``,
+    type: 'array',
+    subType: 'string',
+    default: [],
+    stage: 'repository',
+    globalOnly: true,
   },
   {
     name: 'gitNoVerify',
