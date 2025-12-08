@@ -274,7 +274,7 @@
   },
   "devDependencies": {
     "@containerbase/eslint-plugin": "1.1.20",
-    "@containerbase/istanbul-reports-html": "1.1.14",
+    "@containerbase/istanbul-reports-html": "1.1.16",
     "@eslint/js": "9.39.1",
     "@hyrious/marshal": "0.3.3",
     "@ls-lint/ls-lint": "2.3.1",
