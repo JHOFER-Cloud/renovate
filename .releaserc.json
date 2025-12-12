@@ -16,6 +16,8 @@
       {
         "releasedLabels": false,
         "successCommentCondition": "<% return branch.channel !== 'next' && issue.user.type !== 'Bot'; %>",
+        "successComment": false,
+        "failComment": false,
         "assets": [
           {
             "path": "tmp/docs.tgz",
