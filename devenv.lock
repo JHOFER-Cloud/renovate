@@ -3,10 +3,10 @@
     "devenv": {
       "locked": {
         "dir": "src/modules",
-        "lastModified": 1764877862,
+        "lastModified": 1765463314,
         "owner": "cachix",
         "repo": "devenv",
-        "rev": "5b6cb65d7dec827badc6bbceeac934931beb7f4e",
+        "rev": "ec805a5ad3e3ffb6d47d05c078a60db2e636fac4",
         "type": "github"
       },
       "original": {
@@ -19,10 +19,10 @@
     "flake-compat": {
       "flake": false,
       "locked": {
-        "lastModified": 1764712249,
+        "lastModified": 1765121682,
         "owner": "edolstra",
         "repo": "flake-compat",
-        "rev": "3b279e4317ccfa4865356387935310531357d919",
+        "rev": "65f23138d8d09a92e30f1e5c87611b23ef451bf3",
         "type": "github"
       },
       "original": {
@@ -40,10 +40,10 @@
         ]
       },
       "locked": {
-        "lastModified": 1763988335,
+        "lastModified": 1765464257,
         "owner": "cachix",
         "repo": "git-hooks.nix",
-        "rev": "50b9238891e388c9fdc6a5c49e49c42533a1b5ce",
+        "rev": "09e45f2598e1a8499c3594fe11ec2943f34fe509",
         "type": "github"
       },
       "original": {
@@ -74,12 +74,12 @@
     },
     "nixpkgs": {
       "locked": {
-        "lastModified": 1764794580,
-        "narHash": "sha256-UMVihg0OQ980YqmOAPz+zkuCEb9hpE5Xj2v+ZGNjQ+M=",
-        "rev": "ebc94f855ef25347c314258c10393a92794e7ab9",
-        "revCount": 906210,
+        "lastModified": 1765270179,
+        "narHash": "sha256-g2a4MhRKu4ymR4xwo+I+auTknXt/+j37Lnf0Mvfl1rE=",
+        "rev": "677fbe97984e7af3175b6c121f3c39ee5c8d62c9",
+        "revCount": 909321,
         "type": "tarball",
-        "url": "https://api.flakehub.com/f/pinned/JHOFER-Cloud/NixOS-nixpkgs/0.1.906210%2Brev-ebc94f855ef25347c314258c10393a92794e7ab9/019ae7de-fad4-7505-bb97-274ce21b6301/source.tar.gz"
+        "url": "https://api.flakehub.com/f/pinned/JHOFER-Cloud/NixOS-nixpkgs/0.1.909321%2Brev-677fbe97984e7af3175b6c121f3c39ee5c8d62c9/019b06c5-c833-7810-bc0e-50e6c2b9c6b7/source.tar.gz"
       },
       "original": {
         "type": "tarball",
