@@ -144,7 +144,7 @@
   },
   "volta": {
     "node": "24.12.0",
-    "pnpm": "10.25.0"
+    "pnpm": "10.26.1"
   },
   "dependencies": {
     "@aws-sdk/client-codecommit": "3.940.0",
@@ -359,7 +359,7 @@
     "vitest": "4.0.15",
     "vitest-mock-extended": "3.1.0"
   },
-  "packageManager": "pnpm@10.25.0",
+  "packageManager": "pnpm@10.26.1",
   "files": [
     "dist",
     "renovate-schema.json"
