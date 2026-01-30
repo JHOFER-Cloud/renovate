@@ -1,17 +1,17 @@
 import type { StatusResult } from 'simple-git';
 import upath from 'upath';
 import { mockDeep } from 'vitest-mock-extended';
-import { GlobalConfig } from '../../../config/global';
-import type { RepoGlobalConfig } from '../../../config/types';
-import * as docker from '../../../util/exec/docker';
-import type { UpdateArtifactsConfig } from '../types';
-import { updateArtifacts } from '.';
-import { envMock, mockExecAll, mockExecSequence } from '~test/exec-util';
-import { env, fs, git, hostRules, partial } from '~test/util';
+import { GlobalConfig } from '../../../config/global.ts';
+import type { RepoGlobalConfig } from '../../../config/types.ts';
+import * as docker from '../../../util/exec/docker/index.ts';
+import type { UpdateArtifactsConfig } from '../types.ts';
+import { updateArtifacts } from './index.ts';
+import { envMock, mockExecAll, mockExecSequence } from '~test/exec-util.ts';
+import { env, fs, git, hostRules, partial } from '~test/util.ts';
 
-vi.mock('../../../util/exec/env');
-vi.mock('../../../util/fs');
-vi.mock('../../../util/host-rules', () => mockDeep());
+vi.mock('../../../util/exec/env.ts');
+vi.mock('../../../util/fs/index.ts');
+vi.mock('../../../util/host-rules.ts', () => mockDeep());
 
 const adminConfig: RepoGlobalConfig = {
   // `join` fixes Windows CI
@@ -22,23 +22,16 @@ const adminConfig: RepoGlobalConfig = {
 const dockerAdminConfig = {
   ...adminConfig,
   binarySource: 'docker',
-  dockerSidecarImage: 'ghcr.io/containerbase/sidecar',
+  dockerSidecarImage: 'ghcr.io/renovatebot/base-image',
 } satisfies RepoGlobalConfig;
 
 process.env.CONTAINERBASE = 'true';
 
 const config: UpdateArtifactsConfig = {};
 const lockMaintenanceConfig = { ...config, isLockFileMaintenance: true };
-const updateInputCmd = `nix \
---extra-experimental-features 'nix-command flakes' \
-flake update nixpkgs`;
-const updateInputTokenCmd = `nix \
---extra-experimental-features 'nix-command flakes' \
---extra-access-tokens github.com=token \
-flake update nixpkgs`;
-const lockfileMaintenanceCmd = `nix \
---extra-experimental-features 'nix-command flakes' \
-flake update`;
+const updateInputCmd = `nix --extra-experimental-features 'nix-command flakes' flake update nixpkgs`;
+const updateInputTokenCmd = `nix --extra-experimental-features 'nix-command flakes' --extra-access-tokens github.com=token flake update nixpkgs`;
+const lockfileMaintenanceCmd = `nix --extra-experimental-features 'nix-command flakes' flake update`;
 
 describe('modules/manager/nix/artifacts', () => {
   beforeEach(() => {
@@ -50,6 +43,10 @@ describe('modules/manager/nix/artifacts', () => {
     GlobalConfig.set(adminConfig);
     docker.resetPrefetchedImages();
     hostRules.find.mockReturnValue({ token: undefined });
+    hostRules.getAll.mockReturnValue([]);
+    fs.getSiblingFileName.mockImplementation(
+      (fileName, siblingName) => siblingName,
+    );
   });
 
   it('returns if no flake.lock found', async () => {
@@ -176,6 +173,7 @@ describe('modules/manager/nix/artifacts', () => {
 
   it('supports docker mode', async () => {
     GlobalConfig.set(dockerAdminConfig);
+    fs.readLocalFile.mockResolvedValueOnce('current flake.lock');
     const execSnapshots = mockExecAll();
     git.getRepoStatus.mockResolvedValue(
       partial<StatusResult>({
@@ -194,13 +192,14 @@ describe('modules/manager/nix/artifacts', () => {
     expect(res).toEqual([
       {
         file: {
+          contents: 'new flake.lock',
           path: 'flake.lock',
           type: 'addition',
         },
       },
     ]);
     expect(execSnapshots).toMatchObject([
-      { cmd: 'docker pull ghcr.io/containerbase/sidecar' },
+      { cmd: 'docker pull ghcr.io/renovatebot/base-image' },
       { cmd: 'docker ps --filter name=renovate_sidecar -aq' },
       {
         cmd:
@@ -209,7 +208,7 @@ describe('modules/manager/nix/artifacts', () => {
           '-v "/tmp/renovate/cache":"/tmp/renovate/cache" ' +
           '-e CONTAINERBASE_CACHE_DIR ' +
           '-w "/tmp/github/some/repo" ' +
-          'ghcr.io/containerbase/sidecar ' +
+          'ghcr.io/renovatebot/base-image ' +
           'bash -l -c "' +
           'install-tool nix 2.10.0 ' +
           '&& ' +
@@ -219,8 +218,44 @@ describe('modules/manager/nix/artifacts', () => {
     ]);
   });
 
+  it('writes newPackageFileContent', async () => {
+    fs.readLocalFile.mockResolvedValueOnce('old flake.lock');
+    const execSnapshots = mockExecAll();
+    git.getRepoStatus.mockResolvedValue(
+      partial<StatusResult>({
+        modified: ['flake.lock'],
+      }),
+    );
+    fs.readLocalFile.mockResolvedValueOnce('new flake.lock');
+
+    const newContent = 'updated flake.nix content';
+    const res = await updateArtifacts({
+      packageFileName: 'flake.nix',
+      updatedDeps: [{ depName: 'nixpkgs' }],
+      newPackageFileContent: newContent,
+      config,
+    });
+
+    expect(res).toEqual([
+      {
+        file: {
+          contents: 'new flake.lock',
+          path: 'flake.lock',
+          type: 'addition',
+        },
+      },
+    ]);
+
+    expect(fs.writeLocalFile).toHaveBeenCalledExactlyOnceWith(
+      'flake.nix',
+      newContent,
+    );
+    expect(execSnapshots).toMatchObject([{ cmd: updateInputCmd }]);
+  });
+
   it('supports install mode', async () => {
     GlobalConfig.set({ ...adminConfig, binarySource: 'install' });
+    fs.readLocalFile.mockResolvedValueOnce('current flake.lock');
     const execSnapshots = mockExecAll();
     git.getRepoStatus.mockResolvedValue(
       partial<StatusResult>({
@@ -239,6 +274,7 @@ describe('modules/manager/nix/artifacts', () => {
     expect(res).toEqual([
       {
         file: {
+          contents: 'new flake.lock',
           path: 'flake.lock',
           type: 'addition',
         },
@@ -303,6 +339,7 @@ describe('modules/manager/nix/artifacts', () => {
 
   it('uses nix from config', async () => {
     GlobalConfig.set(dockerAdminConfig);
+    fs.readLocalFile.mockResolvedValueOnce('current flake.lock');
     const execSnapshots = mockExecAll();
     git.getRepoStatus.mockResolvedValue(
       partial<StatusResult>({
@@ -324,13 +361,14 @@ describe('modules/manager/nix/artifacts', () => {
     expect(res).toEqual([
       {
         file: {
+          contents: 'new lock',
           path: 'flake.lock',
           type: 'addition',
         },
       },
     ]);
     expect(execSnapshots).toMatchObject([
-      { cmd: 'docker pull ghcr.io/containerbase/sidecar' },
+      { cmd: 'docker pull ghcr.io/renovatebot/base-image' },
       { cmd: 'docker ps --filter name=renovate_sidecar -aq' },
       {
         cmd:
@@ -339,7 +377,7 @@ describe('modules/manager/nix/artifacts', () => {
           '-v "/tmp/renovate/cache":"/tmp/renovate/cache" ' +
           '-e CONTAINERBASE_CACHE_DIR ' +
           '-w "/tmp/github/some/repo" ' +
-          'ghcr.io/containerbase/sidecar ' +
+          'ghcr.io/renovatebot/base-image ' +
           'bash -l -c "' +
           'install-tool nix 2.10.0 ' +
           '&& ' +

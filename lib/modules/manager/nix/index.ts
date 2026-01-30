@@ -1,18 +1,14 @@
-import { GitRefsDatasource } from '../../datasource/git-refs';
+import { GitRefsDatasource } from '../../datasource/git-refs/index.ts';
 
-export { extractPackageFile } from './extract';
-export { updateArtifacts } from './artifacts';
-export { getRangeStrategy } from './range';
+export { updateArtifacts } from './artifacts.ts';
+export { extractPackageFile } from './extract.ts';
+export { updateDependency } from './update.ts';
 
+export const supportedDatasources = [GitRefsDatasource.id];
 export const supportsLockFileMaintenance = true;
-
 export const url = 'https://nix.dev';
 
 export const defaultConfig = {
   managerFilePatterns: ['/(^|/)flake\\.nix$/'],
-  commitMessageTopic: 'nix',
-  commitMessageExtra: 'to {{newValue}}',
   enabled: false,
 };
-
-export const supportedDatasources = [GitRefsDatasource.id];

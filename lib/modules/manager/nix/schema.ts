@@ -1,5 +1,5 @@
 import { z } from 'zod';
-import { Json } from '../../../util/schema-utils';
+import { Json } from '../../../util/schema-utils/index.ts';
 
 const InputType = z.enum([
   'file',
@@ -43,3 +43,4 @@ export const NixFlakeLock = Json.pipe(
 );
 
 export type NixFlakeLock = z.infer<typeof NixFlakeLock>;
+export type NixInput = z.infer<typeof NixInput>;

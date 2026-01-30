@@ -1,7 +1,7 @@
 import { isNonEmptyArray } from '@sindresorhus/is';
-import { WORKER_FILE_UPDATE_FAILED } from '../../../../constants/error-messages';
-import { logger } from '../../../../logger';
-import { get } from '../../../../modules/manager';
+import { WORKER_FILE_UPDATE_FAILED } from '../../../../constants/error-messages.ts';
+import { logger } from '../../../../logger/index.ts';
+import { get } from '../../../../modules/manager/index.ts';
 import type {
   ArtifactError,
   ArtifactNotice,
@@ -10,12 +10,12 @@ import type {
   UpdateArtifact,
   UpdateArtifactsConfig,
   UpdateArtifactsResult,
-} from '../../../../modules/manager/types';
-import { getFile } from '../../../../util/git';
-import type { FileAddition, FileChange } from '../../../../util/git/types';
-import { coerceString } from '../../../../util/string';
-import type { BranchConfig, BranchUpgradeConfig } from '../../../types';
-import { doAutoReplace } from './auto-replace';
+} from '../../../../modules/manager/types.ts';
+import { getFile } from '../../../../util/git/index.ts';
+import type { FileAddition, FileChange } from '../../../../util/git/types.ts';
+import { coerceString } from '../../../../util/string.ts';
+import type { BranchConfig, BranchUpgradeConfig } from '../../../types.ts';
+import { doAutoReplace } from './auto-replace.ts';
 
 export interface PackageFilesResult {
   artifactErrors: ArtifactError[];
@@ -102,6 +102,7 @@ export async function getUpdatedPackageFiles(
   );
   let updatedFileContents: Record<string, string> = {};
   const nonUpdatedFileContents: Record<string, string> = {};
+  const artifactUpdateNeeded: Record<string, string> = {};
   const managerPackageFiles: Record<string, Set<string>> = {};
   const packageFileUpdatedDeps: Record<string, PackageDependency[]> = {};
   const lockFileMaintenanceFiles: string[] = [];
@@ -304,6 +305,19 @@ export async function getUpdatedPackageFiles(
           updatedFileContents[packageFile] = newContent;
           delete nonUpdatedFileContents[packageFile];
         }
+        if (
+          manager === 'nix' &&
+          upgrade.currentValue === upgrade.newValue &&
+          upgrade.currentDigest &&
+          upgrade.newDigest &&
+          upgrade.currentDigest !== upgrade.newDigest
+        ) {
+          logger.debug(
+            { packageFile, depName },
+            'Nix digest-only update - tracking for artifact update',
+          );
+          artifactUpdateNeeded[packageFile] = newContent;
+        }
       }
     }
   }
@@ -314,18 +328,27 @@ export async function getUpdatedPackageFiles(
     path: name,
     contents: updatedFileContents[name],
   }));
+  // For artifact processing, include both updated files and files needing artifact updates
+  const filesForArtifacts: FileAddition[] = [
+    ...updatedPackageFiles,
+    ...Object.keys(artifactUpdateNeeded).map((name) => ({
+      type: 'addition' as const,
+      path: name,
+      contents: artifactUpdateNeeded[name],
+    })),
+  ];
   const updatedArtifacts: FileChange[] = [];
   const artifactErrors: ArtifactError[] = [];
   const artifactNotices: ArtifactNotice[] = [];
-  if (isNonEmptyArray(updatedPackageFiles)) {
+  if (isNonEmptyArray(filesForArtifacts)) {
     logger.debug('updateArtifacts for updatedPackageFiles');
     const updatedPackageFileManagers = getManagersForPackageFiles(
-      updatedPackageFiles,
+      filesForArtifacts,
       managerPackageFiles,
     );
     for (const manager of updatedPackageFileManagers) {
       const packageFilesForManager = getPackageFilesForManager(
-        updatedPackageFiles,
+        filesForArtifacts,
         managerPackageFiles[manager],
       );
       sortPackageFiles(config, manager, packageFilesForManager);
