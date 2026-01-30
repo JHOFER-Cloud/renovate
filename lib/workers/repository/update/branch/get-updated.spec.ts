@@ -1,17 +1,17 @@
 import { isArray } from '@sindresorhus/is';
 import { mockDeep } from 'vitest-mock-extended';
-import { GitRefsDatasource } from '../../../../modules/datasource/git-refs';
-import * as _batectWrapper from '../../../../modules/manager/batect-wrapper';
-import * as _bundler from '../../../../modules/manager/bundler';
-import * as _composer from '../../../../modules/manager/composer';
-import * as _gitSubmodules from '../../../../modules/manager/git-submodules';
-import * as _gomod from '../../../../modules/manager/gomod';
-import * as _helmv3 from '../../../../modules/manager/helmv3';
-import * as _nix from '../../../../modules/manager/nix';
-import * as _npm from '../../../../modules/manager/npm';
-import * as _pep621 from '../../../../modules/manager/pep621';
-import * as _pipCompile from '../../../../modules/manager/pip-compile';
-import * as _poetry from '../../../../modules/manager/poetry';
+import { GitRefsDatasource } from '../../../../modules/datasource/git-refs/index.js';
+import * as _batectWrapper from '../../../../modules/manager/batect-wrapper/index.js';
+import * as _bundler from '../../../../modules/manager/bundler/index.js';
+import * as _composer from '../../../../modules/manager/composer/index.js';
+import * as _gitSubmodules from '../../../../modules/manager/git-submodules/index.js';
+import * as _gomod from '../../../../modules/manager/gomod/index.js';
+import * as _helmv3 from '../../../../modules/manager/helmv3/index.js';
+import * as _nix from '../../../../modules/manager/nix/index.js';
+import * as _npm from '../../../../modules/manager/npm/index.js';
+import * as _pep621 from '../../../../modules/manager/pep621/index.js';
+import * as _pipCompile from '../../../../modules/manager/pip-compile/index.js';
+import * as _poetry from '../../../../modules/manager/poetry/index.js';
 import type {
   LookupUpdate,
   PackageFile,
