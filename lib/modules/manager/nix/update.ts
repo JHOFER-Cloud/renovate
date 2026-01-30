@@ -22,7 +22,7 @@ export function updateDependency({
     'gm',
   );
   const attrSetPattern = regEx(
-    `^\\s*${escapeRegExp(depName)}\\s*=\\s*\\{[^}]*url\\s*=\\s*"([^"]+)"`,
+    `^\\s*${escapeRegExp(depName)}\\s*=\\s*\\{[^}]*?url\\s*=\\s*"([^"]+)"`,
     'gms',
   );
   const match =
@@ -45,8 +45,21 @@ export function updateDependency({
 
   logger.trace({ depName, parsedUrl }, 'Parsed URL for update');
 
-  // Special handling for `github:` protocol URLs where the URL object doesn't properly serialize changes to non-standard protocols
-  if (parsedUrl.protocol === 'github:') {
+  // Special handling for FlakeHub URLs
+  if (parsedUrl.hostname === 'flakehub.com' && oldUrl.includes('/f/')) {
+    // FlakeHub URL format: https://flakehub.com/f/{owner}/{repo}/{version}[.tar.gz]
+    // Only update the version in the path if it's a version update
+    if (currentValue && newValue && currentValue !== newValue) {
+      // Replace version in the path, handling optional .tar.gz suffix
+      const versionPattern = new RegExp(
+        `(/f/[^/]+/[^/]+/)${escapeRegExp(currentValue)}(\\.tar\\.gz)?$`,
+      );
+      if (versionPattern.test(oldUrl)) {
+        newUrl = oldUrl.replace(versionPattern, `$1${newValue}$2`);
+      }
+    }
+  } else if (parsedUrl.protocol === 'github:') {
+    // Special handling for `github:` protocol URLs where the URL object doesn't properly serialize changes to non-standard protocols
     // Handle version updates
     if (
       currentValue &&

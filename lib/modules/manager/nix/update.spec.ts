@@ -445,5 +445,93 @@ describe('modules/manager/nix/update', () => {
         'No changes made to URL',
       );
     });
+
+    it('updates FlakeHub URL version', () => {
+      const fileContent = codeBlock`
+        {
+          inputs = {
+            flake-compat.url = "https://flakehub.com/f/edolstra/flake-compat/1.tar.gz";
+          };
+        }
+      `;
+      const result = updateDependency({
+        fileContent,
+        upgrade: {
+          depName: 'flake-compat',
+          currentValue: '1',
+          newValue: '1.1',
+        },
+      });
+      expect(result).toBe(codeBlock`
+        {
+          inputs = {
+            flake-compat.url = "https://flakehub.com/f/edolstra/flake-compat/1.1.tar.gz";
+          };
+        }
+      `);
+    });
+
+    it('updates FlakeHub URL version without .tar.gz suffix', () => {
+      const fileContent = codeBlock`
+        {
+          inputs = {
+            nixpkgs.url = "https://flakehub.com/f/NixOS/nixpkgs/0.2411";
+          };
+        }
+      `;
+      const result = updateDependency({
+        fileContent,
+        upgrade: {
+          depName: 'nixpkgs',
+          currentValue: '0.2411',
+          newValue: '0.2505',
+        },
+      });
+      expect(result).toBe(codeBlock`
+        {
+          inputs = {
+            nixpkgs.url = "https://flakehub.com/f/NixOS/nixpkgs/0.2505";
+          };
+        }
+      `);
+    });
+
+    it('returns null when FlakeHub URL pattern does not match', () => {
+      const fileContent = codeBlock`
+        {
+          inputs = {
+            something.url = "https://flakehub.com/api/something";
+          };
+        }
+      `;
+      const result = updateDependency({
+        fileContent,
+        upgrade: {
+          depName: 'something',
+          currentValue: '1.0',
+          newValue: '2.0',
+        },
+      });
+      expect(result).toBeNull();
+    });
+
+    it('returns null when FlakeHub version is not at expected position', () => {
+      const fileContent = codeBlock`
+        {
+          inputs = {
+            weird.url = "https://flakehub.com/f/owner/repo/extra/path/1.0";
+          };
+        }
+      `;
+      const result = updateDependency({
+        fileContent,
+        upgrade: {
+          depName: 'weird',
+          currentValue: '1.0',
+          newValue: '2.0',
+        },
+      });
+      expect(result).toBeNull();
+    });
   });
 });
