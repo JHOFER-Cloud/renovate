@@ -375,9 +375,173 @@ describe('modules/manager/nix/extract', () => {
       deps: [
         {
           currentDigest: 'ff81ac966bb2cae68946d5ed5fc4994f96d0ffec',
-          datasource: GitRefsDatasource.id,
+          currentValue: '1',
+          datasource: 'flakehub',
           depName: 'flake-compat',
-          packageName: 'https://flakehub.com/f/edolstra/flake-compat/1.tar.gz',
+          packageName: 'edolstra/flake-compat',
+          versioning: 'cargo',
+        },
+      ],
+    });
+  });
+
+  it('handles FlakeHub pinned version without digest', async () => {
+    const flakeLock = codeBlock`{
+      "nodes": {
+        "nixpkgs": {
+          "locked": {
+            "lastModified": 1733328505,
+            "narHash": "sha256-NeCCThCEP3eCl2l/+27kNNK7QrwZB1IJCrXfrbv5oqU=",
+            "rev": "abc123",
+            "revCount": 5835,
+            "type": "tarball",
+            "url": "https://api.flakehub.com/f/pinned/NixOS/nixpkgs/0.2411.5835/xxx/source.tar.gz"
+          },
+          "original": {
+            "type": "tarball",
+            "url": "https://flakehub.com/f/NixOS/nixpkgs/0.2411.5835.tar.gz"
+          }
+        },
+        "root": {
+          "inputs": {
+            "nixpkgs": "nixpkgs"
+          }
+        }
+      },
+      "root": "root",
+      "version": 7
+    }`;
+    fs.readLocalFile.mockResolvedValueOnce(flakeLock);
+    expect(await extractPackageFile('', 'flake.nix')).toEqual({
+      deps: [
+        {
+          currentValue: '0.2411.5835',
+          datasource: 'flakehub',
+          depName: 'nixpkgs',
+          packageName: 'NixOS/nixpkgs',
+        },
+      ],
+    });
+  });
+
+  it('handles FlakeHub wildcard version', async () => {
+    const flakeLock = codeBlock`{
+      "nodes": {
+        "home-manager": {
+          "locked": {
+            "lastModified": 1733328505,
+            "narHash": "sha256-NeCCThCEP3eCl2l/+27kNNK7QrwZB1IJCrXfrbv5oqU=",
+            "rev": "def456",
+            "revCount": 100,
+            "type": "tarball",
+            "url": "https://api.flakehub.com/f/pinned/nix-community/home-manager/0.1.100/yyy/source.tar.gz"
+          },
+          "original": {
+            "type": "tarball",
+            "url": "https://flakehub.com/f/nix-community/home-manager/*.tar.gz"
+          }
+        },
+        "root": {
+          "inputs": {
+            "home-manager": "home-manager"
+          }
+        }
+      },
+      "root": "root",
+      "version": 7
+    }`;
+    fs.readLocalFile.mockResolvedValueOnce(flakeLock);
+    expect(await extractPackageFile('', 'flake.nix')).toEqual({
+      deps: [
+        {
+          currentDigest: 'def456',
+          currentValue: '*',
+          datasource: 'flakehub',
+          depName: 'home-manager',
+          packageName: 'nix-community/home-manager',
+          versioning: 'cargo',
+        },
+      ],
+    });
+  });
+
+  it('handles FlakeHub URL-encoded wildcard version', async () => {
+    const flakeLock = codeBlock`{
+      "nodes": {
+        "devshell": {
+          "locked": {
+            "lastModified": 1733328505,
+            "narHash": "sha256-NeCCThCEP3eCl2l/+27kNNK7QrwZB1IJCrXfrbv5oqU=",
+            "rev": "jkl012",
+            "revCount": 200,
+            "type": "tarball",
+            "url": "https://api.flakehub.com/f/pinned/numtide/devshell/0.1.200/aaa/source.tar.gz"
+          },
+          "original": {
+            "type": "tarball",
+            "url": "https://flakehub.com/f/numtide/devshell/%2A.tar.gz"
+          }
+        },
+        "root": {
+          "inputs": {
+            "devshell": "devshell"
+          }
+        }
+      },
+      "root": "root",
+      "version": 7
+    }`;
+    fs.readLocalFile.mockResolvedValueOnce(flakeLock);
+    expect(await extractPackageFile('', 'flake.nix')).toEqual({
+      deps: [
+        {
+          currentDigest: 'jkl012',
+          currentValue: '%2A',
+          datasource: 'flakehub',
+          depName: 'devshell',
+          packageName: 'numtide/devshell',
+          versioning: 'cargo',
+        },
+      ],
+    });
+  });
+
+  it('handles FlakeHub URL without .tar.gz suffix', async () => {
+    const flakeLock = codeBlock`{
+      "nodes": {
+        "flake-utils": {
+          "locked": {
+            "lastModified": 1733328505,
+            "narHash": "sha256-NeCCThCEP3eCl2l/+27kNNK7QrwZB1IJCrXfrbv5oqU=",
+            "rev": "ghi789",
+            "revCount": 50,
+            "type": "tarball",
+            "url": "https://api.flakehub.com/f/pinned/numtide/flake-utils/0.1/zzz/source.tar.gz"
+          },
+          "original": {
+            "type": "tarball",
+            "url": "https://flakehub.com/f/numtide/flake-utils/0.1"
+          }
+        },
+        "root": {
+          "inputs": {
+            "flake-utils": "flake-utils"
+          }
+        }
+      },
+      "root": "root",
+      "version": 7
+    }`;
+    fs.readLocalFile.mockResolvedValueOnce(flakeLock);
+    expect(await extractPackageFile('', 'flake.nix')).toEqual({
+      deps: [
+        {
+          currentDigest: 'ghi789',
+          currentValue: '0.1',
+          datasource: 'flakehub',
+          depName: 'flake-utils',
+          packageName: 'numtide/flake-utils',
+          versioning: 'cargo',
         },
       ],
     });
