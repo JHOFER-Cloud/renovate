@@ -1,12 +1,23 @@
 {
   "plugins": [
     "@semantic-release/commit-analyzer",
-    "@semantic-release/release-notes-generator",
+    [
+      "@semantic-release/release-notes-generator",
+      {
+        "preset": "conventionalcommits",
+        "writerOpts": {
+          "maxSubjectLength": 72,
+          "commitLimit": 50
+        }
+      }
+    ],
     [
       "@semantic-release/github",
       {
         "releasedLabels": false,
         "successCommentCondition": "<% return branch.channel !== 'next' && issue.user.type !== 'Bot'; %>",
+        "successComment": false,
+        "failComment": false,
         "assets": [
           {
             "path": "tmp/docs.tgz",
@@ -15,7 +26,6 @@
         ]
       }
     ],
-    "@containerbase/semantic-release-pnpm",
     [
       "@semantic-release/exec",
       {
