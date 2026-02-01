@@ -1,10 +1,28 @@
-# FlakeHub Datasource
+This datasource fetches version information from
+[FlakeHub](https://flakehub.com), a discovery service and registry for Nix
+flakes.
 
-Fetches package information from [FlakeHub](https://flakehub.com), a discovery service and registry for Nix flakes.
+## How It Works
 
-## Usage
+The datasource queries the FlakeHub API using version constraints to find
+matching releases. Unlike traditional package registries that return all
+available versions, FlakeHub's API returns a single version matching the
+specified constraint.
 
-This datasource is primarily used by the [Nix manager](../../manager/nix/index.md) to update FlakeHub-based dependencies in `flake.lock` files.
+- **API endpoint**:
+  `https://api.flakehub.com/version/{packageName}/{constraint}`
+- **Default registryUrl**: `https://api.flakehub.com`
+- **packageName format**: `{owner}/{project}`, for example:
+  - `edolstra/flake-compat`
+  - `NixOS/nixpkgs`
+  - `nix-community/home-manager`
+
+## Version Constraints
+
+The datasource queries with a version constraint (or `*` for the latest) and
+returns the matching version. This is primarily used by the
+[Nix manager](../../manager/nix/index.md) to update FlakeHub-based dependencies
+in `flake.lock` files.
 
 When a Nix flake input uses a FlakeHub URL like:
 
@@ -16,24 +34,15 @@ When a Nix flake input uses a FlakeHub URL like:
 }
 ```
 
-The datasource will query the FlakeHub API to discover available versions and update the dependency accordingly.
-
-## API
-
-The datasource queries `https://api.flakehub.com/f/{owner}/{project}/releases` to fetch all available releases for a flake.
-
-## Package Names
-
-Package names follow the format `{owner}/{project}`, for example:
-
-- `edolstra/flake-compat`
-- `NixOS/nixpkgs`
-- `nix-community/home-manager`
+Renovate will query for versions matching the `1` constraint to check for
+updates within that major version.
 
 ## Versioning
 
-FlakeHub uses semantic versioning. The datasource returns releases with their full semantic version numbers along with the corresponding Git commit SHA.
+FlakeHub uses semantic versioning. The datasource returns the simplified version
+number (e.g. `1.1.0`) and the corresponding Git commit revision for pinning.
 
 ## Deprecated Releases
 
-Releases that have been yanked (marked as deprecated on FlakeHub) are returned with `isDeprecated: true`.
+Releases that have been yanked on FlakeHub are returned with
+`isDeprecated: true`.
