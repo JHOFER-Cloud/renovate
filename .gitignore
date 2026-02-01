@@ -36,6 +36,5 @@ test/datasource/nuget/_fixtures/obj
 # pdm
 /.pdm-python
 
-# devenv
-/.devenv
-.devenv.flake.nix
+# nix
+.direnv
