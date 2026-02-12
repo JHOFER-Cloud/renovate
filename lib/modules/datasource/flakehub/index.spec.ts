@@ -1,6 +1,6 @@
+import * as httpMock from '~test/http-mock.ts';
 import { getPkgReleases } from '../index.ts';
 import { FlakeHubDatasource } from './index.ts';
-import * as httpMock from '~test/http-mock.ts';
 
 const flakeCompatResponse = {
   version: '1.1.0+rev-ff81ac966bb2cae68946d5ed5fc4994f96d0ffec',

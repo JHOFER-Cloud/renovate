@@ -1,17 +1,18 @@
 import { isArray } from '@sindresorhus/is';
 import { mockDeep } from 'vitest-mock-extended';
-import { GitRefsDatasource } from '../../../../modules/datasource/git-refs/index.js';
-import * as _batectWrapper from '../../../../modules/manager/batect-wrapper/index.js';
-import * as _bundler from '../../../../modules/manager/bundler/index.js';
-import * as _composer from '../../../../modules/manager/composer/index.js';
-import * as _gitSubmodules from '../../../../modules/manager/git-submodules/index.js';
-import * as _gomod from '../../../../modules/manager/gomod/index.js';
-import * as _helmv3 from '../../../../modules/manager/helmv3/index.js';
-import * as _nix from '../../../../modules/manager/nix/index.js';
-import * as _npm from '../../../../modules/manager/npm/index.js';
-import * as _pep621 from '../../../../modules/manager/pep621/index.js';
-import * as _pipCompile from '../../../../modules/manager/pip-compile/index.js';
-import * as _poetry from '../../../../modules/manager/poetry/index.js';
+import { git } from '~test/util.ts';
+import { GitRefsDatasource } from '../../../../modules/datasource/git-refs/index.ts';
+import * as _batectWrapper from '../../../../modules/manager/batect-wrapper/index.ts';
+import * as _bundler from '../../../../modules/manager/bundler/index.ts';
+import * as _composer from '../../../../modules/manager/composer/index.ts';
+import * as _gitSubmodules from '../../../../modules/manager/git-submodules/index.ts';
+import * as _gomod from '../../../../modules/manager/gomod/index.ts';
+import * as _helmv3 from '../../../../modules/manager/helmv3/index.ts';
+import * as _nix from '../../../../modules/manager/nix/index.ts';
+import * as _npm from '../../../../modules/manager/npm/index.ts';
+import * as _pep621 from '../../../../modules/manager/pep621/index.ts';
+import * as _pipCompile from '../../../../modules/manager/pip-compile/index.ts';
+import * as _poetry from '../../../../modules/manager/poetry/index.ts';
 import type {
   LookupUpdate,
   PackageFile,
@@ -20,7 +21,6 @@ import type {
 import type { BranchConfig, BranchUpgradeConfig } from '../../../types.ts';
 import * as _autoReplace from './auto-replace.ts';
 import { getUpdatedPackageFiles } from './get-updated.ts';
-import { git } from '~test/util.ts';
 
 const bundler = vi.mocked(_bundler);
 const composer = vi.mocked(_composer);

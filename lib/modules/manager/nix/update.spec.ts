@@ -1,6 +1,6 @@
 import { codeBlock } from 'common-tags';
-import { updateDependency } from './update.ts';
 import { logger } from '~test/util.ts';
+import { updateDependency } from './update.ts';
 
 describe('modules/manager/nix/update', () => {
   describe('updateDependency', () => {

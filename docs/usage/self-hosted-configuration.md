@@ -130,7 +130,7 @@ Allowed options:
 
 | Option          | Description                                                                   |
 | --------------- | ----------------------------------------------------------------------------- |
-| `goGenerate`    | Allows the `goGenerate` `postUpdateCommand` to run after a go mod update.     |
+| `goGenerate`    | Allows the `goGenerate` `postUpdateOption` to run after a go mod update.      |
 | `gradleWrapper` | Allows using `./gradlew` or `gradle.bat` when performing updates with Gradle. |
 
 ## autodiscover
@@ -446,6 +446,7 @@ Other valid cache namespaces are as follows:
 - `datasource-git`
 - `datasource-gitea-releases`
 - `datasource-gitea-tags`
+- `datasource-github-digest`
 - `datasource-github-release-attachments`
 - `datasource-gitlab-packages`
 - `datasource-gitlab-releases`

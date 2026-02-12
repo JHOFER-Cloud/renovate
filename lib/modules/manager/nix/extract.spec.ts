@@ -1,9 +1,9 @@
 import { codeBlock } from 'common-tags';
 import { ZodError } from 'zod';
+import { fs, logger } from '~test/util.ts';
 import { GitRefsDatasource } from '../../datasource/git-refs/index.ts';
 import { id as nixpkgsVersioning } from '../../versioning/nixpkgs/index.ts';
 import { extractPackageFile } from './index.ts';
-import { fs, logger } from '~test/util.ts';
 
 vi.mock('../../../util/fs/index.ts');
 

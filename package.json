@@ -24,9 +24,9 @@
     "lint-other": "vitest run --coverage false test/other/**.spec.ts",
     "oxlint": "oxlint --import-plugin",
     "oxlint-fix": "oxlint --import-plugin --fix",
-    "biome": "biome lint .",
-    "biome-ci": "biome lint --reporter=github .",
-    "biome-fix": "biome lint --write .",
+    "biome": "biome check --formatter-enabled=false .",
+    "biome-ci": "biome check --formatter-enabled=false --reporter=github .",
+    "biome-fix": "biome check --formatter-enabled=false --write .",
     "eslint": "NODE_OPTIONS=--max-old-space-size=8192 eslint . --cache --cache-location .cache/eslint",
     "eslint-fix": "NODE_OPTIONS=--max-old-space-size=8192 eslint --cache --cache-location .cache/eslint --fix .",
     "eslint-ci": "NODE_OPTIONS=--max-old-space-size=8192 eslint . --cache --cache-strategy content --cache-location .cache/eslint --format gha",
@@ -215,7 +215,7 @@
     "execa": "8.0.1",
     "extract-zip": "2.0.1",
     "find-packages": "10.0.4",
-    "find-up": "7.0.0",
+    "find-up": "8.0.0",
     "fs-extra": "11.3.3",
     "git-url-parse": "16.1.0",
     "github-url-from-git": "1.5.0",
@@ -247,7 +247,7 @@
     "p-throttle": "8.1.0",
     "parse-link-header": "2.0.0",
     "prettier": "3.6.2",
-    "protobufjs": "7.5.4",
+    "protobufjs": "8.0.0",
     "punycode": "2.3.1",
     "redis": "5.10.0",
     "remark": "15.0.1",
@@ -255,7 +255,7 @@
     "remark-github": "12.0.0",
     "safe-stable-stringify": "2.5.0",
     "sax": "1.4.4",
-    "semver": "7.7.2",
+    "semver": "7.7.3",
     "semver-stable": "3.0.0",
     "semver-utils": "1.1.4",
     "shlex": "3.0.0",
@@ -364,8 +364,8 @@
     "typescript": "5.9.3",
     "typescript-eslint": "8.54.0",
     "unified": "11.0.5",
-    "vite": "8.0.0-beta.8",
-    "vite-tsconfig-paths": "5.1.4",
+    "vite": "8.0.0-beta.11",
+    "vite-tsconfig-paths": "6.0.5",
     "vitest": "4.0.18",
     "vitest-mock-extended": "3.1.0"
   },
@@ -394,7 +394,7 @@
     "overrides": {
       "@yarnpkg/core@4.5.0>tar": "7.5.7",
       "esbuild": "0.27.2",
-      "vite": "8.0.0-beta.8"
+      "vite": "8.0.0-beta.11"
     }
   }
 }
