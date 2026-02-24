@@ -10,6 +10,8 @@ export const supportedDatasources = [
   FlakeHubDatasource.id,
 ];
 export const supportsLockFileMaintenance = true;
+export const lockFileNames = ['flake.lock'];
+
 export const url = 'https://nix.dev';
 
 export const defaultConfig = {
