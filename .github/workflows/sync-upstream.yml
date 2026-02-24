@@ -46,20 +46,17 @@ jobs:
 
           # Get latest upstream tag
           LATEST_TAG=$(git describe --tags upstream/main --abbrev=0)
-          echo "latest_tag=$LATEST_TAG" >> $GITHUB_OUTPUT
+          echo "latest_tag=$LATEST_TAG" >> "$GITHUB_OUTPUT"
 
           # Check if we're behind
           # merge-base returns 0 if ancestor, 1 if not - both are valid, not errors
-          set +e
-          git merge-base --is-ancestor HEAD upstream/main
-          if [ $? -eq 0 ]; then
-            echo "has_updates=false" >> $GITHUB_OUTPUT
+          if git merge-base --is-ancestor HEAD upstream/main; then
+            echo "has_updates=false" >> "$GITHUB_OUTPUT"
           else
-            echo "has_updates=true" >> $GITHUB_OUTPUT
+            echo "has_updates=true" >> "$GITHUB_OUTPUT"
           fi
-          set -e
 
-          echo "BRANCH_NAME=sync-upstream" >> $GITHUB_ENV
+          echo "BRANCH_NAME=sync-upstream" >> "$GITHUB_ENV"
 
       - name: Check for existing PR
         if: steps.check.outputs.has_updates == 'true'
@@ -67,8 +64,8 @@ jobs:
         env:
           GH_TOKEN: ${{ steps.generate_token.outputs.token }}
         run: |
-          PR_NUMBER=$(gh pr list --repo ${{ github.repository }} --head sync-upstream --json number --jq '.[0].number' || echo "")
-          echo "pr_number=$PR_NUMBER" >> $GITHUB_OUTPUT
+          PR_NUMBER=$(gh pr list --repo "${{ github.repository }}" --head sync-upstream --json number --jq '.[0].number' || echo "")
+          echo "pr_number=$PR_NUMBER" >> "$GITHUB_OUTPUT"
 
       - name: Create or update sync branch
         if: steps.check.outputs.has_updates == 'true'

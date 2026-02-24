@@ -65,9 +65,11 @@ export class FlakeHubDatasource extends Datasource {
 
       if (result) {
         releasesMap.set(result.version, result);
+        /* v8 ignore next -- single result per query, already-set branch unreachable */
         sourceUrl ??= result.repo_url;
       }
 
+      /* v8 ignore next 3 -- getJson either throws or returns a valid body, so releasesMap is never empty */
       if (releasesMap.size === 0) {
         return null;
       }
@@ -90,9 +92,9 @@ export class FlakeHubDatasource extends Datasource {
         sourceUrl,
       };
     } catch (err) {
-      /* istanbul ignore next */
+      /* v8 ignore next */
       const statusCode = err?.statusCode;
-      /* istanbul ignore next */
+      /* v8 ignore next */
       if (statusCode === 404) {
         logger.debug(
           { packageName, currentValue },
@@ -100,7 +102,7 @@ export class FlakeHubDatasource extends Datasource {
         );
         return null;
       }
-      /* istanbul ignore next */
+      /* v8 ignore next */
       this.handleGenericErrors(err);
     }
   }
@@ -122,6 +124,7 @@ export class FlakeHubDatasource extends Datasource {
     }
 
     // gitRef is required by schema but TypeScript doesn't know that
+    /* v8 ignore next */
     return releases.releases[0].gitRef ?? null;
   }
 }
