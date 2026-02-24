@@ -1,0 +1,121 @@
+name: Sync Fork with Upstream
+
+on:
+  schedule:
+    # Run daily at 7 AM UTC
+    - cron: '0 7 * * *'
+  workflow_dispatch: # Allow manual triggering
+
+permissions:
+  contents: write
+  pull-requests: write
+  actions: write
+
+jobs:
+  sync:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Generate GitHub App Token
+        id: generate_token
+        uses: actions/create-github-app-token@d72941d797fd3113feb6b93fd0dec494b13a2547 # v1
+        with:
+          app-id: ${{ secrets.APP_ID }}
+          private-key: ${{ secrets.APP_PRIVATE_KEY }}
+
+      - name: Checkout repository
+        uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
+        with:
+          fetch-depth: 0
+          token: ${{ steps.generate_token.outputs.token }}
+
+      - name: Configure Git
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+
+      - name: Add upstream remote
+        run: |
+          git remote add upstream https://github.com/renovatebot/renovate.git || true
+          git fetch upstream
+
+      - name: Get latest upstream tag
+        id: check
+        run: |
+          git fetch origin
+          git fetch upstream --tags --force
+
+          # Get latest upstream tag
+          LATEST_TAG=$(git describe --tags upstream/main --abbrev=0)
+          echo "latest_tag=$LATEST_TAG" >> $GITHUB_OUTPUT
+
+          # Check if we're behind
+          # merge-base returns 0 if ancestor, 1 if not - both are valid, not errors
+          set +e
+          git merge-base --is-ancestor HEAD upstream/main
+          if [ $? -eq 0 ]; then
+            echo "has_updates=false" >> $GITHUB_OUTPUT
+          else
+            echo "has_updates=true" >> $GITHUB_OUTPUT
+          fi
+          set -e
+
+          echo "BRANCH_NAME=sync-upstream" >> $GITHUB_ENV
+
+      - name: Check for existing PR
+        if: steps.check.outputs.has_updates == 'true'
+        id: existing_pr
+        env:
+          GH_TOKEN: ${{ steps.generate_token.outputs.token }}
+        run: |
+          PR_NUMBER=$(gh pr list --repo ${{ github.repository }} --head sync-upstream --json number --jq '.[0].number' || echo "")
+          echo "pr_number=$PR_NUMBER" >> $GITHUB_OUTPUT
+
+      - name: Create or update sync branch
+        if: steps.check.outputs.has_updates == 'true'
+        run: |
+          BRANCH_NAME="sync-upstream"
+          LATEST_TAG="${{ steps.check.outputs.latest_tag }}"
+
+          # Check if branch exists remotely
+          if git ls-remote --heads origin "$BRANCH_NAME" | grep -q "$BRANCH_NAME"; then
+            # Branch exists, force push to update it
+            git checkout -B "$BRANCH_NAME" "$LATEST_TAG"
+            git push origin "$BRANCH_NAME" --force
+          else
+            # Branch doesn't exist, create it
+            git checkout -b "$BRANCH_NAME" "$LATEST_TAG"
+            git push origin "$BRANCH_NAME"
+          fi
+
+      - name: Create or update Pull Request
+        if: steps.check.outputs.has_updates == 'true'
+        env:
+          GH_TOKEN: ${{ steps.generate_token.outputs.token }}
+        run: |
+          TITLE="Sync upstream"
+          BODY="🔄 Sync to latest upstream tag: **${{ steps.check.outputs.latest_tag }}**
+
+          Review changes and merge when ready."
+
+          if [ -n "${{ steps.existing_pr.outputs.pr_number }}" ]; then
+            # Update existing PR
+            echo "Updating existing PR #${{ steps.existing_pr.outputs.pr_number }}"
+            gh pr edit ${{ steps.existing_pr.outputs.pr_number }} \
+              --repo ${{ github.repository }} \
+              --title "$TITLE" \
+              --body "$BODY"
+          else
+            # Create new PR
+            echo "Creating new PR"
+            gh pr create --repo ${{ github.repository }} \
+              --title "$TITLE" \
+              --body "$BODY" \
+              --base main \
+              --head "sync-upstream" \
+              --reviewer ojsef39
+          fi
+          gh pr merge --auto
+
+      - name: No updates
+        if: steps.check.outputs.has_updates == 'false'
+        run: echo "✅ Fork is already up to date with upstream"
