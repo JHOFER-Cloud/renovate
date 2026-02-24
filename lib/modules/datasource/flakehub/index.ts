@@ -7,7 +7,7 @@ import type {
   GetReleasesConfig,
   ReleaseResult,
 } from '../types.ts';
-import { FlakeHubRelease } from './schema.ts';
+import { FlakeHubRelease, type FlakeHubReleaseType } from './schema.ts';
 
 export class FlakeHubDatasource extends Datasource {
   static readonly id = 'flakehub';
@@ -50,7 +50,7 @@ export class FlakeHubDatasource extends Datasource {
       return null;
     }
 
-    const releasesMap = new Map<string, typeof FlakeHubRelease._type>();
+    const releasesMap = new Map<string, FlakeHubReleaseType>();
     let sourceUrl: string | undefined;
 
     try {
