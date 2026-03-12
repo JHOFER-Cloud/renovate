@@ -29,7 +29,7 @@ void (async () => {
   const meta = await bake('push', opts);
 
   if (meta?.['push-slim']?.['containerimage.digest']) {
-    sign(
+    await sign(
       `ghcr.io/jhofer-cloud/renovate@${meta['push-slim']['containerimage.digest']}`,
       opts,
     );
@@ -38,7 +38,7 @@ void (async () => {
   }
 
   if (meta?.['push-full']?.['containerimage.digest']) {
-    sign(
+    await sign(
       `ghcr.io/jhofer-cloud/renovate@${meta['push-full']['containerimage.digest']}`,
       opts,
     );
