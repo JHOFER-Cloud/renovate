@@ -373,8 +373,8 @@ importers:
         specifier: 14.0.0
         version: 14.0.0(commander@14.0.3)
       '@containerbase/istanbul-reports-html':
-        specifier: 1.1.36
-        version: 1.1.36
+        specifier: 1.1.37
+        version: 1.1.37
       '@eslint/js':
         specifier: 9.39.4
         version: 9.39.4
@@ -1021,8 +1021,8 @@ packages:
     peerDependencies:
       commander: ~14.0.0
 
-  '@containerbase/istanbul-reports-html@1.1.36':
-    resolution: {integrity: sha512-gpKLhJqePOzG1pUNQMKbTxIo19VPPFUI/yLbEIoK11pLLIaNjQ/b5czyfa9a5T6cLtatAQ/xiVtSpmCSPKY6VQ==}
+  '@containerbase/istanbul-reports-html@1.1.37':
+    resolution: {integrity: sha512-IOzuOAnolFouCNKiI7yRYoVCIDET5lR2J/jgw3g67M+2zDYTZF2ba4vqoK+4xrqftU7GADEvn0gh10kGnHXPLQ==}
     engines: {node: ^20.9.0 || ^22.11.0 || ^24.0.0, pnpm: ^10.0.0}
 
   '@emnapi/core@1.8.1':
@@ -7561,7 +7561,7 @@ snapshots:
     dependencies:
       commander: 14.0.3
 
-  '@containerbase/istanbul-reports-html@1.1.36':
+  '@containerbase/istanbul-reports-html@1.1.37':
     dependencies:
       istanbul-lib-report: 3.0.1
       istanbul-reports: 3.2.0
