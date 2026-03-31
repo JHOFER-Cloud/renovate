@@ -1,23 +1,23 @@
-# syntax=docker/dockerfile:1.22.0@sha256:4a43a54dd1fedceb30ba47e76cfcf2b47304f4161c0caeac2db1c61804ea3c91
+# syntax=docker/dockerfile:1.23.0@sha256:2780b5c3bab67f1f76c781860de469442999ed1a0d7992a5efdf2cffc0e3d769
 
 ARG BASE_IMAGE_TYPE=slim
 
 # --------------------------------------
 # slim image
 # --------------------------------------
-FROM ghcr.io/renovatebot/base-image:13.32.1@sha256:0e9a93d5c1cb2d4497c6795d412fe80a5631e13f18538a823c31e79f230e4320 AS slim-base
+FROM ghcr.io/renovatebot/base-image:13.32.2@sha256:a2286b1fd1d77f84625b735e047a2ede6ce1cb03035f08b2d27e0012cff082f5 AS slim-base
 
 # --------------------------------------
 # full image
 # --------------------------------------
-FROM ghcr.io/renovatebot/base-image:13.32.1-full@sha256:1a7e24829fe66f52820a90f0c6135706a4bb2f673058e1e49627b380d10b8984 AS full-base
+FROM ghcr.io/renovatebot/base-image:13.32.2-full@sha256:926e1a66dbe953e71922075657197f5b895dad9d6297ea32882ff3f919ae62b3 AS full-base
 
 ENV RENOVATE_BINARY_SOURCE=global
 
 # --------------------------------------
 # build image
 # --------------------------------------
-FROM --platform=$BUILDPLATFORM ghcr.io/renovatebot/base-image:13.32.1@sha256:0e9a93d5c1cb2d4497c6795d412fe80a5631e13f18538a823c31e79f230e4320 AS build
+FROM --platform=$BUILDPLATFORM ghcr.io/renovatebot/base-image:13.32.2@sha256:a2286b1fd1d77f84625b735e047a2ede6ce1cb03035f08b2d27e0012cff082f5 AS build
 
 # We want a specific node version here
 # renovate: datasource=github-releases packageName=containerbase/node-prebuild versioning=node
@@ -53,7 +53,7 @@ RUN set -ex; \
 
 # prepare pnpm env
 ENV CI=1 npm_config_modules_cache_max_age=0 \
-  npm_config_loglevel=info
+    npm_config_loglevel=info
 
 # replace `amd64` with `x64` for `node`
 ENV ARCH=${TARGETARCH/amd64/x64}
@@ -84,9 +84,9 @@ RUN set -ex; \
 FROM ${BASE_IMAGE_TYPE}-base
 
 LABEL name="renovate"
-LABEL org.opencontainers.image.source="https://github.com/renovatebot/renovate" \
-  org.opencontainers.image.url="https://renovatebot.com" \
-  org.opencontainers.image.licenses="AGPL-3.0-only"
+LABEL org.opencontainers.image.source="https://github.com/JHOFER-Cloud/renovate" \
+    org.opencontainers.image.url="https://renovatebot.com" \
+    org.opencontainers.image.licenses="AGPL-3.0-only"
 
 WORKDIR /usr/src/app
 
@@ -103,8 +103,26 @@ RUN ln -sf /usr/local/renovate/node /bin/node
 
 # ensure default base and cache directories exist.
 # /runner/cache is an alternative cache directory used in both Docker and microVMs.
-RUN mkdir -p /tmp/renovate/cache/renovate/repository /runner/cache/renovate/repository && \
-  chmod -R 777 /tmp/renovate /runner
+RUN mkdir -p /tmp/renovate/cache/renovate/repository /runner/cache/renovate/repository \
+    && chmod -R 777 /tmp/renovate /runner
+
+# Install Nix manually by copying binaries (avoiding installer validation)
+RUN NIX_VERSION=$(curl -sL https://api.github.com/repos/NixOS/nix/tags | grep -o '"name": "[^"]*"' | head -1 | cut -d'"' -f4) \
+    && mkdir -p /nix/store /nix/var/nix \
+    && curl -L https://releases.nixos.org/nix/nix-${NIX_VERSION}/nix-${NIX_VERSION}-$(uname -m)-linux.tar.xz | tar xJ \
+    && cp -RPp nix-*-linux/store/* /nix/store/ \
+    && rm -rf nix-*-linux \
+    && rm -f /usr/local/bin/nix \
+    && ln -sf /nix/store/*-nix-*/bin/nix /usr/local/bin/nix \
+    && /usr/local/bin/nix --version \
+    && mkdir -p /etc/nix \
+    && echo "experimental-features = nix-command flakes" >> /etc/nix/nix.conf \
+    && echo "sandbox = false" >> /etc/nix/nix.conf \
+    && echo "build-users-group =" >> /etc/nix/nix.conf \
+    && echo "extra-substituters = https://ojsef39.cachix.org" >> /etc/nix/nix.conf \
+    && echo "extra-trusted-public-keys = ojsef39.cachix.org-1:Pe8zOhPVMt4fa/2HYlquHkTnGX3EH7lC9xMyCA2zM3Y=" >> /etc/nix/nix.conf \
+    && echo "extra-trusted-substituters = https://ojsef39.cachix.org" >> /etc/nix/nix.conf \
+    && chown -R 12021:12021 /nix
 
 # test
 RUN set -ex; \
@@ -114,8 +132,8 @@ RUN set -ex; \
   true
 
 LABEL \
-  org.opencontainers.image.version="${RENOVATE_VERSION}" \
-  org.label-schema.version="${RENOVATE_VERSION}"
+    org.opencontainers.image.version="${RENOVATE_VERSION}" \
+    org.label-schema.version="${RENOVATE_VERSION}"
 
 # Numeric user ID for the ubuntu user. Used to indicate a non-root user to OpenShift
 USER 12021
