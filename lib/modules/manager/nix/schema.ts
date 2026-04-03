@@ -43,3 +43,4 @@ export const NixFlakeLock = Json.pipe(
 );
 
 export type NixFlakeLock = z.infer<typeof NixFlakeLock>;
+export type NixInput = z.infer<typeof NixInput>;
