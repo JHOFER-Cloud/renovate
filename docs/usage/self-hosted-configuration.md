@@ -464,6 +464,7 @@ Other valid cache namespaces are as follows:
 - `datasource-dotnet-version`
 - `datasource-elm-package`
 - `datasource-endoflife-date`
+- `datasource-flakehub`
 - `datasource-forgejo-releases`
 - `datasource-forgejo-tags`
 - `datasource-galaxy-collection`

@@ -42,3 +42,6 @@ test/datasource/nuget/_fixtures/obj
 /.opencode
 /AGENTS.md
 /CLAUDE.md
+
+# nix
+.direnv
