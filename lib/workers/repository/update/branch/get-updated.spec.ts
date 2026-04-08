@@ -36,18 +36,18 @@ const pep621 = vi.mocked(_pep621);
 const pipCompile = vi.mocked(_pipCompile);
 const poetry = vi.mocked(_poetry);
 
-vi.mock('../../../../modules/manager/bundler');
-vi.mock('../../../../modules/manager/composer');
-vi.mock('../../../../modules/manager/helmv3');
-vi.mock('../../../../modules/manager/npm');
-vi.mock('../../../../modules/manager/git-submodules');
-vi.mock('../../../../modules/manager/gomod', () => mockDeep());
-vi.mock('../../../../modules/manager/nix');
-vi.mock('../../../../modules/manager/batect-wrapper');
-vi.mock('../../../../modules/manager/pep621');
-vi.mock('../../../../modules/manager/pip-compile');
-vi.mock('../../../../modules/manager/poetry');
-vi.mock('./auto-replace');
+vi.mock('../../../../modules/manager/bundler/index.ts');
+vi.mock('../../../../modules/manager/composer/index.ts');
+vi.mock('../../../../modules/manager/helmv3/index.ts');
+vi.mock('../../../../modules/manager/npm/index.ts');
+vi.mock('../../../../modules/manager/git-submodules/index.ts');
+vi.mock('../../../../modules/manager/gomod/index.ts', () => mockDeep());
+vi.mock('../../../../modules/manager/nix/index.ts');
+vi.mock('../../../../modules/manager/batect-wrapper/index.ts');
+vi.mock('../../../../modules/manager/pep621/index.ts');
+vi.mock('../../../../modules/manager/pip-compile/index.ts');
+vi.mock('../../../../modules/manager/poetry/index.ts');
+vi.mock('./auto-replace.ts');
 
 describe('workers/repository/update/branch/get-updated', () => {
   describe('getUpdatedPackageFiles()', () => {
