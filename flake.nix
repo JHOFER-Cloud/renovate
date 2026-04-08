@@ -20,12 +20,13 @@
       in {
         devShells.default = pkgs.mkShell {
           packages = with pkgs; [
-            git
             gh
+            git
             jq
-            tsx
             nodejs_25
+            oxlint
             pnpm
+            tsx
           ];
 
           shellHook = ''
