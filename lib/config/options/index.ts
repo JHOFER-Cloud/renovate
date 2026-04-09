@@ -1079,6 +1079,21 @@ const options: Readonly<RenovateOptions>[] = [
     globalOnly: true,
   },
   {
+    name: 'githubAppId',
+    description:
+      'GitHub App ID. Use with `githubAppKey` to auto-generate installation tokens.',
+    type: 'string',
+    globalOnly: true,
+    supportedPlatforms: ['github'],
+  },
+  {
+    name: 'githubAppKey',
+    description: 'GitHub App private key (PEM format). Use with `githubAppId`.',
+    type: 'string',
+    globalOnly: true,
+    supportedPlatforms: ['github'],
+  },
+  {
     name: 'username',
     description: 'Username for authentication.',
     stage: 'repository',

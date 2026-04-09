@@ -26,6 +26,7 @@ import type {
   ReattemptPlatformAutomergeConfig,
   UpdatePrConfig,
 } from '../types.ts';
+import * as _appToken from './app-token.ts';
 import * as branch from './branch.ts';
 import * as github from './index.ts';
 import type { ApiPageCache, GhRestPr } from './types.ts';
@@ -36,7 +37,9 @@ vi.mock('timers/promises');
 
 vi.mock('../../../util/host-rules.ts', () => mockDeep());
 vi.mock('../../../util/http/queue.ts');
+vi.mock('./app-token.ts');
 const hostRules = vi.mocked(_hostRules);
+const appToken = vi.mocked(_appToken);
 
 const git = vi.mocked(_git);
 
@@ -632,6 +635,238 @@ describe('modules/platform/github/index', () => {
 
       const repos = await github.getRepos();
       expect(repos).toEqual(['a/b', 'c/d']);
+    });
+  });
+
+  describe('GitHub App mode (githubAppId + githubAppKey)', () => {
+    const futureExpiry = new Date(Date.now() + 3600 * 1000);
+    const pastExpiry = new Date(Date.now() - 60 * 1000);
+
+    beforeEach(() => {
+      appToken.generateJWT.mockReturnValue('mock-jwt');
+    });
+
+    describe('initPlatform()', () => {
+      it('bootstraps installation tokens and throws when no installations', async () => {
+        appToken.listInstallations.mockResolvedValue([]);
+        await expect(
+          github.initPlatform({
+            githubAppId: '67890',
+            githubAppKey: 'fake-pem',
+          }),
+        ).rejects.toThrow('Init: GitHub App has no installations');
+        expect(appToken.generateJWT).toHaveBeenCalledWith('67890', 'fake-pem');
+      });
+
+      it('bootstraps installation tokens for all installations', async () => {
+        appToken.listInstallations.mockResolvedValue([
+          { id: 1, account: { login: 'org1', type: 'Organization' } },
+          { id: 2, account: { login: 'org2', type: 'Organization' } },
+        ]);
+        appToken.fetchInstallationToken
+          .mockResolvedValueOnce({
+            token: 'ghs_org1token',
+            expiresAt: futureExpiry,
+          })
+          .mockResolvedValueOnce({
+            token: 'ghs_org2token',
+            expiresAt: futureExpiry,
+          });
+
+        httpMock
+          .scope(githubApiHost)
+          .post('/graphql')
+          .reply(200, {
+            data: { viewer: { login: 'my-app[bot]', databaseId: 12345 } },
+          });
+
+        const result = await github.initPlatform({
+          githubAppId: '67890',
+          githubAppKey: 'fake-pem',
+        });
+
+        expect(appToken.generateJWT).toHaveBeenCalledWith('67890', 'fake-pem');
+        expect(appToken.listInstallations).toHaveBeenCalledWith('mock-jwt');
+        expect(appToken.fetchInstallationToken).toHaveBeenCalledTimes(2);
+        expect(result.token).toBe('x-access-token:ghs_org1token');
+        expect(result.renovateUsername).toBe('my-app[bot]');
+      });
+    });
+
+    describe('getRepos() with ownerTokens', () => {
+      it('aggregates repos from all installations', async () => {
+        appToken.listInstallations.mockResolvedValue([
+          { id: 1, account: { login: 'org1', type: 'Organization' } },
+          { id: 2, account: { login: 'org2', type: 'Organization' } },
+        ]);
+        appToken.fetchInstallationToken
+          .mockResolvedValueOnce({ token: 'ghs_org1', expiresAt: futureExpiry })
+          .mockResolvedValueOnce({
+            token: 'ghs_org2',
+            expiresAt: futureExpiry,
+          });
+
+        httpMock
+          .scope(githubApiHost)
+          .post('/graphql')
+          .reply(200, {
+            data: { viewer: { login: 'my-app[bot]', databaseId: 12345 } },
+          });
+
+        await github.initPlatform({
+          githubAppId: '67890',
+          githubAppKey: 'fake-pem',
+        });
+
+        httpMock
+          .scope(githubApiHost)
+          .get('/installation/repositories?per_page=100')
+          .reply(200, {
+            repositories: [{ full_name: 'org1/repo1', archived: false }],
+          })
+          .get('/installation/repositories?per_page=100')
+          .reply(200, {
+            repositories: [{ full_name: 'org2/repo1', archived: false }],
+          });
+
+        const repos = await github.getRepos();
+        expect(repos).toEqual(['org1/repo1', 'org2/repo1']);
+      });
+    });
+
+    describe('initRepo() with ownerTokens', () => {
+      async function setupAppPlatform(
+        installations: _appToken.GhAppInstallation[],
+        tokens: _appToken.InstallationToken[],
+      ): Promise<void> {
+        appToken.listInstallations.mockResolvedValue(installations);
+        for (const token of tokens) {
+          appToken.fetchInstallationToken.mockResolvedValueOnce(token);
+        }
+        httpMock
+          .scope(githubApiHost)
+          .post('/graphql')
+          .reply(200, {
+            data: { viewer: { login: 'my-app[bot]', databaseId: 12345 } },
+          });
+        await github.initPlatform({
+          githubAppId: '67890',
+          githubAppKey: 'fake-pem',
+        });
+      }
+
+      it('switches to the correct installation token for the repo owner', async () => {
+        await setupAppPlatform(
+          [{ id: 1, account: { login: 'myorg', type: 'Organization' } }],
+          [{ token: 'ghs_myorgtoken', expiresAt: futureExpiry }],
+        );
+
+        const scope = httpMock.scope(githubApiHost);
+        initRepoMock(scope, 'myorg/myrepo');
+        await github.initRepo({ repository: 'myorg/myrepo' });
+
+        expect(hostRules.add).toHaveBeenCalledWith(
+          expect.objectContaining({
+            matchHost: 'api.github.com',
+            hostType: 'github',
+            token: 'x-access-token:ghs_myorgtoken',
+          }),
+        );
+      });
+
+      it('refreshes installation token when expiring within 5 minutes', async () => {
+        await setupAppPlatform(
+          [{ id: 1, account: { login: 'myorg', type: 'Organization' } }],
+          [{ token: 'ghs_expired', expiresAt: pastExpiry }],
+        );
+
+        appToken.fetchInstallationToken.mockResolvedValueOnce({
+          token: 'ghs_refreshed',
+          expiresAt: futureExpiry,
+        });
+
+        const scope = httpMock.scope(githubApiHost);
+        initRepoMock(scope, 'myorg/myrepo');
+        await github.initRepo({ repository: 'myorg/myrepo' });
+
+        // fetchInstallationToken: once during initPlatform, once during refresh
+        expect(appToken.fetchInstallationToken).toHaveBeenCalledTimes(2);
+        expect(hostRules.add).toHaveBeenCalledWith(
+          expect.objectContaining({
+            token: 'x-access-token:ghs_refreshed',
+          }),
+        );
+      });
+
+      it('warns and does not add host rule when owner not found in ownerTokens', async () => {
+        await setupAppPlatform(
+          [{ id: 1, account: { login: 'org1', type: 'Organization' } }],
+          [{ token: 'ghs_org1', expiresAt: futureExpiry }],
+        );
+
+        const scope = httpMock.scope(githubApiHost);
+        initRepoMock(scope, 'other-org/repo');
+        await github.initRepo({ repository: 'other-org/repo' });
+
+        expect(hostRules.add).not.toHaveBeenCalledWith(
+          expect.objectContaining({ token: expect.stringContaining('ghs_') }),
+        );
+        expect(logger.logger.warn).toHaveBeenCalledWith(
+          expect.objectContaining({ repository: 'other-org/repo' }),
+          'GitHub App has no installation for this repository owner; API calls may fail',
+        );
+      });
+    });
+
+    describe('initPlatform() partial installation failures', () => {
+      it('skips failed installations and continues with the rest', async () => {
+        appToken.listInstallations.mockResolvedValue([
+          { id: 1, account: { login: 'org1', type: 'Organization' } },
+          { id: 2, account: { login: 'org2', type: 'Organization' } },
+        ]);
+        appToken.fetchInstallationToken
+          .mockRejectedValueOnce(new Error('403 Forbidden'))
+          .mockResolvedValueOnce({
+            token: 'ghs_org2token',
+            expiresAt: futureExpiry,
+          });
+
+        httpMock
+          .scope(githubApiHost)
+          .post('/graphql')
+          .reply(200, {
+            data: { viewer: { login: 'my-app[bot]', databaseId: 12345 } },
+          });
+
+        const result = await github.initPlatform({
+          githubAppId: '67890',
+          githubAppKey: 'fake-pem',
+        });
+
+        expect(logger.logger.warn).toHaveBeenCalledWith(
+          expect.objectContaining({ installationId: 1, account: 'org1' }),
+          'Failed to fetch GitHub App installation token; skipping this installation',
+        );
+        expect(result.token).toBe('x-access-token:ghs_org2token');
+      });
+
+      it('throws when all installation token fetches fail', async () => {
+        appToken.listInstallations.mockResolvedValue([
+          { id: 1, account: { login: 'org1', type: 'Organization' } },
+        ]);
+        appToken.fetchInstallationToken.mockRejectedValueOnce(
+          new Error('403 Forbidden'),
+        );
+
+        await expect(
+          github.initPlatform({
+            githubAppId: '67890',
+            githubAppKey: 'fake-pem',
+          }),
+        ).rejects.toThrow(
+          'Init: GitHub App could not obtain any installation tokens',
+        );
+      });
     });
   });
 
