@@ -913,6 +913,18 @@ Possible values:
 - `ssh`: use SSH URLs provided by the platform for Git
 - `endpoint`: ignore URLs provided by the platform and use the configured endpoint directly
 
+## githubAppId
+
+GitHub App ID. Use together with `githubAppKey` to let Renovate generate installation tokens automatically, instead of providing a personal access token or installation token directly.
+
+When both `githubAppId` and `githubAppKey` are set, Renovate discovers all installations of the GitHub App and processes repositories from each installation.
+
+## githubAppKey
+
+GitHub App private key (PEM format). Use together with `githubAppId` to let Renovate generate installation tokens automatically.
+
+Store this value securely (e.g. as an environment variable or in a secret manager) rather than in plain text configuration files.
+
 ## githubTokenWarn
 
 By default, Renovate logs and displays a warning when the `RENOVATE_GITHUB_COM_TOKEN` is not set.
