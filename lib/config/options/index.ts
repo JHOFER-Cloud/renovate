@@ -659,7 +659,7 @@ const options: Readonly<RenovateOptions>[] = [
     description:
       'Change this value to override the default Renovate sidecar image.',
     type: 'string',
-    default: 'ghcr.io/renovatebot/base-image:13.33.18',
+    default: 'ghcr.io/renovatebot/base-image:13.33.19',
     globalOnly: true,
     deprecationMsg:
       'The usage of `binarySource=docker` is deprecated, and will be removed in the future',
@@ -1077,6 +1077,21 @@ const options: Readonly<RenovateOptions>[] = [
     stage: 'repository',
     type: 'string',
     globalOnly: true,
+  },
+  {
+    name: 'githubAppId',
+    description:
+      'GitHub App ID. Use with `githubAppKey` to auto-generate installation tokens.',
+    type: 'string',
+    globalOnly: true,
+    supportedPlatforms: ['github'],
+  },
+  {
+    name: 'githubAppKey',
+    description: 'GitHub App private key (PEM format). Use with `githubAppId`.',
+    type: 'string',
+    globalOnly: true,
+    supportedPlatforms: ['github'],
   },
   {
     name: 'username',

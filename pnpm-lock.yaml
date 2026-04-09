@@ -372,9 +372,9 @@ importers:
       '@containerbase/istanbul-reports-html':
         specifier: 1.1.42
         version: 1.1.42
-      '@containerbase/semantic-release-pnpm':
-        specifier: 1.3.32
-        version: 1.3.32(semantic-release@25.0.3(typescript@5.9.3))
+      '@eslint/js':
+        specifier: 9.39.4
+        version: 9.39.4
       '@hyrious/marshal':
         specifier: 0.3.3
         version: 0.3.3
@@ -390,6 +390,9 @@ importers:
       '@smithy/util-stream':
         specifier: 4.5.21
         version: 4.5.21
+      '@types/auth-header':
+        specifier: 1.0.6
+        version: 1.0.6
       '@types/aws4':
         specifier: 1.11.6
         version: 1.11.6
@@ -1001,12 +1004,6 @@ packages:
     resolution: {integrity: sha512-pfgmajJEDMQh15BTvQn9G8Rtj8fHpy/cPMuQ3c56qXryGLvcy6WRgWS4ZgKr37jvnwUtiNkEIrBZ5yCn0Mdnyg==}
     engines: {node: ^20.9.0 || ^22.11.0 || ^24.0.0, pnpm: ^10.0.0}
 
-  '@containerbase/semantic-release-pnpm@1.3.32':
-    resolution: {integrity: sha512-8XPLip0UnG8G41ZZ+dpc2nyODPzLXMNuIdKp3AFqXKN4apYR2O1qpwtxQzMYt/3uoSbxG9CTdjkWDQN3Th+jPQ==}
-    engines: {node: ^22.11.0 || ^24}
-    peerDependencies:
-      semantic-release: ^24.0.0 || ^25.0.0
-
   '@emnapi/core@1.9.1':
     resolution: {integrity: sha512-mukuNALVsoix/w1BJwFzwXBN/dHeejQtuVzcDsfOEsdpCumXb/E9j8w11h5S54tT1xhifGfbbSm/ICrObRb3KA==}
 
@@ -1171,6 +1168,10 @@ packages:
     engines: {node: '>=18'}
     cpu: [x64]
     os: [win32]
+
+  '@eslint/js@9.39.4':
+    resolution: {integrity: sha512-nE7DEIchvtiFTwBw4Lfbu59PG+kCofhjsKaCWzxTpt4lfRjRMqG6uMBzKXuEcyXhOHoUp9riAm7/aWYGhXZ9cw==}
+    engines: {node: ^18.18.0 || ^20.9.0 || >=21.1.0}
 
   '@gar/promise-retry@1.0.3':
     resolution: {integrity: sha512-GmzA9ckNokPypTg10pgpeHNQe7ph+iIKKmhKu3Ob9ANkswreCx7R3cKmY781K8QK3AqVL3xVh9A42JvIAbkkSA==}
@@ -2314,6 +2315,9 @@ packages:
 
   '@tybys/wasm-util@0.10.1':
     resolution: {integrity: sha512-9tTaPJLSiejZKx+Bmog4uSubteqTvFrVrURwkmHixBo0G4seD0zUxp98E1DzUBJxLQ3NPwXrGKDiVjwx/DpPsg==}
+
+  '@types/auth-header@1.0.6':
+    resolution: {integrity: sha512-TjQyS7b+msxND/uuvza7FWSiBBLtI5y9vB55rpTeMcO2M5DSs4ony9WNKDvZLJL2w5aJH2A4C+ht1c9MPHhJWQ==}
 
   '@types/aws4@1.11.6':
     resolution: {integrity: sha512-5CnVUkHNyLGpD9AnOcK66YyP0qvIh6nhJJoeK8zSl5YKikUcUbdB7SlHevUYVqicgeh6j5AJa1qa/h08dSZHoA==}
@@ -6936,14 +6940,6 @@ snapshots:
       istanbul-lib-report: 3.0.1
       istanbul-reports: 3.2.0
 
-  '@containerbase/semantic-release-pnpm@1.3.32(semantic-release@25.0.3(typescript@5.9.3))':
-    dependencies:
-      '@semantic-release/error': 4.0.0
-      aggregate-error: 5.0.0
-      execa: 9.6.1
-      semantic-release: 25.0.3(typescript@5.9.3)
-      semver: 7.7.4
-
   '@emnapi/core@1.9.1':
     dependencies:
       '@emnapi/wasi-threads': 1.2.0
@@ -7037,6 +7033,8 @@ snapshots:
 
   '@esbuild/win32-x64@0.27.5':
     optional: true
+
+  '@eslint/js@9.39.4': {}
 
   '@gar/promise-retry@1.0.3':
     optional: true
@@ -8276,6 +8274,8 @@ snapshots:
     dependencies:
       tslib: 2.8.1
     optional: true
+
+  '@types/auth-header@1.0.6': {}
 
   '@types/aws4@1.11.6':
     dependencies:
