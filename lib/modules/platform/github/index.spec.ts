@@ -644,6 +644,10 @@ describe('modules/platform/github/index', () => {
 
     beforeEach(() => {
       appToken.generateJWT.mockReturnValue('mock-jwt');
+      // findAll() is used to look up an existing host rule before deciding
+      // whether to update in-place or add. Default to empty so tests that
+      // don't care about this path get a safe, non-undefined return value.
+      hostRules.findAll.mockReturnValue([]);
     });
 
     describe('initPlatform()', () => {
@@ -694,7 +698,7 @@ describe('modules/platform/github/index', () => {
     });
 
     describe('getRepos() with ownerTokens', () => {
-      it('aggregates repos from all installations', async () => {
+      it('aggregates repos from all installations using per-org tokens', async () => {
         appToken.listInstallations.mockResolvedValue([
           { id: 1, account: { login: 'org1', type: 'Organization' } },
           { id: 2, account: { login: 'org2', type: 'Organization' } },
@@ -718,11 +722,18 @@ describe('modules/platform/github/index', () => {
           githubAppKey: 'fake-pem',
         });
 
+        // Each installation must be queried with its own token
         httpMock
-          .scope(githubApiHost)
+          .scope(githubApiHost, {
+            reqheaders: { authorization: 'Bearer ghs_org1' },
+          })
           .get('/installation/repositories?per_page=100')
           .reply(200, {
             repositories: [{ full_name: 'org1/repo1', archived: false }],
+          });
+        httpMock
+          .scope(githubApiHost, {
+            reqheaders: { authorization: 'Bearer ghs_org2' },
           })
           .get('/installation/repositories?per_page=100')
           .reply(200, {
@@ -796,6 +807,59 @@ describe('modules/platform/github/index', () => {
             token: 'x-access-token:ghs_refreshed',
           }),
         );
+      });
+
+      it('warns and falls back to existing token when refresh fails', async () => {
+        await setupAppPlatform(
+          [{ id: 1, account: { login: 'myorg', type: 'Organization' } }],
+          [{ token: 'ghs_expired', expiresAt: pastExpiry }],
+        );
+
+        appToken.fetchInstallationToken.mockRejectedValueOnce(
+          new Error('503 Service Unavailable'),
+        );
+
+        const scope = httpMock.scope(githubApiHost);
+        initRepoMock(scope, 'myorg/myrepo');
+        await github.initRepo({ repository: 'myorg/myrepo' });
+
+        expect(logger.logger.warn).toHaveBeenCalledWith(
+          expect.objectContaining({
+            repository: 'myorg/myrepo',
+            installationId: 1,
+          }),
+          'Failed to refresh GitHub App installation token; using existing token',
+        );
+        // Falls back to the original (expired) token
+        expect(hostRules.add).toHaveBeenCalledWith(
+          expect.objectContaining({
+            token: 'x-access-token:ghs_expired',
+          }),
+        );
+      });
+
+      it('updates existing host rule in-place on subsequent initRepo calls', async () => {
+        await setupAppPlatform(
+          [{ id: 1, account: { login: 'myorg', type: 'Organization' } }],
+          [{ token: 'ghs_myorgtoken', expiresAt: futureExpiry }],
+        );
+
+        // Simulate an existing host rule already present from a previous run
+        const existingRule: Record<string, unknown> = {
+          resolvedHost: 'api.github.com',
+          token: 'x-access-token:ghs_old',
+        };
+        hostRules.findAll.mockReturnValue([existingRule as any]);
+
+        const scope = httpMock.scope(githubApiHost);
+        initRepoMock(scope, 'myorg/myrepo');
+        await github.initRepo({ repository: 'myorg/myrepo' });
+
+        // Token updated in-place; add() not called again
+        expect(hostRules.add).not.toHaveBeenCalledWith(
+          expect.objectContaining({ hostType: 'github' }),
+        );
+        expect(existingRule.token).toBe('x-access-token:ghs_myorgtoken');
       });
 
       it('warns and does not add host rule when owner not found in ownerTokens', async () => {

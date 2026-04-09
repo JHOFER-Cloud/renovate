@@ -35,6 +35,9 @@ export async function listInstallations(
   jwt: string,
 ): Promise<GhAppInstallation[]> {
   logger.debug('Listing GitHub App installations');
+  // The GitHub API returns a flat array for this endpoint; the HTTP client
+  // concatenates pages via Link-header pagination when paginate:'all' is set
+  // and the body is an array, so >100 installations are handled correctly.
   const res = await githubApi.getJsonUnchecked<GhAppInstallation[]>(
     'app/installations?per_page=100',
     {

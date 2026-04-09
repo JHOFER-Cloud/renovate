@@ -577,20 +577,27 @@ export async function initRepo({
         logger.debug(
           `Refreshing GitHub App installation token for ${config.repositoryOwner}`,
         );
-        const jwt = generateJWT(
-          platformConfig.githubAppId!,
-          platformConfig.githubAppKey!,
-        );
-        const refreshed = await fetchInstallationToken(
-          jwt,
-          tokenInfo.installationId,
-        );
-        platformConfig.ownerTokens[ownerKey] = {
-          ...refreshed,
-          installationId: tokenInfo.installationId,
-        };
-        addSecretForSanitizing(`x-access-token:${refreshed.token}`, 'global');
-        rawToken = refreshed.token;
+        try {
+          const jwt = generateJWT(
+            platformConfig.githubAppId!,
+            platformConfig.githubAppKey!,
+          );
+          const refreshed = await fetchInstallationToken(
+            jwt,
+            tokenInfo.installationId,
+          );
+          platformConfig.ownerTokens[ownerKey] = {
+            ...refreshed,
+            installationId: tokenInfo.installationId,
+          };
+          addSecretForSanitizing(`x-access-token:${refreshed.token}`, 'global');
+          rawToken = refreshed.token;
+        } catch (err) {
+          logger.warn(
+            { repository, installationId: tokenInfo.installationId, err },
+            'Failed to refresh GitHub App installation token; using existing token',
+          );
+        }
       }
       // Update the existing GitHub host rule with the current org's token rather
       // than accumulating a new rule on every initRepo() call. findAll() returns
