@@ -33,6 +33,7 @@ import {
 } from '../../constants/error-messages.ts';
 import { ExternalHostError } from '../../types/errors/external-host-error.ts';
 import handleError from './error.ts';
+import { raiseRepositoryErrorIssue } from './error-config.ts';
 
 vi.mock('./error-config.ts');
 
@@ -113,8 +114,13 @@ describe('workers/repository/error', () => {
     });
 
     it('handles unknown error', async () => {
-      const res = await handleError(config, new Error('abcdefg'));
+      const error = new Error('abcdefg');
+      const res = await handleError(config, error);
       expect(res).toEqual(UNKNOWN_ERROR);
+      expect(raiseRepositoryErrorIssue).toHaveBeenCalledExactlyOnceWith(
+        config,
+        error,
+      );
     });
 
     it('logs config validation errors as warnings by default', async () => {

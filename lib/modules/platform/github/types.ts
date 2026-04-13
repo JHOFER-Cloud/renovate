@@ -85,6 +85,12 @@ export interface UserDetails {
   id: number;
 }
 
+export interface OwnerTokenInfo {
+  token: string;
+  expiresAt: Date;
+  installationId: number;
+}
+
 export interface PlatformConfig {
   hostType: string;
   endpoint: string;
@@ -94,6 +100,10 @@ export interface PlatformConfig {
   existingRepos?: string[];
   userDetails?: UserDetails;
   userEmail?: EmailAddress | null;
+  // GitHub App multi-installation support
+  ownerTokens?: Record<string, OwnerTokenInfo>;
+  githubAppId?: string;
+  githubAppKey?: string;
 }
 
 export interface LocalRepoConfig {
