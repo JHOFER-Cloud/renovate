@@ -3023,6 +3023,7 @@ const options: Readonly<RenovateOptions>[] = [
       'dependencyLookupWarnings',
       'lockFileErrors',
       'missingCredentialsError',
+      'repositoryErrorIssue',
       'onboardingClose',
       'prEditedNotification',
       'prIgnoreNotification',

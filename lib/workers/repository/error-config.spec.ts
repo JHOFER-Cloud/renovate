@@ -8,6 +8,7 @@ import type { Pr } from '../../modules/platform/index.ts';
 import {
   raiseConfigWarningIssue,
   raiseCredentialsWarningIssue,
+  raiseRepositoryErrorIssue,
 } from './error-config.ts';
 
 let config: RenovateConfig;
@@ -144,6 +145,91 @@ Message: some-message
         { notificationName },
         'Configuration failure, issues will be suppressed',
       );
+    });
+  });
+
+  describe('raiseRepositoryErrorIssue()', () => {
+    beforeEach(() => {
+      GlobalConfig.reset();
+    });
+
+    it('returns if mode is silent', async () => {
+      config.mode = 'silent';
+      const res = await raiseRepositoryErrorIssue(config, new Error('oops'));
+      expect(res).toBeUndefined();
+      expect(logger.debug).toHaveBeenCalledWith(
+        'Repository error issues are not created, updated or closed when mode=silent',
+      );
+    });
+
+    it('suppresses issue when suppressNotifications includes repositoryErrorIssue', async () => {
+      config.suppressNotifications = ['repositoryErrorIssue'];
+      const res = await raiseRepositoryErrorIssue(config, new Error('oops'));
+      expect(res).toBeUndefined();
+      expect(logger.info).toHaveBeenCalledWith(
+        { notificationName: 'repositoryErrorIssue' },
+        'Repository error, issues will be suppressed',
+      );
+    });
+
+    it('logs dry-run message instead of creating issue', async () => {
+      GlobalConfig.set({ dryRun: 'full' });
+      const error = new Error('oops');
+      const res = await raiseRepositoryErrorIssue(config, error);
+      expect(res).toBeUndefined();
+      expect(platform.ensureIssue).not.toHaveBeenCalled();
+      expect(logger.info).toHaveBeenCalledWith(
+        { err: error },
+        'DRY-RUN: Would ensure repository error issue',
+      );
+    });
+
+    it('dry-run takes precedence over suppressNotifications', async () => {
+      GlobalConfig.set({ dryRun: 'full' });
+      config.suppressNotifications = ['repositoryErrorIssue'];
+      const error = new Error('oops');
+      const res = await raiseRepositoryErrorIssue(config, error);
+      expect(res).toBeUndefined();
+      expect(platform.ensureIssue).not.toHaveBeenCalled();
+      expect(logger.info).toHaveBeenCalledWith(
+        { err: error },
+        'DRY-RUN: Would ensure repository error issue',
+      );
+    });
+
+    it('creates issue with sanitized message and logs warning', async () => {
+      platform.ensureIssue.mockResolvedValueOnce('created');
+      const error = new Error('Invalid URL: https://token@example.com/repo');
+      const res = await raiseRepositoryErrorIssue(config, error);
+      expect(res).toBeUndefined();
+      expect(platform.ensureIssue).toHaveBeenCalledExactlyOnceWith(
+        expect.objectContaining({
+          title: 'Action Required: Fix Renovate Repository Error',
+          body: expect.stringContaining('**redacted**'),
+        }),
+      );
+      expect(logger.warn).toHaveBeenCalledWith(
+        { err: error, res: 'created' },
+        'Repository Error Warning',
+      );
+    });
+
+    it('updates existing issue and logs warning', async () => {
+      platform.ensureIssue.mockResolvedValueOnce('updated');
+      const error = new Error('some error');
+      const res = await raiseRepositoryErrorIssue(config, error);
+      expect(res).toBeUndefined();
+      expect(logger.warn).toHaveBeenCalledWith(
+        { err: error, res: 'updated' },
+        'Repository Error Warning',
+      );
+    });
+
+    it('does not log warning when issue is unchanged', async () => {
+      platform.ensureIssue.mockResolvedValueOnce(null);
+      const res = await raiseRepositoryErrorIssue(config, new Error('oops'));
+      expect(res).toBeUndefined();
+      expect(logger.warn).not.toHaveBeenCalled();
     });
   });
 });
