@@ -2,6 +2,7 @@
 import { GlobalConfig } from '../../config/global.ts';
 import type { RenovateConfig } from '../../config/types.ts';
 import { logger } from '../../logger/index.ts';
+import { sanitizeUrls } from '../../logger/utils.ts';
 import type { Pr } from '../../modules/platform/index.ts';
 import { platform } from '../../modules/platform/index.ts';
 import { getInheritedOrGlobal } from '../../util/common.ts';
@@ -26,6 +27,44 @@ export function raiseCredentialsWarningIssue(
   const body = `There are missing credentials for the authentication-required feature. As a precaution, Renovate will pause PRs until it is resolved.\n\n`;
   const notificationName = 'missingCredentialsError';
   return raiseWarningIssue(config, notificationName, title, body, error);
+}
+
+export async function raiseRepositoryErrorIssue(
+  config: RenovateConfig,
+  error: Error,
+): Promise<void> {
+  logger.debug('raiseRepositoryErrorIssue()');
+  if (config.mode === 'silent') {
+    logger.debug(
+      `Repository error issues are not created, updated or closed when mode=silent`,
+    );
+    return;
+  }
+  const notificationName = 'repositoryErrorIssue';
+  if (GlobalConfig.get('dryRun')) {
+    logger.info({ err: error }, 'DRY-RUN: Would ensure repository error issue');
+    return;
+  }
+  if (config.suppressNotifications?.includes(notificationName)) {
+    logger.info(
+      { notificationName },
+      'Repository error, issues will be suppressed',
+    );
+    return;
+  }
+  const title = `Action Required: Fix Renovate Repository Error`;
+  const safeMessage = sanitizeUrls(error.message).slice(0, 150);
+  const body = `Renovate encountered an unexpected error in this repository and has aborted. Please check the logs or contact your Renovate administrator for more details.\n\n**Error:** \`${safeMessage}\`\n`;
+  const res = await platform.ensureIssue({
+    title,
+    body,
+    once: false,
+    shouldReOpen: true,
+    confidential: config.confidential,
+  });
+  if (res === 'updated' || res === 'created') {
+    logger.warn({ err: error, res }, 'Repository Error Warning');
+  }
 }
 
 async function raiseWarningIssue(
