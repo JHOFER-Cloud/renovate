@@ -39,6 +39,7 @@ import { ExternalHostError } from '../../types/errors/external-host-error.ts';
 import {
   raiseConfigWarningIssue,
   raiseCredentialsWarningIssue,
+  raiseRepositoryErrorIssue,
 } from './error-config.ts';
 import type { RepositoryResult } from './result.ts';
 
@@ -227,6 +228,6 @@ export default async function handleError(
   logger.error({ err }, `Repository has unknown error`);
   // delete branchList to avoid cleaning up branches
   delete config.branchList;
-
+  await raiseRepositoryErrorIssue(config, err);
   return UNKNOWN_ERROR;
 }

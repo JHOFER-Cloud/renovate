@@ -123,6 +123,7 @@ export default defineConfig(() =>
           'dist/**/*',
           'tools/docs/test/**/*.test.mjs',
           '.worktrees/**/*',
+          '.direnv/**/*',
         ],
       },
     }),
