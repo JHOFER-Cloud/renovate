@@ -114,6 +114,8 @@ all options.
 
 **Supports: all platforms**
 
+For additional community-maintained options, see the [Community Tools](https://docs.renovatebot.com/community-tools/) page.
+
 ## Docs
 
 ### More about Renovate

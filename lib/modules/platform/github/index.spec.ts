@@ -5061,12 +5061,14 @@ describe('modules/platform/github/index', () => {
               description: 'description',
               identifiers: [{ type: 'type', value: 'value' }],
               references: [],
+              severity: 'high',
             },
             security_vulnerability: {
               package: {
                 ecosystem: 'npm',
                 name: 'left-pad',
               },
+              severity: 'high',
               vulnerable_version_range: '0.0.2',
               first_patched_version: { identifier: '0.0.3' },
             },
@@ -5079,6 +5081,7 @@ describe('modules/platform/github/index', () => {
               description: 'description',
               identifiers: [{ type: 'type', value: 'value' }],
               references: [],
+              severity: 'high',
             },
             security_vulnerability: null,
             dependency: {
@@ -5132,12 +5135,14 @@ describe('modules/platform/github/index', () => {
               description: 'description',
               identifiers: [{ type: 'type', value: 'value' }],
               references: [],
+              severity: 'high',
             },
             security_vulnerability: {
               package: {
                 ecosystem: 'npm',
                 name: 'left-pad',
               },
+              severity: 'high',
               vulnerable_version_range: '0.0.2',
               first_patched_version: { identifier: '0.0.3' },
             },
@@ -5151,6 +5156,7 @@ describe('modules/platform/github/index', () => {
               description: 'description',
               identifiers: [{ type: 'type', value: 'value' }],
               references: [],
+              severity: 'high',
             },
             security_vulnerability: null,
             dependency: {
@@ -5181,12 +5187,14 @@ describe('modules/platform/github/index', () => {
               description: 'description',
               identifiers: [{ type: 'type', value: 'value' }],
               references: [],
+              severity: 'medium',
             },
             security_vulnerability: {
               package: {
                 ecosystem: 'pip',
                 name: 'FrIeNdLy.-.BARD',
               },
+              severity: 'medium',
               vulnerable_version_range: '0.0.2',
               first_patched_version: { identifier: '0.0.3' },
             },
@@ -5216,12 +5224,14 @@ describe('modules/platform/github/index', () => {
                 description: 'description',
                 identifiers: [{ type: 'type', value: 'value' }],
                 references: [],
+                severity: 'high',
               },
               security_vulnerability: {
                 package: {
                   ecosystem: 'npm',
                   name: 'left-pad',
                 },
+                severity: 'high',
                 vulnerable_version_range: '0.0.2',
                 first_patched_version: { identifier: '0.0.3' },
               },
@@ -5234,12 +5244,14 @@ describe('modules/platform/github/index', () => {
                 description: 'description',
                 identifiers: [{ type: 'type', value: 'value' }],
                 references: [],
+                severity: 'critical',
               },
               security_vulnerability: {
                 package: {
                   ecosystem: 'npm',
                   name: 'right-pad',
                 },
+                severity: 'critical',
                 vulnerable_version_range: '0.0.1',
                 first_patched_version: { identifier: '0.0.2' },
               },
@@ -5261,12 +5273,14 @@ describe('modules/platform/github/index', () => {
               description: 'description',
               identifiers: [{ type: 'type', value: 'value' }],
               references: [],
+              severity: 'low',
             },
             security_vulnerability: {
               package: {
                 ecosystem: 'npm',
                 name: 'center-pad',
               },
+              severity: 'low',
               vulnerable_version_range: '0.0.3',
               first_patched_version: { identifier: '0.0.4' },
             },
