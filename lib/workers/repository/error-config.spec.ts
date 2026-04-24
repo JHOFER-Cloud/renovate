@@ -220,6 +220,16 @@ Message: some-message
       );
     });
 
+    it('logs dry-run message instead of closing issue when no warnings', async () => {
+      GlobalConfig.set({ dryRun: 'full' });
+      await raiseDependencyLookupWarningsIssue(config, {});
+      expect(platform.ensureIssueClosing).not.toHaveBeenCalled();
+      expect(logger.info).toHaveBeenCalledWith(
+        { warnings: [] },
+        'DRY-RUN: Would close dependency lookup warning issue',
+      );
+    });
+
     it('creates issue with correct body format', async () => {
       platform.ensureIssue.mockResolvedValueOnce('created');
       await raiseDependencyLookupWarningsIssue(
