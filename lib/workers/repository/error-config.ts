@@ -188,7 +188,13 @@ export async function raiseDependencyLookupWarningsIssue(
   const title = `Action Required: Fix Dependency Lookup Errors`;
   let body = `Renovate failed to look up the following dependencies. Please investigate and fix these issues in your repository.\n\n`;
   for (const w of warnings) {
-    body += `- \`${w.split('\n').join(' ').trim()}\`\n`;
+    const line = w
+      .split('\n')
+      .join(' ')
+      .trim()
+      .replace(/#(\d)/g, '&#35;$1')
+      .replace(/@/g, '&#64;');
+    body += `- ${line}\n`;
   }
   body += `\nFiles affected: ${warningFiles.map((f) => '`' + f + '`').join(', ')}\n`;
   const res = await platform.ensureIssue({
