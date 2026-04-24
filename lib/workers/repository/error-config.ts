@@ -3,10 +3,12 @@ import { GlobalConfig } from '../../config/global.ts';
 import type { RenovateConfig } from '../../config/types.ts';
 import { logger } from '../../logger/index.ts';
 import { sanitizeUrls } from '../../logger/utils.ts';
+import type { PackageFile } from '../../modules/manager/types.ts';
 import type { Pr } from '../../modules/platform/index.ts';
 import { platform } from '../../modules/platform/index.ts';
 import { getInheritedOrGlobal } from '../../util/common.ts';
 import { sanitize } from '../../util/sanitize.ts';
+import { getDepWarnings } from './errors-warnings.ts';
 
 export function raiseConfigWarningIssue(
   config: RenovateConfig,
@@ -147,5 +149,53 @@ async function handleOnboardingPr(pr: Pr, issueMessage: string): Promise<void> {
     });
   } catch (err) /* istanbul ignore next */ {
     logger.warn({ err }, 'Error updating onboarding PR');
+  }
+}
+
+export async function raiseDependencyLookupWarningsIssue(
+  config: RenovateConfig,
+  packageFiles: Record<string, PackageFile[]>,
+): Promise<void> {
+  logger.debug('raiseDependencyLookupWarningsIssue()');
+  if (config.mode === 'silent') {
+    logger.debug(
+      'Dependency lookup warning issues are not created, updated or closed when mode=silent',
+    );
+    return;
+  }
+  const notificationName = 'dependencyLookupWarnings';
+  if (config.suppressNotifications?.includes(notificationName)) {
+    logger.info(
+      { notificationName },
+      'Dependency lookup warnings, issues will be suppressed',
+    );
+    return;
+  }
+  const { warnings, warningFiles } = getDepWarnings(packageFiles);
+  if (!warnings.length) {
+    return;
+  }
+  if (GlobalConfig.get('dryRun')) {
+    logger.info(
+      { warnings },
+      'DRY-RUN: Would ensure dependency lookup warning issue',
+    );
+    return;
+  }
+  const title = `Action Required: Fix Dependency Lookup Errors`;
+  let body = `Renovate failed to look up the following dependencies. Please investigate and fix these issues in your repository.\n\n`;
+  for (const w of warnings) {
+    body += `- \`${w.split('\n').join(' ').trim()}\`\n`;
+  }
+  body += `\nFiles affected: ${warningFiles.map((f) => '`' + f + '`').join(', ')}\n`;
+  const res = await platform.ensureIssue({
+    title,
+    body,
+    once: false,
+    shouldReOpen: true,
+    confidential: config.confidential,
+  });
+  if (res === 'updated' || res === 'created') {
+    logger.warn({ warnings, res }, 'Dependency Lookup Warning');
   }
 }

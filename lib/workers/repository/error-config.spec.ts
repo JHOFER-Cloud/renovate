@@ -12,6 +12,7 @@ import {
 import {
   raiseConfigWarningIssue,
   raiseCredentialsWarningIssue,
+  raiseDependencyLookupWarningsIssue,
   raiseRepositoryErrorIssue,
 } from './error-config.ts';
 
@@ -148,6 +149,142 @@ Message: some-message
       expect(logger.info).toHaveBeenCalledWith(
         { notificationName },
         'Configuration failure, issues will be suppressed',
+      );
+    });
+  });
+
+  describe('raiseDependencyLookupWarningsIssue()', () => {
+    beforeEach(() => {
+      GlobalConfig.reset();
+    });
+
+    const packageFilesWithWarnings = {
+      nix: [
+        partial({
+          packageFile: 'flake.nix',
+          deps: [
+            partial({
+              warnings: [
+                {
+                  topic: 'https://github.com/foo/bar',
+                  message:
+                    'Dependency lookup error for `git-refs` package `https://github.com/foo/bar`: Repository not found.',
+                },
+              ],
+            }),
+          ],
+        }),
+      ],
+    };
+
+    it('returns if mode is silent', async () => {
+      config.mode = 'silent';
+      await raiseDependencyLookupWarningsIssue(config, {});
+      expect(logger.debug).toHaveBeenCalledWith(
+        'Dependency lookup warning issues are not created, updated or closed when mode=silent',
+      );
+      expect(platform.ensureIssue).not.toHaveBeenCalled();
+    });
+
+    it('suppresses issue when suppressNotifications includes dependencyLookupWarnings', async () => {
+      config.suppressNotifications = ['dependencyLookupWarnings'];
+      await raiseDependencyLookupWarningsIssue(
+        config,
+        packageFilesWithWarnings,
+      );
+      expect(logger.info).toHaveBeenCalledWith(
+        { notificationName: 'dependencyLookupWarnings' },
+        'Dependency lookup warnings, issues will be suppressed',
+      );
+      expect(platform.ensureIssue).not.toHaveBeenCalled();
+    });
+
+    it('does nothing when there are no warnings', async () => {
+      await raiseDependencyLookupWarningsIssue(config, {});
+      expect(platform.ensureIssue).not.toHaveBeenCalled();
+    });
+
+    it('logs dry-run message instead of creating issue', async () => {
+      GlobalConfig.set({ dryRun: 'full' });
+      await raiseDependencyLookupWarningsIssue(
+        config,
+        packageFilesWithWarnings,
+      );
+      expect(platform.ensureIssue).not.toHaveBeenCalled();
+      expect(logger.info).toHaveBeenCalledWith(
+        expect.objectContaining({ warnings: expect.any(Array) }),
+        'DRY-RUN: Would ensure dependency lookup warning issue',
+      );
+    });
+
+    it('creates issue when there are lookup warnings', async () => {
+      platform.ensureIssue.mockResolvedValueOnce('created');
+      await raiseDependencyLookupWarningsIssue(
+        config,
+        packageFilesWithWarnings,
+      );
+      expect(platform.ensureIssue).toHaveBeenCalledExactlyOnceWith(
+        expect.objectContaining({
+          title: 'Action Required: Fix Dependency Lookup Errors',
+          body: expect.stringContaining('flake.nix'),
+          once: false,
+          shouldReOpen: true,
+        }),
+      );
+      expect(logger.warn).toHaveBeenCalledWith(
+        expect.objectContaining({ res: 'created' }),
+        'Dependency Lookup Warning',
+      );
+    });
+
+    it('updates existing issue and logs warning', async () => {
+      platform.ensureIssue.mockResolvedValueOnce('updated');
+      await raiseDependencyLookupWarningsIssue(
+        config,
+        packageFilesWithWarnings,
+      );
+      expect(logger.warn).toHaveBeenCalledWith(
+        expect.objectContaining({ res: 'updated' }),
+        'Dependency Lookup Warning',
+      );
+    });
+
+    it('does not log warning when issue is unchanged', async () => {
+      platform.ensureIssue.mockResolvedValueOnce(null);
+      await raiseDependencyLookupWarningsIssue(
+        config,
+        packageFilesWithWarnings,
+      );
+      expect(logger.warn).not.toHaveBeenCalledWith(
+        expect.anything(),
+        'Dependency Lookup Warning',
+      );
+    });
+
+    it('normalizes newlines in warning messages', async () => {
+      platform.ensureIssue.mockResolvedValueOnce('created');
+      const packageFilesWithNewline = {
+        nix: [
+          partial({
+            packageFile: 'flake.nix',
+            deps: [
+              partial({
+                warnings: [
+                  {
+                    topic: 'pkg',
+                    message: 'line one\nline two',
+                  },
+                ],
+              }),
+            ],
+          }),
+        ],
+      };
+      await raiseDependencyLookupWarningsIssue(config, packageFilesWithNewline);
+      expect(platform.ensureIssue).toHaveBeenCalledExactlyOnceWith(
+        expect.objectContaining({
+          body: expect.stringContaining('line one line two'),
+        }),
       );
     });
   });
