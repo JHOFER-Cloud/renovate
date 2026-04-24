@@ -49,8 +49,5 @@ function ensureIssuesClosing(): Promise<Awaited<void>[]> {
     platform.ensureIssueClosing(
       `Action Required: Fix Renovate Repository Error`,
     ),
-    platform.ensureIssueClosing(
-      `Action Required: Fix Dependency Lookup Errors`,
-    ),
   ]);
 }

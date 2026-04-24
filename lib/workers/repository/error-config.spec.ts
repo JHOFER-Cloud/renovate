@@ -199,9 +199,12 @@ Message: some-message
       expect(platform.ensureIssue).not.toHaveBeenCalled();
     });
 
-    it('does nothing when there are no warnings', async () => {
+    it('closes existing issue when there are no warnings', async () => {
       await raiseDependencyLookupWarningsIssue(config, {});
       expect(platform.ensureIssue).not.toHaveBeenCalled();
+      expect(platform.ensureIssueClosing).toHaveBeenCalledExactlyOnceWith(
+        'Action Required: Fix Dependency Lookup Errors',
+      );
     });
 
     it('logs dry-run message instead of creating issue', async () => {
