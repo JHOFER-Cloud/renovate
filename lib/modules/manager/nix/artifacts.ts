@@ -42,8 +42,36 @@ export async function updateArtifacts({
     }),
   );
 
+  // Build --extra-access-tokens: main token plus any per-org cross-org trust tokens.
+  // Use a Map keyed by host string to deduplicate in case the same org appears
+  // in hostRules more than once.
+  const accessTokenMap = new Map<string, string>();
   if (token) {
-    cmd += `--extra-access-tokens github.com=${token} `;
+    accessTokenMap.set('github.com', token);
+  }
+  // Per-org rules have matchHost like 'https://github.com/OrgName/' (set by cross-org trust groups)
+  for (const rule of hostRules.getAll()) {
+    if (rule.hostType !== 'github' || !rule.matchHost) {
+      continue;
+    }
+    try {
+      const ruleUrl = new URL(rule.matchHost);
+      const pathParts = ruleUrl.pathname.split('/').filter(Boolean);
+      if (ruleUrl.hostname === 'github.com' && pathParts.length === 1) {
+        const orgToken = findGithubToken(rule);
+        if (orgToken) {
+          accessTokenMap.set(`github.com/${pathParts[0]}`, orgToken);
+        }
+      }
+    } catch {
+      // matchHost is not a URL (e.g. bare hostname), skip
+    }
+  }
+  if (accessTokenMap.size > 0) {
+    const tokenStr = [...accessTokenMap.entries()]
+      .map(([host, tok]) => `${host}=${tok}`)
+      .join(' ');
+    cmd += `--extra-access-tokens ${quote(tokenStr)} `;
   }
 
   if (config.isLockFileMaintenance) {

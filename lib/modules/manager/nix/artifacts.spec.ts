@@ -171,6 +171,47 @@ describe('modules/manager/nix/artifacts', () => {
     expect(execSnapshots).toMatchObject([{ cmd: updateInputTokenCmd }]);
   });
 
+  it('includes per-org cross-org trust tokens in --extra-access-tokens', async () => {
+    fs.readLocalFile.mockResolvedValueOnce('current flake.lock');
+    const execSnapshots = mockExecAll();
+    git.getRepoStatus.mockResolvedValue(
+      partial<StatusResult>({
+        modified: ['flake.lock'],
+      }),
+    );
+    fs.readLocalFile.mockResolvedValueOnce('new flake.lock');
+    hostRules.find.mockReturnValueOnce({ token: 'main-token' });
+    hostRules.getAll.mockReturnValue([
+      {
+        hostType: 'github',
+        matchHost: 'https://github.com/TrustedOrg/',
+        token: 'x-access-token:trusted-token',
+      },
+    ]);
+
+    const res = await updateArtifacts({
+      packageFileName: 'flake.nix',
+      updatedDeps: [{ depName: 'nixpkgs' }],
+      newPackageFileContent: 'some new content',
+      config,
+    });
+
+    expect(res).toEqual([
+      {
+        file: {
+          contents: 'new flake.lock',
+          path: 'flake.lock',
+          type: 'addition',
+        },
+      },
+    ]);
+    expect(execSnapshots).toMatchObject([
+      {
+        cmd: `nix --extra-experimental-features 'nix-command flakes' --extra-access-tokens 'github.com=main-token github.com/TrustedOrg=trusted-token' flake update nixpkgs`,
+      },
+    ]);
+  });
+
   it('supports docker mode', async () => {
     GlobalConfig.set(dockerAdminConfig);
     fs.readLocalFile.mockResolvedValueOnce('current flake.lock');
