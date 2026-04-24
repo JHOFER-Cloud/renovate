@@ -34,7 +34,7 @@ env:
   # are we on a release branch?
   DO_RELEASE: ${{ github.ref_name == github.event.repository.default_branch || github.ref_name == 'next' || startsWith(github.ref_name, 'maint/')}}
   NODE_VERSION: 24
-  PDM_VERSION: 2.26.7 # renovate: datasource=pypi depName=pdm
+  PDM_VERSION: 2.26.8 # renovate: datasource=pypi depName=pdm
   DRY_RUN: true
   TEST_LEGACY_DECRYPTION: true
   SPARSE_CHECKOUT: |-
@@ -43,6 +43,7 @@ env:
     patches/
     tools/
     package.json
+    pnpm-workspace.yaml
     pnpm-lock.yaml
 
 jobs:
@@ -745,7 +746,11 @@ jobs:
         run: pnpm test-e2e:pack
 
       - name: Install dependencies
-        run: pnpm test-e2e:install
+        run: |
+          # as `--ignore-workspace` doesn't seem to apply to `minimumReleaseAge`, forcibly delete our workspace
+          rm pnpm-workspace.yaml
+
+          pnpm test-e2e:install
 
       - name: E2E Test
         run: pnpm test-e2e:run
@@ -812,7 +817,7 @@ jobs:
       - run: df -h
 
       - name: docker-config
-        uses: containerbase/internal-tools@e9592c79693436df3b52351a40c101a93229d585 # v4.5.25
+        uses: containerbase/internal-tools@b4ae852a7c41333ca1876519026160d1b3c37206 # v4.6.1
         with:
           command: docker-config
 
@@ -929,7 +934,7 @@ jobs:
     steps:
       - name: Post to Slack
         id: slack
-        uses: slackapi/slack-github-action@af78098f536edbc4de71162a307590698245be95 # v3.0.1
+        uses: slackapi/slack-github-action@03ea5433c137af7c0495bc0cad1af10403fc800c # v3.0.2
         with:
           webhook: ${{ secrets.RENOVATEBOT_SLACK_WEBHOOK_MAIN_FAILURES }}
           webhook-type: incoming-webhook
@@ -949,7 +954,7 @@ jobs:
     steps:
       - name: Post to Slack
         id: slack
-        uses: slackapi/slack-github-action@af78098f536edbc4de71162a307590698245be95 # v3.0.1
+        uses: slackapi/slack-github-action@03ea5433c137af7c0495bc0cad1af10403fc800c # v3.0.2
         with:
           webhook: ${{ secrets.RENOVATEBOT_SLACK_WEBHOOK_MAIN_FAILURES }}
           webhook-type: incoming-webhook
