@@ -6,6 +6,10 @@ import { CONFIG_VALIDATION } from '../../constants/error-messages.ts';
 import { logger } from '../../logger/index.ts';
 import type { Pr } from '../../modules/platform/index.ts';
 import {
+  addSecretForSanitizing,
+  clearRepoSanitizedSecretsList,
+} from '../../util/sanitize.ts';
+import {
   raiseConfigWarningIssue,
   raiseCredentialsWarningIssue,
   raiseRepositoryErrorIssue,
@@ -153,6 +157,10 @@ Message: some-message
       GlobalConfig.reset();
     });
 
+    afterEach(() => {
+      clearRepoSanitizedSecretsList();
+    });
+
     it('returns if mode is silent', async () => {
       config.mode = 'silent';
       const res = await raiseRepositoryErrorIssue(config, new Error('oops'));
@@ -197,7 +205,7 @@ Message: some-message
       );
     });
 
-    it('creates issue with sanitized message and logs warning', async () => {
+    it('sanitizes URLs with credentials in error message', async () => {
       platform.ensureIssue.mockResolvedValueOnce('created');
       const error = new Error('Invalid URL: https://token@example.com/repo');
       const res = await raiseRepositoryErrorIssue(config, error);
@@ -211,6 +219,23 @@ Message: some-message
       expect(logger.warn).toHaveBeenCalledWith(
         { err: error, res: 'created' },
         'Repository Error Warning',
+      );
+    });
+
+    it('sanitizes registered secrets in error message', async () => {
+      platform.ensureIssue.mockResolvedValueOnce('created');
+      addSecretForSanitizing('super-secret-token');
+      const error = new Error('auth failed: super-secret-token is invalid');
+      await raiseRepositoryErrorIssue(config, error);
+      expect(platform.ensureIssue).toHaveBeenCalledExactlyOnceWith(
+        expect.objectContaining({
+          body: expect.stringContaining('**redacted**'),
+        }),
+      );
+      expect(platform.ensureIssue).toHaveBeenCalledExactlyOnceWith(
+        expect.objectContaining({
+          body: expect.not.stringContaining('super-secret-token'),
+        }),
       );
     });
 

@@ -82,11 +82,16 @@ describe('workers/repository/error', () => {
     });
 
     it(`handles ExternalHostError`, async () => {
+      const innerError = new Error('some inner error');
       const res = await handleError(
         config,
-        new ExternalHostError(new Error(), 'some-host-type'),
+        new ExternalHostError(innerError, 'some-host-type'),
       );
       expect(res).toEqual(EXTERNAL_HOST_ERROR);
+      expect(raiseRepositoryErrorIssue).toHaveBeenCalledExactlyOnceWith(
+        config,
+        innerError,
+      );
     });
 
     it('rewrites git 5xx error', async () => {
