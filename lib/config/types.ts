@@ -213,6 +213,7 @@ export interface GlobalOnlyConfigLegacy {
   deleteConfigFile?: boolean;
   githubAppId?: string;
   githubAppKey?: string;
+  githubAppCrossOrgTrustGroups?: string[][];
   deleteAdditionalConfigFile?: boolean;
 }
 

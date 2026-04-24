@@ -104,6 +104,7 @@ export interface PlatformConfig {
   ownerTokens?: Record<string, OwnerTokenInfo>;
   githubAppId?: string;
   githubAppKey?: string;
+  githubAppCrossOrgTrustGroups?: string[][];
 }
 
 export interface LocalRepoConfig {

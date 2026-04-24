@@ -880,6 +880,238 @@ describe('modules/platform/github/index', () => {
           'GitHub App has no installation for this repository owner; API calls may fail',
         );
       });
+
+      describe('githubAppCrossOrgTrustGroups', () => {
+        async function setupWithTrustGroups(
+          installations: _appToken.GhAppInstallation[],
+          tokens: _appToken.InstallationToken[],
+          trustGroups?: string[][],
+          endpoint?: string,
+        ): Promise<void> {
+          appToken.listInstallations.mockResolvedValue(installations);
+          for (const token of tokens) {
+            appToken.fetchInstallationToken.mockResolvedValueOnce(token);
+          }
+          const scope = httpMock.scope(endpoint ?? githubApiHost);
+          // GHE endpoints call HEAD / during initPlatform to detect the version
+          if (endpoint) {
+            scope
+              .head('/')
+              .reply(200, '', { 'x-github-enterprise-version': '3.10.0' });
+          }
+          scope.post('/graphql').reply(200, {
+            data: { viewer: { login: 'my-app[bot]', databaseId: 12345 } },
+          });
+          await github.initPlatform({
+            endpoint,
+            githubAppId: '67890',
+            githubAppKey: 'fake-pem',
+            githubAppCrossOrgTrustGroups: trustGroups,
+          });
+        }
+
+        it('adds no cross-org rules when trust groups are not configured', async () => {
+          await setupWithTrustGroups(
+            [
+              { id: 1, account: { login: 'org1', type: 'Organization' } },
+              { id: 2, account: { login: 'org2', type: 'Organization' } },
+            ],
+            [
+              { token: 'ghs_org1', expiresAt: futureExpiry },
+              { token: 'ghs_org2', expiresAt: futureExpiry },
+            ],
+          );
+
+          const scope = httpMock.scope(githubApiHost);
+          initRepoMock(scope, 'org1/repo');
+          await github.initRepo({ repository: 'org1/repo' });
+
+          expect(hostRules.add).not.toHaveBeenCalledWith(
+            expect.objectContaining({
+              matchHost: expect.stringContaining('github.com/org2/'),
+            }),
+          );
+        });
+
+        it('adds per-owner rules for trusted orgs in the same group', async () => {
+          await setupWithTrustGroups(
+            [
+              { id: 1, account: { login: 'org1', type: 'Organization' } },
+              { id: 2, account: { login: 'org2', type: 'Organization' } },
+            ],
+            [
+              { token: 'ghs_org1', expiresAt: futureExpiry },
+              { token: 'ghs_org2', expiresAt: futureExpiry },
+            ],
+            [['org1', 'org2']],
+          );
+
+          const scope = httpMock.scope(githubApiHost);
+          initRepoMock(scope, 'org1/repo');
+          await github.initRepo({ repository: 'org1/repo' });
+
+          expect(hostRules.add).toHaveBeenCalledWith(
+            expect.objectContaining({
+              matchHost: 'https://github.com/org2/',
+              hostType: 'github',
+              token: 'x-access-token:ghs_org2',
+            }),
+          );
+        });
+
+        it('does not add rules for orgs outside the current owner group', async () => {
+          await setupWithTrustGroups(
+            [
+              { id: 1, account: { login: 'org1', type: 'Organization' } },
+              { id: 2, account: { login: 'org2', type: 'Organization' } },
+              { id: 3, account: { login: 'org3', type: 'Organization' } },
+            ],
+            [
+              { token: 'ghs_org1', expiresAt: futureExpiry },
+              { token: 'ghs_org2', expiresAt: futureExpiry },
+              { token: 'ghs_org3', expiresAt: futureExpiry },
+            ],
+            [['org1', 'org2'], ['org3']],
+          );
+
+          const scope = httpMock.scope(githubApiHost);
+          initRepoMock(scope, 'org1/repo');
+          await github.initRepo({ repository: 'org1/repo' });
+
+          expect(hostRules.add).toHaveBeenCalledWith(
+            expect.objectContaining({ matchHost: 'https://github.com/org2/' }),
+          );
+          expect(hostRules.add).not.toHaveBeenCalledWith(
+            expect.objectContaining({ matchHost: 'https://github.com/org3/' }),
+          );
+        });
+
+        it('matches trust group members case-insensitively', async () => {
+          await setupWithTrustGroups(
+            [
+              { id: 1, account: { login: 'Org1', type: 'Organization' } },
+              { id: 2, account: { login: 'Org2', type: 'Organization' } },
+            ],
+            [
+              { token: 'ghs_org1', expiresAt: futureExpiry },
+              { token: 'ghs_org2', expiresAt: futureExpiry },
+            ],
+            [['ORG1', 'ORG2']],
+          );
+
+          const scope = httpMock.scope(githubApiHost);
+          initRepoMock(scope, 'Org1/repo');
+          await github.initRepo({ repository: 'Org1/repo' });
+
+          expect(hostRules.add).toHaveBeenCalledWith(
+            expect.objectContaining({
+              matchHost: 'https://github.com/org2/',
+              token: 'x-access-token:ghs_org2',
+            }),
+          );
+        });
+
+        it('adds rules for all peers in a group with 3+ orgs', async () => {
+          await setupWithTrustGroups(
+            [
+              { id: 1, account: { login: 'org1', type: 'Organization' } },
+              { id: 2, account: { login: 'org2', type: 'Organization' } },
+              { id: 3, account: { login: 'org3', type: 'Organization' } },
+            ],
+            [
+              { token: 'ghs_org1', expiresAt: futureExpiry },
+              { token: 'ghs_org2', expiresAt: futureExpiry },
+              { token: 'ghs_org3', expiresAt: futureExpiry },
+            ],
+            [['org1', 'org2', 'org3']],
+          );
+
+          const scope = httpMock.scope(githubApiHost);
+          initRepoMock(scope, 'org1/repo');
+          await github.initRepo({ repository: 'org1/repo' });
+
+          expect(hostRules.add).toHaveBeenCalledWith(
+            expect.objectContaining({ matchHost: 'https://github.com/org2/' }),
+          );
+          expect(hostRules.add).toHaveBeenCalledWith(
+            expect.objectContaining({ matchHost: 'https://github.com/org3/' }),
+          );
+          expect(hostRules.add).not.toHaveBeenCalledWith(
+            expect.objectContaining({
+              matchHost: 'https://github.com/org1/',
+            }),
+          );
+        });
+
+        it('updates existing per-owner rule in-place instead of adding a new one', async () => {
+          await setupWithTrustGroups(
+            [
+              { id: 1, account: { login: 'org1', type: 'Organization' } },
+              { id: 2, account: { login: 'org2', type: 'Organization' } },
+            ],
+            [
+              { token: 'ghs_org1', expiresAt: futureExpiry },
+              { token: 'ghs_org2', expiresAt: futureExpiry },
+            ],
+            [['org1', 'org2']],
+          );
+
+          const existingGenericRule: Record<string, unknown> = {
+            resolvedHost: 'api.github.com',
+            token: 'x-access-token:ghs_org1_old',
+          };
+          const existingOwnerRule: Record<string, unknown> = {
+            matchHost: 'https://github.com/org2/',
+            token: 'x-access-token:ghs_org2_old',
+          };
+          hostRules.findAll.mockReturnValue([
+            existingGenericRule as any,
+            existingOwnerRule as any,
+          ]);
+
+          const scope = httpMock.scope(githubApiHost);
+          initRepoMock(scope, 'org1/repo');
+          await github.initRepo({ repository: 'org1/repo' });
+
+          expect(hostRules.add).not.toHaveBeenCalledWith(
+            expect.objectContaining({ matchHost: 'https://github.com/org2/' }),
+          );
+          expect(existingOwnerRule.token).toBe('x-access-token:ghs_org2');
+        });
+
+        it('uses GHE hostname in matchHost for GHE endpoints', async () => {
+          const gheHost = 'https://ghe.renovatebot.com';
+          await setupWithTrustGroups(
+            [
+              { id: 1, account: { login: 'org1', type: 'Organization' } },
+              { id: 2, account: { login: 'org2', type: 'Organization' } },
+            ],
+            [
+              { token: 'ghs_org1', expiresAt: futureExpiry },
+              { token: 'ghs_org2', expiresAt: futureExpiry },
+            ],
+            [['org1', 'org2']],
+            gheHost,
+          );
+
+          const scope = httpMock.scope(gheHost);
+          initRepoMock(scope, 'org1/repo');
+          await github.initRepo({ repository: 'org1/repo' });
+
+          expect(hostRules.add).toHaveBeenCalledWith(
+            expect.objectContaining({
+              matchHost: 'https://ghe.renovatebot.com/org2/',
+              hostType: 'github',
+              token: 'x-access-token:ghs_org2',
+            }),
+          );
+          expect(hostRules.add).not.toHaveBeenCalledWith(
+            expect.objectContaining({
+              matchHost: expect.stringContaining('github.com/org2/'),
+            }),
+          );
+        });
+      });
     });
 
     describe('initPlatform() partial installation failures', () => {
