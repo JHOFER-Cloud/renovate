@@ -220,7 +220,7 @@ Message: some-message
       );
     });
 
-    it('creates issue when there are lookup warnings', async () => {
+    it('creates issue with correct body format', async () => {
       platform.ensureIssue.mockResolvedValueOnce('created');
       await raiseDependencyLookupWarningsIssue(
         config,
@@ -229,7 +229,9 @@ Message: some-message
       expect(platform.ensureIssue).toHaveBeenCalledExactlyOnceWith(
         expect.objectContaining({
           title: 'Action Required: Fix Dependency Lookup Errors',
-          body: expect.stringContaining('flake.nix'),
+          body: expect.stringContaining(
+            '- Dependency lookup error for `git-refs` package `https://github.com/foo/bar`: Repository not found.',
+          ),
           once: false,
           shouldReOpen: true,
         }),
@@ -238,6 +240,57 @@ Message: some-message
         expect.objectContaining({ res: 'created' }),
         'Dependency Lookup Warning',
       );
+    });
+
+    it('escapes @ signs to prevent GitHub mentions', async () => {
+      platform.ensureIssue.mockResolvedValueOnce('created');
+      const packageFilesWithAt = {
+        npm: [
+          partial({
+            packageFile: 'package.json',
+            deps: [
+              partial({
+                warnings: [
+                  {
+                    topic: '@scope/pkg',
+                    message:
+                      'Dependency lookup error for `npm` package `@scope/pkg`: not found',
+                  },
+                ],
+              }),
+            ],
+          }),
+        ],
+      };
+      await raiseDependencyLookupWarningsIssue(config, packageFilesWithAt);
+      const body: string = platform.ensureIssue.mock.calls[0][0].body;
+      expect(body).not.toContain('@scope');
+      expect(body).toContain('&#64;scope');
+    });
+
+    it('escapes #number to prevent GitHub issue linkification', async () => {
+      platform.ensureIssue.mockResolvedValueOnce('created');
+      const packageFilesWithHash = {
+        npm: [
+          partial({
+            packageFile: 'package.json',
+            deps: [
+              partial({
+                warnings: [
+                  {
+                    topic: 'pkg',
+                    message: 'lookup failed, see #123 for details',
+                  },
+                ],
+              }),
+            ],
+          }),
+        ],
+      };
+      await raiseDependencyLookupWarningsIssue(config, packageFilesWithHash);
+      const body: string = platform.ensureIssue.mock.calls[0][0].body;
+      expect(body).not.toContain('#123');
+      expect(body).toContain('&#35;123');
     });
 
     it('updates existing issue and logs warning', async () => {
