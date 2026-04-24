@@ -913,6 +913,23 @@ Possible values:
 - `ssh`: use SSH URLs provided by the platform for Git
 - `endpoint`: ignore URLs provided by the platform and use the configured endpoint directly
 
+## githubAppCrossOrgTrustGroups
+
+Groups of GitHub orgs whose installation tokens may be used for cross-org dependency lookups.
+Each group is an array of org names; any org in a group may use the tokens of the others when resolving dependencies hosted under those orgs.
+Orgs not listed here never share tokens.
+
+Example:
+
+```json
+{
+  "githubAppCrossOrgTrustGroups": [
+    ["org-a", "org-b"],
+    ["org-c", "org-d"]
+  ]
+}
+```
+
 ## githubAppId
 
 GitHub App ID. Use together with `githubAppKey` to let Renovate generate installation tokens automatically, instead of providing a personal access token or installation token directly.

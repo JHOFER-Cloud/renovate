@@ -13,6 +13,7 @@ export interface PlatformParams {
   gitAuthor?: string;
   githubAppId?: string;
   githubAppKey?: string;
+  githubAppCrossOrgTrustGroups?: string[][];
 }
 
 export interface PlatformResult {

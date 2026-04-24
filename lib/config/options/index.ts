@@ -1095,6 +1095,14 @@ const options: Readonly<RenovateOptions>[] = [
     supportedPlatforms: ['github'],
   },
   {
+    name: 'githubAppCrossOrgTrustGroups',
+    description:
+      'Groups of GitHub orgs whose installation tokens may be used for cross-org dependency lookups. Each group is an array of org names; any org in a group may use the tokens of the others when resolving dependencies hosted under those orgs. Orgs not listed here never share tokens.',
+    type: 'array',
+    globalOnly: true,
+    supportedPlatforms: ['github'],
+  },
+  {
     name: 'username',
     description: 'Username for authentication.',
     stage: 'repository',

@@ -158,6 +158,7 @@ export async function initPlatform({
   gitAuthor,
   githubAppId,
   githubAppKey,
+  githubAppCrossOrgTrustGroups,
 }: PlatformParams): Promise<PlatformResult> {
   let token = originalToken;
 
@@ -199,6 +200,7 @@ export async function initPlatform({
     platformConfig.ownerTokens = ownerTokens;
     platformConfig.githubAppId = githubAppId;
     platformConfig.githubAppKey = githubAppKey;
+    platformConfig.githubAppCrossOrgTrustGroups = githubAppCrossOrgTrustGroups;
     addSecretForSanitizing(githubAppKey, 'global');
     for (const { token: rawToken } of Object.values(ownerTokens)) {
       addSecretForSanitizing(`x-access-token:${rawToken}`, 'global');
@@ -545,6 +547,19 @@ export async function createFork(
   return forkedRepo;
 }
 
+/**
+ * Derives the base git URL from the GitHub API endpoint.
+ * For github.com the git host differs from the API host (api.github.com → github.com).
+ * For GHE both use the same hostname.
+ */
+function getGitBaseUrl(endpoint: string): string {
+  const url = new URL(endpoint);
+  if (url.hostname === 'api.github.com') {
+    return 'https://github.com/';
+  }
+  return `${url.protocol}//${url.host}/`;
+}
+
 // Initialize GitHub by getting base branch and SHA
 export async function initRepo({
   repository,
@@ -605,13 +620,69 @@ export async function initRepo({
       // rule in-place. Falls back to add() on the first run when no rule exists.
       const matchHost = new URL(platformConfig.endpoint).hostname;
       const token = `x-access-token:${rawToken}`;
-      const existingRule = hostRules
-        .findAll({ hostType: 'github' })
-        .find((r) => r.resolvedHost === matchHost);
+      const allGitHubRules = hostRules.findAll({ hostType: 'github' });
+      const existingRule = allGitHubRules.find(
+        (r) => r.resolvedHost === matchHost,
+      );
       if (existingRule) {
         existingRule.token = token;
       } else {
         hostRules.add({ matchHost, hostType: 'github', token });
+      }
+
+      // Register per-owner git hostRules for orgs that the current repo's owner
+      // explicitly trusts via githubAppCrossOrgTrustGroups. Git's insteadOf
+      // matching prefers the longest prefix, so https://github.com/<owner>/
+      // wins over https://github.com/ for that owner's repos, ensuring the
+      // right installation token is used for cross-org dependency lookups.
+      // Re-registered on every initRepo() so they survive hostRules.clear().
+      const trustGroups = platformConfig.githubAppCrossOrgTrustGroups ?? [];
+      const currentOwner = config.repositoryOwner.toLowerCase();
+      const trustedOwners = new Set<string>();
+      for (const group of trustGroups) {
+        const normalized = group.map((o) => o.toLowerCase());
+        if (normalized.includes(currentOwner)) {
+          for (const o of normalized) {
+            if (o !== currentOwner) {
+              trustedOwners.add(o);
+            }
+          }
+        }
+      }
+
+      for (const owner of trustedOwners) {
+        if (!platformConfig.ownerTokens[owner]) {
+          logger.debug(
+            { owner },
+            'Trusted org has no GitHub App installation token; cross-org dependency lookups for this org may fail',
+          );
+        }
+      }
+
+      const gitBase = getGitBaseUrl(platformConfig.endpoint);
+      for (const [ownerLogin, ownerInfo] of Object.entries(
+        platformConfig.ownerTokens,
+      )) {
+        if (!trustedOwners.has(ownerLogin)) {
+          continue;
+        }
+        const ownerMatchHost = `${gitBase}${ownerLogin}/`;
+        const ownerToken = `x-access-token:${ownerInfo.token}`;
+        // Per-owner rules are stored as URL prefixes (e.g. https://github.com/org/)
+        // so we match on matchHost, not resolvedHost. The main host rule above
+        // uses resolvedHost because it was stored with a bare hostname.
+        const ownerRule = allGitHubRules.find(
+          (r) => r.matchHost === ownerMatchHost,
+        );
+        if (ownerRule) {
+          ownerRule.token = ownerToken;
+        } else {
+          hostRules.add({
+            hostType: 'github',
+            matchHost: ownerMatchHost,
+            token: ownerToken,
+          });
+        }
       }
     } else {
       logger.warn(
