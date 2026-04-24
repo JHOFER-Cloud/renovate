@@ -184,6 +184,7 @@ export async function initPlatform({
         ownerTokens[inst.account.login.toLowerCase()] = {
           ...instToken,
           installationId: inst.id,
+          login: inst.account.login,
         };
       } catch (err) {
         logger.warn(
@@ -201,6 +202,12 @@ export async function initPlatform({
     platformConfig.githubAppId = githubAppId;
     platformConfig.githubAppKey = githubAppKey;
     platformConfig.githubAppCrossOrgTrustGroups = githubAppCrossOrgTrustGroups;
+    if (githubAppCrossOrgTrustGroups?.length) {
+      logger.debug(
+        { trustGroups: githubAppCrossOrgTrustGroups },
+        'githubAppCrossOrgTrustGroups: loaded cross-org trust configuration',
+      );
+    }
     addSecretForSanitizing(githubAppKey, 'global');
     for (const { token: rawToken } of Object.values(ownerTokens)) {
       addSecretForSanitizing(`x-access-token:${rawToken}`, 'global');
@@ -604,6 +611,7 @@ export async function initRepo({
           platformConfig.ownerTokens[ownerKey] = {
             ...refreshed,
             installationId: tokenInfo.installationId,
+            login: tokenInfo.login,
           };
           addSecretForSanitizing(`x-access-token:${refreshed.token}`, 'global');
           rawToken = refreshed.token;
@@ -650,6 +658,13 @@ export async function initRepo({
         }
       }
 
+      if (trustGroups.length && trustedOwners.size === 0) {
+        logger.debug(
+          { currentOwner, trustGroups },
+          'githubAppCrossOrgTrustGroups: current owner not found in any group; no cross-org rules registered',
+        );
+      }
+
       for (const owner of trustedOwners) {
         if (!platformConfig.ownerTokens[owner]) {
           logger.debug(
@@ -666,13 +681,21 @@ export async function initRepo({
         if (!trustedOwners.has(ownerLogin)) {
           continue;
         }
-        const ownerMatchHost = `${gitBase}${ownerLogin}/`;
+        const ownerMatchHost = `${gitBase}${ownerInfo.login}/`;
         const ownerToken = `x-access-token:${ownerInfo.token}`;
         // Per-owner rules are stored as URL prefixes (e.g. https://github.com/org/)
         // so we match on matchHost, not resolvedHost. The main host rule above
         // uses resolvedHost because it was stored with a bare hostname.
         const ownerRule = allGitHubRules.find(
           (r) => r.matchHost === ownerMatchHost,
+        );
+        logger.debug(
+          {
+            owner: ownerInfo.login,
+            matchHost: ownerMatchHost,
+            upsert: !!ownerRule,
+          },
+          'githubAppCrossOrgTrustGroups: registering cross-org host rule',
         );
         if (ownerRule) {
           ownerRule.token = ownerToken;

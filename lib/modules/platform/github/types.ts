@@ -89,6 +89,7 @@ export interface OwnerTokenInfo {
   token: string;
   expiresAt: Date;
   installationId: number;
+  login: string; // original case from GitHub API
 }
 
 export interface PlatformConfig {

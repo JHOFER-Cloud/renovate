@@ -172,16 +172,18 @@ export async function raiseDependencyLookupWarningsIssue(
     return;
   }
   const { warnings, warningFiles } = getDepWarnings(packageFiles);
-  if (!warnings.length) {
-    await platform.ensureIssueClosing(
-      `Action Required: Fix Dependency Lookup Errors`,
-    );
-    return;
-  }
   if (GlobalConfig.get('dryRun')) {
     logger.info(
       { warnings },
-      'DRY-RUN: Would ensure dependency lookup warning issue',
+      warnings.length
+        ? 'DRY-RUN: Would ensure dependency lookup warning issue'
+        : 'DRY-RUN: Would close dependency lookup warning issue',
+    );
+    return;
+  }
+  if (!warnings.length) {
+    await platform.ensureIssueClosing(
+      `Action Required: Fix Dependency Lookup Errors`,
     );
     return;
   }

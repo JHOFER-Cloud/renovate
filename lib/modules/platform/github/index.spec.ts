@@ -1005,7 +1005,7 @@ describe('modules/platform/github/index', () => {
 
           expect(hostRules.add).toHaveBeenCalledWith(
             expect.objectContaining({
-              matchHost: 'https://github.com/org2/',
+              matchHost: 'https://github.com/Org2/',
               token: 'x-access-token:ghs_org2',
             }),
           );
