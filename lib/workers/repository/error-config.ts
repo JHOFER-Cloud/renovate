@@ -173,6 +173,9 @@ export async function raiseDependencyLookupWarningsIssue(
   }
   const { warnings, warningFiles } = getDepWarnings(packageFiles);
   if (!warnings.length) {
+    await platform.ensureIssueClosing(
+      `Action Required: Fix Dependency Lookup Errors`,
+    );
     return;
   }
   if (GlobalConfig.get('dryRun')) {
