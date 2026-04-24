@@ -159,6 +159,7 @@ export default async function handleError(
     );
     logger.info('External host error causing abort - skipping');
     delete config.branchList;
+    await raiseRepositoryErrorIssue(config, err.err);
     return EXTERNAL_HOST_ERROR;
   }
   if (

@@ -6,6 +6,7 @@ import { sanitizeUrls } from '../../logger/utils.ts';
 import type { Pr } from '../../modules/platform/index.ts';
 import { platform } from '../../modules/platform/index.ts';
 import { getInheritedOrGlobal } from '../../util/common.ts';
+import { sanitize } from '../../util/sanitize.ts';
 
 export function raiseConfigWarningIssue(
   config: RenovateConfig,
@@ -53,7 +54,7 @@ export async function raiseRepositoryErrorIssue(
     return;
   }
   const title = `Action Required: Fix Renovate Repository Error`;
-  const safeMessage = sanitizeUrls(error.message).slice(0, 150);
+  const safeMessage = sanitize(sanitizeUrls(error.message)).slice(0, 150);
   const body = `Renovate encountered an unexpected error in this repository and has aborted. Please check the logs or contact your Renovate administrator for more details.\n\n**Error:** \`${safeMessage}\`\n`;
   const res = await platform.ensureIssue({
     title,
