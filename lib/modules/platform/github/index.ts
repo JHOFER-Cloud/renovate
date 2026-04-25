@@ -45,7 +45,7 @@ import * as githubHttp from '../../../util/http/github.ts';
 import type { HttpResponse } from '../../../util/http/types.ts';
 import { coerceObject } from '../../../util/object.ts';
 import { regEx } from '../../../util/regex.ts';
-import { sanitize } from '../../../util/sanitize.ts';
+import { addSecretForSanitizing, sanitize } from '../../../util/sanitize.ts';
 import { fromBase64, looseEquals } from '../../../util/string.ts';
 import { ensureTrailingSlash } from '../../../util/url.ts';
 import { incLimitedValue } from '../../../workers/global/limits.ts';
@@ -71,6 +71,11 @@ import type {
 } from '../types.ts';
 import { repoFingerprint } from '../util.ts';
 import { smartTruncate } from '../utils/pr-body.ts';
+import {
+  fetchInstallationToken,
+  generateJWT,
+  listInstallations,
+} from './app-token.ts';
 import { remoteBranchExists } from './branch.ts';
 import { coerceRestPr, githubApi, mapMergeStartegy } from './common.ts';
 import {
@@ -151,20 +156,70 @@ export async function initPlatform({
   token: originalToken,
   username,
   gitAuthor,
+  githubAppId,
+  githubAppKey,
+  githubAppCrossOrgTrustGroups,
 }: PlatformParams): Promise<PlatformResult> {
   let token = originalToken;
-  if (!token) {
-    throw new Error('Init: You must configure a GitHub token');
-  }
-  token = token.replace(/^ghs_/, 'x-access-token:ghs_');
-  platformConfig.isGHApp = token.startsWith('x-access-token:');
 
+  // Set up endpoint first so GitHub App API calls hit the right host
   if (endpoint) {
     platformConfig.endpoint = ensureTrailingSlash(endpoint);
     githubHttp.setBaseUrl(platformConfig.endpoint);
   } else {
     logger.debug('Using default github endpoint: ' + platformConfig.endpoint);
   }
+
+  if (!token && githubAppId && githubAppKey) {
+    logger.debug('GitHub App mode: resolving installation tokens');
+    const jwt = generateJWT(githubAppId, githubAppKey);
+    const installations = await listInstallations(jwt);
+    if (!installations.length) {
+      throw new Error('Init: GitHub App has no installations');
+    }
+    const ownerTokens: NonNullable<typeof platformConfig.ownerTokens> = {};
+    for (const inst of installations) {
+      try {
+        const instToken = await fetchInstallationToken(jwt, inst.id);
+        ownerTokens[inst.account.login.toLowerCase()] = {
+          ...instToken,
+          installationId: inst.id,
+          login: inst.account.login,
+        };
+      } catch (err) {
+        logger.warn(
+          { installationId: inst.id, account: inst.account.login, err },
+          'Failed to fetch GitHub App installation token; skipping this installation',
+        );
+      }
+    }
+    if (!Object.keys(ownerTokens).length) {
+      throw new Error(
+        'Init: GitHub App could not obtain any installation tokens',
+      );
+    }
+    platformConfig.ownerTokens = ownerTokens;
+    platformConfig.githubAppId = githubAppId;
+    platformConfig.githubAppKey = githubAppKey;
+    platformConfig.githubAppCrossOrgTrustGroups = githubAppCrossOrgTrustGroups;
+    if (githubAppCrossOrgTrustGroups?.length) {
+      logger.debug(
+        { trustGroups: githubAppCrossOrgTrustGroups },
+        'githubAppCrossOrgTrustGroups: loaded cross-org trust configuration',
+      );
+    }
+    addSecretForSanitizing(githubAppKey, 'global');
+    for (const { token: rawToken } of Object.values(ownerTokens)) {
+      addSecretForSanitizing(`x-access-token:${rawToken}`, 'global');
+    }
+    token = Object.values(ownerTokens)[0].token;
+  }
+
+  if (!token) {
+    throw new Error('Init: You must configure a GitHub token');
+  }
+  token = token.replace(/^ghs_/, 'x-access-token:ghs_');
+  platformConfig.isGHApp = token.startsWith('x-access-token:');
 
   await detectGhe(token);
   /**
@@ -267,6 +322,22 @@ export async function initPlatform({
 async function fetchRepositories(): Promise<GhRestRepo[]> {
   try {
     if (isGHApp()) {
+      if (platformConfig.ownerTokens) {
+        const allRepos: GhRestRepo[] = [];
+        for (const { token: rawToken } of Object.values(
+          platformConfig.ownerTokens,
+        )) {
+          const res = await githubApi.getJsonUnchecked<{
+            repositories: GhRestRepo[];
+          }>(`installation/repositories?per_page=100`, {
+            token: `x-access-token:${rawToken}`,
+            paginationField: 'repositories',
+            paginate: 'all',
+          });
+          allRepos.push(...res.body.repositories);
+        }
+        return allRepos;
+      }
       const res = await githubApi.getJsonUnchecked<{
         repositories: GhRestRepo[];
       }>(`installation/repositories?per_page=100`, {
@@ -483,6 +554,19 @@ export async function createFork(
   return forkedRepo;
 }
 
+/**
+ * Derives the base git URL from the GitHub API endpoint.
+ * For github.com the git host differs from the API host (api.github.com → github.com).
+ * For GHE both use the same hostname.
+ */
+function getGitBaseUrl(endpoint: string): string {
+  const url = new URL(endpoint);
+  if (url.hostname === 'api.github.com') {
+    return 'https://github.com/';
+  }
+  return `${url.protocol}//${url.host}/`;
+}
+
 // Initialize GitHub by getting base branch and SHA
 export async function initRepo({
   repository,
@@ -501,13 +585,143 @@ export async function initRepo({
     cloneSubmodulesFilter,
     ignorePrAuthor: GlobalConfig.get('ignorePrAuthor', false),
   } as any;
+  config.renovateUsername = renovateUsername;
+  [config.repositoryOwner, config.repositoryName] = repository.split('/');
+
+  // Multi-installation: activate (and refresh if expiring) the token for this org
+  if (platformConfig.ownerTokens) {
+    const ownerKey = config.repositoryOwner.toLowerCase();
+    const tokenInfo = platformConfig.ownerTokens[ownerKey];
+    if (tokenInfo) {
+      let rawToken = tokenInfo.token;
+      const fiveMinFromNow = new Date(Date.now() + 5 * 60 * 1000);
+      if (tokenInfo.expiresAt <= fiveMinFromNow) {
+        logger.debug(
+          `Refreshing GitHub App installation token for ${config.repositoryOwner}`,
+        );
+        try {
+          const jwt = generateJWT(
+            platformConfig.githubAppId!,
+            platformConfig.githubAppKey!,
+          );
+          const refreshed = await fetchInstallationToken(
+            jwt,
+            tokenInfo.installationId,
+          );
+          platformConfig.ownerTokens[ownerKey] = {
+            ...refreshed,
+            installationId: tokenInfo.installationId,
+            login: tokenInfo.login,
+          };
+          addSecretForSanitizing(`x-access-token:${refreshed.token}`, 'global');
+          rawToken = refreshed.token;
+        } catch (err) {
+          logger.warn(
+            { repository, installationId: tokenInfo.installationId, err },
+            'Failed to refresh GitHub App installation token; using existing token',
+          );
+        }
+      }
+      // Update the existing GitHub host rule with the current org's token rather
+      // than accumulating a new rule on every initRepo() call. findAll() returns
+      // live references (no clone), so mutating the element updates the stored
+      // rule in-place. Falls back to add() on the first run when no rule exists.
+      const matchHost = new URL(platformConfig.endpoint).hostname;
+      const token = `x-access-token:${rawToken}`;
+      const allGitHubRules = hostRules.findAll({ hostType: 'github' });
+      const existingRule = allGitHubRules.find(
+        (r) => r.resolvedHost === matchHost,
+      );
+      if (existingRule) {
+        existingRule.token = token;
+      } else {
+        hostRules.add({ matchHost, hostType: 'github', token });
+      }
+
+      // Register per-owner git hostRules for orgs that the current repo's owner
+      // explicitly trusts via githubAppCrossOrgTrustGroups. Git's insteadOf
+      // matching prefers the longest prefix, so https://github.com/<owner>/
+      // wins over https://github.com/ for that owner's repos, ensuring the
+      // right installation token is used for cross-org dependency lookups.
+      // Re-registered on every initRepo() so they survive hostRules.clear().
+      const trustGroups = platformConfig.githubAppCrossOrgTrustGroups ?? [];
+      const currentOwner = config.repositoryOwner.toLowerCase();
+      const trustedOwners = new Set<string>();
+      for (const group of trustGroups) {
+        const normalized = group.map((o) => o.toLowerCase());
+        if (normalized.includes(currentOwner)) {
+          for (const o of normalized) {
+            if (o !== currentOwner) {
+              trustedOwners.add(o);
+            }
+          }
+        }
+      }
+
+      if (trustGroups.length && trustedOwners.size === 0) {
+        logger.debug(
+          { currentOwner, trustGroups },
+          'githubAppCrossOrgTrustGroups: current owner not found in any group; no cross-org rules registered',
+        );
+      }
+
+      for (const owner of trustedOwners) {
+        if (!platformConfig.ownerTokens[owner]) {
+          logger.debug(
+            { owner },
+            'Trusted org has no GitHub App installation token; cross-org dependency lookups for this org may fail',
+          );
+        }
+      }
+
+      const gitBase = getGitBaseUrl(platformConfig.endpoint);
+      for (const [ownerLogin, ownerInfo] of Object.entries(
+        platformConfig.ownerTokens,
+      )) {
+        if (!trustedOwners.has(ownerLogin)) {
+          continue;
+        }
+        const ownerMatchHost = `${gitBase}${ownerInfo.login}/`;
+        const ownerToken = `x-access-token:${ownerInfo.token}`;
+        // Per-owner rules are stored as URL prefixes (e.g. https://github.com/org/)
+        // so we match on matchHost, not resolvedHost. The main host rule above
+        // uses resolvedHost because it was stored with a bare hostname.
+        const ownerRule = allGitHubRules.find(
+          (r) => r.matchHost === ownerMatchHost,
+        );
+        logger.debug(
+          {
+            owner: ownerInfo.login,
+            matchHost: ownerMatchHost,
+            upsert: !!ownerRule,
+          },
+          'githubAppCrossOrgTrustGroups: registering cross-org host rule',
+        );
+        if (ownerRule) {
+          ownerRule.token = ownerToken;
+        } else {
+          hostRules.add({
+            hostType: 'github',
+            matchHost: ownerMatchHost,
+            token: ownerToken,
+          });
+        }
+      }
+    } else {
+      logger.warn(
+        { repository },
+        'GitHub App has no installation for this repository owner; API calls may fail',
+      );
+    }
+  }
+
+  // Resolve opts after any host-rule updates so git auth uses the active token
   const opts = hostRules.find({
     hostType: 'github',
     url: platformConfig.endpoint,
     readOnly: true,
   });
-  config.renovateUsername = renovateUsername;
-  [config.repositoryOwner, config.repositoryName] = repository.split('/');
+
   let repo: GhRepo | undefined;
   try {
     let infoQuery = repoInfoQuery;
