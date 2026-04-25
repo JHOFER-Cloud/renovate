@@ -16,56 +16,53 @@ pkgs:
 builtins.foldl'
 (acc: sys: let
   sysPkgs = pkgs.\${sys};
-  filtered =
-    builtins.filterAttrs
-    (n: p: p ? passthru && p.passthru ? updateScript)
-    sysPkgs;
-  entries =
-    builtins.mapAttrs
-    (n: p: let
-      us = p.passthru.updateScript;
-      rawCmd =
-        if builtins.isAttrs us && us ? command && builtins.isList us.command
-        then us.command
-        else if builtins.isList us
-        then us
-        else [];
-      cmdLen = builtins.length rawCmd;
-      cmdHead =
-        if cmdLen > 0
-        then builtins.unsafeDiscardStringContext (builtins.head rawCmd)
-        else "";
-      isNixUpdateScript = builtins.match ".*nix-update.*" cmdHead != null;
-      src = p.src or null;
-      srcUrl =
-        if src != null && builtins.isAttrs src
-        then let
-          u =
-            if src ? urls && builtins.length src.urls > 0
-            then builtins.head src.urls
-            else src.url or null;
-        in
-          if u != null
-          then builtins.unsafeDiscardStringContext u
-          else null
-        else null;
-      srcRev =
-        if src != null && builtins.isAttrs src && src ? rev
-        then builtins.unsafeDiscardStringContext src.rev
-        else null;
-    in {
-      system = sys;
-      version = p.version or null;
-      pname = p.pname or null;
-      inherit srcUrl srcRev;
-      updateScriptArgs =
-        if isNixUpdateScript && cmdLen >= 2
-        then
-          map builtins.unsafeDiscardStringContext
-          (builtins.genList (i: builtins.elemAt rawCmd (i + 1)) (cmdLen - 1))
-        else [];
-    })
-    filtered;
+  entries = builtins.listToAttrs (builtins.concatMap (n:
+    let p = sysPkgs.\${n};
+    in if p ? passthru && p.passthru ? updateScript then [{ name = n; value =
+      let
+        us = p.passthru.updateScript;
+        rawCmd =
+          if builtins.isAttrs us && us ? command && builtins.isList us.command
+          then us.command
+          else if builtins.isList us
+          then us
+          else [];
+        cmdLen = builtins.length rawCmd;
+        cmdHead =
+          if cmdLen > 0
+          then builtins.unsafeDiscardStringContext (builtins.head rawCmd)
+          else "";
+        isNixUpdateScript = builtins.match ".*nix-update.*" cmdHead != null;
+        src = p.src or null;
+        srcUrl =
+          if src != null && builtins.isAttrs src
+          then let
+            u =
+              if src ? urls && builtins.length src.urls > 0
+              then builtins.head src.urls
+              else src.url or null;
+          in
+            if u != null
+            then builtins.unsafeDiscardStringContext u
+            else null
+          else null;
+        srcRev =
+          if src != null && builtins.isAttrs src && src ? rev
+          then builtins.unsafeDiscardStringContext src.rev
+          else null;
+      in {
+        system = sys;
+        version = p.version or null;
+        pname = p.pname or null;
+        inherit srcUrl srcRev;
+        updateScriptArgs =
+          if isNixUpdateScript && cmdLen >= 2
+          then
+            map builtins.unsafeDiscardStringContext
+            (builtins.genList (i: builtins.elemAt rawCmd (i + 1)) (cmdLen - 1))
+          else [];
+      }; }] else []
+  ) (builtins.attrNames sysPkgs));
 in
   acc // entries)
 {}
