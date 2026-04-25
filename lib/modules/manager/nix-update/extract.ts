@@ -216,9 +216,12 @@ export async function extractAllPackageFiles(
   // packages (any system works). Per-system tracking lets us pass --system to
   // nix-update so it evaluates Linux-only packages on Linux and macOS-only
   // packages on macOS, regardless of which system renovate itself runs on.
+  // Collapse to a single line before JSON.stringify — shell passes the
+  // --apply value as-is, so literal \n from JSON escaping would break nix.
+  const singleLineExpr = evalExpr.replace(/\n\s*/g, ' ').trim();
   const cmd =
     `nix --extra-experimental-features 'nix-command flakes' ` +
-    `eval --json .#packages --apply ${JSON.stringify(evalExpr)}`;
+    `eval --json .#packages --apply ${JSON.stringify(singleLineExpr)}`;
 
   const execOptions: ExecOptions = {
     toolConstraints: [{ toolName: 'nix' }],
