@@ -318,6 +318,12 @@ export async function getUpdatedPackageFiles(
           );
           artifactUpdateNeeded[packageFile] = newContent;
         }
+        if (manager === 'nix-update') {
+          // nix-update's updateDependency is always a no-op; the real work
+          // happens in updateArtifacts (runs nix-update binary). Always
+          // schedule an artifact update so updateArtifacts is called.
+          artifactUpdateNeeded[packageFile] = newContent;
+        }
       }
     }
   }
