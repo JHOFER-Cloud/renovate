@@ -15,6 +15,27 @@ export function extractRepoProblems(
   );
 }
 
+// Pull just the nix-update prefetch failures for this repo so we can post a
+// dedicated user-facing issue. Identified by message prefix — artifacts.ts
+// always emits `nix-update: failed to prefetch <attr> <path> (<fetcher>)`.
+export function extractNixUpdateArtifactWarnings(
+  repository: string | undefined,
+): string[] {
+  return Array.from(
+    new Set(
+      getProblems()
+        .filter(
+          (problem) =>
+            problem.repository === repository &&
+            problem.level >= WARN &&
+            typeof problem.msg === 'string' &&
+            problem.msg.startsWith('nix-update: failed to prefetch'),
+        )
+        .map((problem) => problem.msg),
+    ),
+  );
+}
+
 type EmojiLogLevelMapping = Record<number, string>;
 
 const logLevelEmojis: EmojiLogLevelMapping = {
