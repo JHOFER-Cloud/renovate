@@ -110,7 +110,7 @@ jobs:
               --head "$BRANCH_NAME" \
               --reviewer ojsef39
           fi
-          gh pr merge --auto "$BRANCH_NAME" --repo ${{ github.repository }}
+          gh pr merge --auto --merge "$BRANCH_NAME" --repo ${{ github.repository }}
 
       - name: No updates
         if: steps.check.outputs.has_updates == 'false'
