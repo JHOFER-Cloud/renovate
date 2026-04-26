@@ -210,3 +210,80 @@ export async function raiseDependencyLookupWarningsIssue(
     logger.warn({ warnings, res }, 'Dependency Lookup Warning');
   }
 }
+
+// Post one sticky repo issue per repository for nix-update artifact failures.
+// Independent of `dependencyDashboard` — fires even when the dashboard is
+// disabled, so the repo owner is notified that a package's `src` or
+// vendor-FOD couldn't be prefetched (typically: upstream removed an asset,
+// platform mismatch, or unsupported fetcher).
+//
+// Closes the issue when there are no warnings — symmetric with how
+// `raiseDependencyLookupWarningsIssue` is shaped.
+const NIX_UPDATE_ARTIFACT_ERRORS_TITLE =
+  'Action Required: Fix nix-update Artifact Errors';
+
+export async function raiseNixUpdateArtifactErrorsIssue(
+  config: RenovateConfig,
+  warnings: string[],
+): Promise<void> {
+  logger.debug('raiseNixUpdateArtifactErrorsIssue()');
+  if (config.mode === 'silent') {
+    logger.debug(
+      'nix-update artifact error issues are not created, updated or closed when mode=silent',
+    );
+    return;
+  }
+  const notificationName = 'nixUpdateArtifactErrors';
+  if (config.suppressNotifications?.includes(notificationName)) {
+    logger.info(
+      { notificationName },
+      'nix-update artifact errors, issues will be suppressed',
+    );
+    return;
+  }
+  if (GlobalConfig.get('dryRun')) {
+    logger.info(
+      { warnings },
+      warnings.length
+        ? 'DRY-RUN: Would ensure nix-update artifact errors issue'
+        : 'DRY-RUN: Would close nix-update artifact errors issue',
+    );
+    return;
+  }
+  if (!warnings.length) {
+    await platform.ensureIssueClosing(NIX_UPDATE_ARTIFACT_ERRORS_TITLE);
+    return;
+  }
+  const safeWarnings = warnings.map((w) =>
+    sanitize(sanitizeUrls(w))
+      .split('\n')
+      .join(' ')
+      .trim()
+      // Escape #N and @user so GitHub doesn't auto-link them inside the issue.
+      .replace(/#(\d)/g, '&#35;$1')
+      .replace(/@/g, '&#64;'),
+  );
+  let body =
+    `Renovate's nix-update manager could not compute hashes for one or more package fixed-output derivations. ` +
+    `Each line below names the failing package, the FOD attribute path, and the fetcher we tried to rebuild. ` +
+    `The corresponding PR (if one was created) carries the full nix error in its body.\n\n`;
+  for (const w of safeWarnings) {
+    body += `- ${w}\n`;
+  }
+  body +=
+    `\n**Common causes**\n` +
+    `- Upstream removed the release asset (404 on download)\n` +
+    `- The package uses a custom or out-of-nixpkgs fetcher we don't recognise\n` +
+    `- Network/auth — see your Renovate logs for the underlying \`nix build\` stderr\n\n` +
+    `Once the underlying issue is fixed, this issue will close automatically on the next Renovate run.\n`;
+  const res = await platform.ensureIssue({
+    title: NIX_UPDATE_ARTIFACT_ERRORS_TITLE,
+    body,
+    once: false,
+    shouldReOpen: true,
+    confidential: config.confidential,
+  });
+  if (res === 'updated' || res === 'created') {
+    logger.warn({ count: warnings.length, res }, 'nix-update Artifact Errors');
+  }
+}

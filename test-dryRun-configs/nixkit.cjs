@@ -30,7 +30,7 @@ module.exports = {
   repositories: [
     {
       repository: 'frostplexx/nixkit',
-      baseBranches: ['refactor/update_stuff'],
+      baseBranches: ['main'],
     },
   ],
   dryRun: 'full',

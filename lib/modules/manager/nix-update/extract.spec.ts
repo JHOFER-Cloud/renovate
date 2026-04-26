@@ -1,6 +1,11 @@
 import { mockExecAll } from '~test/exec-util.ts';
 import { fs } from '~test/util.ts';
-import { datasourceFromSrc, extractAllPackageFiles } from './extract.ts';
+import {
+  datasourceFromSrc,
+  deriveExtractVersion,
+  extractAllPackageFiles,
+  packageFileFromPosition,
+} from './extract.ts';
 
 vi.mock('../../../util/fs/index.ts');
 vi.mock('../../../util/exec/index.ts');
@@ -95,6 +100,7 @@ describe('modules/manager/nix-update/extract', () => {
           srcUrl: null,
           srcRev: null,
           updateScriptArgs: ['--version=branch'],
+          fods: [],
         },
       }),
       stderr: '',
@@ -152,8 +158,10 @@ describe('modules/manager/nix-update/extract', () => {
             managerData: {
               attrName: 'kubernetes-mcp-server',
               system: 'x86_64-linux',
+              pname: 'kubernetes-mcp-server',
               updateScriptArgs: [],
               isBranchTracked: false,
+              fods: undefined,
             },
           },
         ],
@@ -242,8 +250,10 @@ describe('modules/manager/nix-update/extract', () => {
             managerData: {
               attrName: 'kubernetes-mcp-server',
               system: 'x86_64-linux',
+              pname: 'kubernetes-mcp-server',
               updateScriptArgs: [],
               isBranchTracked: false,
+              fods: undefined,
             },
           },
           {
@@ -256,8 +266,10 @@ describe('modules/manager/nix-update/extract', () => {
             managerData: {
               attrName: 'opsops',
               system: 'aarch64-darwin',
+              pname: 'opsops',
               updateScriptArgs: ['--version=branch'],
               isBranchTracked: true,
+              fods: undefined,
             },
           },
         ],
@@ -280,6 +292,7 @@ describe('modules/manager/nix-update/extract', () => {
           srcUrl: 'https://github.com/owner/opsops',
           srcRev: null,
           updateScriptArgs: ['--version=branch'],
+          fods: [],
         },
       }),
       stderr: '',
@@ -350,6 +363,113 @@ describe('modules/manager/nix-update/extract', () => {
       currentValue: 'main',
       currentDigest: 'deadbeefcafe01',
     });
+  });
+
+  it('uses meta.position to set per-package packageFile so renovate auto-replace works', async () => {
+    fs.readLocalFile
+      .mockResolvedValueOnce('passthru.updateScript = nix-update-script {};')
+      .mockResolvedValueOnce('passthru.updateScript = nix-update-script {};')
+      .mockResolvedValueOnce('{ outputs = ...; }');
+
+    const { exec } = await import('../../../util/exec/index.ts');
+    vi.mocked(exec).mockResolvedValueOnce({
+      stdout: JSON.stringify({
+        'kubernetes-mcp-server': {
+          system: 'x86_64-linux',
+          version: '0.0.60',
+          pname: 'kubernetes-mcp-server',
+          srcUrl: 'https://github.com/containers/kubernetes-mcp-server',
+          srcRev: 'v0.0.60',
+          updateScriptArgs: [],
+          position:
+            '/nix/store/abc123-source/packages/kubernetes-mcp-server/default.nix:25',
+        },
+        skhd_zig: {
+          system: 'x86_64-darwin',
+          version: '0.0.17',
+          pname: 'skhd_zig',
+          srcUrl:
+            'https://github.com/jackielii/skhd.zig/releases/download/v0.0.17/skhd-x86_64-macos.tar.gz',
+          srcRev: null,
+          updateScriptArgs: [],
+          position: '/nix/store/abc123-source/packages/skhd_zig/default.nix:30',
+        },
+      }),
+      stderr: '',
+    });
+
+    const result = await extractAllPackageFiles({}, [
+      'packages/kubernetes-mcp-server/default.nix',
+      'packages/skhd_zig/default.nix',
+    ]);
+
+    expect(result).toHaveLength(2);
+    const files = result?.map((r) => r.packageFile).sort();
+    expect(files).toEqual([
+      'packages/kubernetes-mcp-server/default.nix',
+      'packages/skhd_zig/default.nix',
+    ]);
+  });
+
+  it('falls back to flake.nix when meta.position is missing', async () => {
+    fs.readLocalFile
+      .mockResolvedValueOnce('passthru.updateScript = nix-update-script {};')
+      .mockResolvedValueOnce('{ outputs = ...; }');
+
+    const { exec } = await import('../../../util/exec/index.ts');
+    vi.mocked(exec).mockResolvedValueOnce({
+      stdout: JSON.stringify({
+        foo: {
+          system: 'x86_64-linux',
+          version: '1.0.0',
+          pname: 'foo',
+          srcUrl: 'https://github.com/owner/foo',
+          srcRev: 'v1.0.0',
+          updateScriptArgs: [],
+          position: null,
+        },
+      }),
+      stderr: '',
+    });
+
+    const result = await extractAllPackageFiles({}, [
+      'packages/foo/default.nix',
+    ]);
+
+    expect(result?.[0].packageFile).toBe('flake.nix');
+  });
+});
+
+describe('modules/manager/nix-update/extract', () => {
+  it('returns null for null/empty', () => {
+    expect(packageFileFromPosition(null)).toBeNull();
+    expect(packageFileFromPosition('')).toBeNull();
+  });
+
+  it('strips trailing :line', () => {
+    expect(packageFileFromPosition('/abs/path/file.nix:42')).toBe(
+      '/abs/path/file.nix',
+    );
+  });
+
+  it('strips trailing :line:col', () => {
+    expect(packageFileFromPosition('/abs/path/file.nix:42:5')).toBe(
+      '/abs/path/file.nix',
+    );
+  });
+
+  it('strips nix store /nix/store/<hash>-<name>/ prefix', () => {
+    expect(
+      packageFileFromPosition(
+        '/nix/store/abc123-source/packages/foo/default.nix:25',
+      ),
+    ).toBe('packages/foo/default.nix');
+  });
+
+  it('returns the absolute path when not in nix store', () => {
+    expect(packageFileFromPosition('/home/user/project/file.nix:1')).toBe(
+      '/home/user/project/file.nix',
+    );
   });
 });
 
@@ -594,5 +714,37 @@ describe('modules/manager/nix-update/extract', () => {
         datasourceFromSrc('https://example.com/tarball.tar.gz', 'pkg', []),
       ).toBeNull();
     });
+  });
+});
+
+describe('modules/manager/nix-update/extract', () => {
+  it('returns undefined when no --version-regex is present', () => {
+    expect(deriveExtractVersion([])).toBeUndefined();
+    expect(deriveExtractVersion(['--version=branch'])).toBeUndefined();
+  });
+
+  it('handles space-separated form: ["--version-regex", "<pat>"]', () => {
+    expect(
+      deriveExtractVersion([
+        '--version-regex',
+        'ndcli-([0-9]+\\.[0-9]+\\.[0-9]+)$',
+      ]),
+    ).toBe('ndcli-(?<version>[0-9]+\\.[0-9]+\\.[0-9]+)$');
+  });
+
+  it('handles equals-separated form: ["--version-regex=<pat>"]', () => {
+    expect(deriveExtractVersion(['--version-regex=v(.+)'])).toBe(
+      'v(?<version>.+)',
+    );
+  });
+
+  it('returns undefined when --version-regex has no value', () => {
+    expect(deriveExtractVersion(['--version-regex'])).toBeUndefined();
+  });
+
+  it('preserves non-capturing groups in front of the first capture', () => {
+    expect(
+      deriveExtractVersion(['--version-regex', '(?:prefix-)?([0-9.]+)']),
+    ).toBe('(?:prefix-)?(?<version>[0-9.]+)');
   });
 });

@@ -1,99 +1,130 @@
 import type { StatusResult } from 'simple-git';
-import { mockExecAll } from '~test/exec-util.ts';
+import { mockExecSequence } from '~test/exec-util.ts';
 import { env, fs, git, partial } from '~test/util.ts';
 import { GlobalConfig } from '../../../config/global.ts';
 import type { RepoGlobalConfig } from '../../../config/types.ts';
 import type { UpdateArtifactsConfig } from '../types.ts';
 import { updateArtifacts } from './artifacts.ts';
+import type { FodInfo } from './extract.ts';
+import { _resetPrefetchCacheForTesting } from './prefetch.ts';
 
 vi.mock('../../../util/exec/env.ts');
 vi.mock('../../../util/fs/index.ts');
-vi.mock('node:os', () => ({ arch: () => 'x64', platform: () => 'linux' }));
 
 const adminConfig: RepoGlobalConfig = {
-  localDir: '/tmp/github/some/repo',
-  cacheDir: '/tmp/renovate/cache',
-  containerbaseDir: '/tmp/renovate/cache/containerbase',
+  localDir: '/tmp/repo',
+  cacheDir: '/tmp/cache',
+  containerbaseDir: '/tmp/cache/containerbase',
 };
 
 const config: UpdateArtifactsConfig = {};
 
-const nixRunCmd =
-  "nix --extra-experimental-features 'nix-command flakes' run nixpkgs#nix-update -- --flake --system x86_64-linux";
+function makeMismatchError(stderr: string): Error {
+  const err = new Error('nix-build failed (expected)') as Error & {
+    stderr?: string;
+  };
+  err.stderr = stderr;
+  return err;
+}
+
+function makeFod(
+  attrPath: string[],
+  inputs: Partial<FodInfo['inputs']>,
+): FodInfo {
+  return {
+    attrPath,
+    inputs: {
+      outputHash: 'sha256-OLDOLDOLDOLDOLDOLDOLDOLDOLDOLDOLDOLDOLDOLDO=',
+      outputHashAlgo: 'sha256',
+      outputHashMode: 'flat',
+      url: null,
+      rev: null,
+      fetchSubmodules: null,
+      leaveDotGit: null,
+      deepClone: null,
+      forceFetchGit: null,
+      sparseCheckout: null,
+      name: null,
+      ...inputs,
+    },
+  };
+}
+
+const NEW_HASH = 'sha256-AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA=';
+const stderrWithGot = (h: string) => `error: hash mismatch\n  got: ${h}`;
 
 describe('modules/manager/nix-update/artifacts', () => {
   beforeEach(() => {
     env.getChildProcessEnv.mockReturnValue({});
     GlobalConfig.set(adminConfig);
+    _resetPrefetchCacheForTesting();
   });
 
-  it('returns null if no attrName in managerData', async () => {
-    const execSnapshots = mockExecAll();
+  it('returns null when managerData has no attrName', async () => {
     const result = await updateArtifacts({
-      packageFileName: 'flake.nix',
+      packageFileName: 'packages/foo/default.nix',
       updatedDeps: [{ depName: 'foo', managerData: {} }],
       newPackageFileContent: '',
       config,
     });
     expect(result).toBeNull();
-    expect(execSnapshots).toEqual([]);
   });
 
-  it('returns null if nix-update makes no changes', async () => {
-    const execSnapshots = mockExecAll();
+  it('returns null when managerData has no fods', async () => {
+    const result = await updateArtifacts({
+      packageFileName: 'packages/foo/default.nix',
+      updatedDeps: [
+        {
+          depName: 'foo',
+          managerData: {
+            attrName: 'foo',
+            system: 'x86_64-linux',
+            pname: 'foo',
+            fods: [],
+          },
+        },
+      ],
+      newPackageFileContent: '',
+      config,
+    });
+    expect(result).toBeNull();
+  });
+
+  it('updates a single src FOD and returns the rewritten file', async () => {
     git.getRepoStatus.mockResolvedValue(
       partial<StatusResult>({ modified: [], not_added: [] }),
     );
+    fs.readLocalFile.mockResolvedValue('content with new hash');
+
+    mockExecSequence([makeMismatchError(stderrWithGot(NEW_HASH))]);
+
+    const fileContent = `{
+      src = fetchurl {
+        url = "https://example.com/foo.tar.gz";
+        hash = "sha256-OLDOLDOLDOLDOLDOLDOLDOLDOLDOLDOLDOLDOLDOLDO=";
+      };
+    }`;
 
     const result = await updateArtifacts({
-      packageFileName: 'flake.nix',
+      packageFileName: 'packages/foo/default.nix',
       updatedDeps: [
         {
           depName: 'foo',
-          newVersion: '1.0.0',
+          newVersion: '1.0.1',
           managerData: {
             attrName: 'foo',
             system: 'x86_64-linux',
-            updateScriptArgs: [],
-            isBranchTracked: false,
+            pname: 'foo',
+            fods: [
+              makeFod(['src'], {
+                url: 'https://example.com/foo.tar.gz',
+                outputHashMode: 'flat',
+              }),
+            ],
           },
         },
       ],
-      newPackageFileContent: 'original content',
-      config,
-    });
-
-    expect(result).toBeNull();
-    expect(execSnapshots).toMatchObject([
-      { cmd: `${nixRunCmd} --version 1.0.0 foo` },
-    ]);
-  });
-
-  it('returns changed files when nix-update updates a package', async () => {
-    const execSnapshots = mockExecAll();
-    git.getRepoStatus.mockResolvedValue(
-      partial<StatusResult>({
-        modified: ['packages/foo/default.nix'],
-        not_added: [],
-      }),
-    );
-    fs.readLocalFile.mockResolvedValueOnce('updated nix content');
-
-    const result = await updateArtifacts({
-      packageFileName: 'flake.nix',
-      updatedDeps: [
-        {
-          depName: 'foo',
-          newVersion: '1.0.0',
-          managerData: {
-            attrName: 'foo',
-            system: 'x86_64-linux',
-            updateScriptArgs: [],
-            isBranchTracked: false,
-          },
-        },
-      ],
-      newPackageFileContent: 'original content',
+      newPackageFileContent: fileContent,
       config,
     });
 
@@ -102,202 +133,140 @@ describe('modules/manager/nix-update/artifacts', () => {
         file: {
           type: 'addition',
           path: 'packages/foo/default.nix',
-          contents: 'updated nix content',
+          contents: 'content with new hash',
         },
       },
     ]);
-    expect(execSnapshots[0]).toMatchObject({
-      cmd: `${nixRunCmd} --version 1.0.0 foo`,
-    });
   });
 
-  it('does not pass --version for branch-tracked packages', async () => {
-    const execSnapshots = mockExecAll();
+  it('runs src first then vendor FOD', async () => {
     git.getRepoStatus.mockResolvedValue(
       partial<StatusResult>({ modified: [], not_added: [] }),
     );
+    fs.readLocalFile.mockResolvedValue('updated content');
+
+    const NEW_SRC = 'sha256-SRCSRCSRCSRCSRCSRCSRCSRCSRCSRCSRCSRCSRCSRC=';
+    const NEW_VENDOR = 'sha256-VENVENVENVENVENVENVENVENVENVENVENVENVENVEN=';
+    const snapshots = mockExecSequence([
+      makeMismatchError(stderrWithGot(NEW_SRC)),
+      makeMismatchError(stderrWithGot(NEW_VENDOR)),
+    ]);
+
+    const fileContent = `{
+      src = fetchFromGitHub {
+        owner = "o"; repo = "r"; rev = "v1";
+        hash = "sha256-OLDOLDOLDOLDOLDOLDOLDOLDOLDOLDOLDOLDOLDOLDO=";
+      };
+      vendorHash = "sha256-OLDVENOLDVENOLDVENOLDVENOLDVENOLDVENOLDVE=";
+    }`;
 
     await updateArtifacts({
-      packageFileName: 'flake.nix',
+      packageFileName: 'packages/foo/default.nix',
       updatedDeps: [
         {
           depName: 'foo',
-          newVersion: 'unstable-2024-01-15',
+          newVersion: '1.0.1',
           managerData: {
             attrName: 'foo',
-            system: 'x86_64-linux',
-            updateScriptArgs: ['--version=branch'],
-            isBranchTracked: true,
+            system: 'x86_64-darwin',
+            pname: 'foo',
+            fods: [
+              // Order is mixed in; artifacts should sort src first.
+              makeFod(['goModules'], {
+                outputHash: 'sha256-OLDVENOLDVENOLDVENOLDVENOLDVENOLDVENOLDVE=',
+              }),
+              makeFod(['src'], {
+                url: 'https://github.com/o/r/archive/v1.tar.gz',
+                outputHashMode: 'recursive',
+              }),
+            ],
           },
         },
       ],
-      newPackageFileContent: 'content',
+      newPackageFileContent: fileContent,
       config,
     });
 
-    // --version=branch from updateScriptArgs is passed, but --version flag is not
-    expect(execSnapshots).toMatchObject([
-      { cmd: `${nixRunCmd} --version=branch foo` },
-    ]);
+    // first exec: src; second exec: vendor (with --eval-system darwin)
+    expect(snapshots[0].cmd).toContain('runnerPkgs.fetchFromGitHub');
+    expect(snapshots[1].cmd).toContain('runnerPkgs.buildGoModule');
+    expect(snapshots[0].cmd).toContain('--eval-system x86_64-darwin');
+    // vendor expression should reference the now-known src hash, not the placeholder
+    expect(snapshots[1].cmd).toContain(NEW_SRC);
   });
 
-  it('does not pass --version when newVersion is absent', async () => {
-    const execSnapshots = mockExecAll();
-    git.getRepoStatus.mockResolvedValue(
-      partial<StatusResult>({ modified: [], not_added: [] }),
-    );
-
-    await updateArtifacts({
-      packageFileName: 'flake.nix',
-      updatedDeps: [
-        {
-          depName: 'foo',
-          managerData: {
-            attrName: 'foo',
-            system: 'x86_64-linux',
-            updateScriptArgs: [],
-            isBranchTracked: false,
-          },
-        },
-      ],
-      newPackageFileContent: 'content',
-      config,
-    });
-
-    expect(execSnapshots).toMatchObject([{ cmd: `${nixRunCmd} foo` }]);
-  });
-
-  it('passes --build when nixUpdateBuild postUpdateOption is set', async () => {
-    const execSnapshots = mockExecAll();
-    git.getRepoStatus.mockResolvedValue(
-      partial<StatusResult>({ modified: [], not_added: [] }),
-    );
-
-    await updateArtifacts({
-      packageFileName: 'flake.nix',
-      updatedDeps: [
-        {
-          depName: 'foo',
-          newVersion: '1.0.0',
-          managerData: {
-            attrName: 'foo',
-            system: 'x86_64-linux',
-            updateScriptArgs: [],
-            isBranchTracked: false,
-          },
-        },
-      ],
-      newPackageFileContent: 'content',
-      config: { ...config, postUpdateOptions: ['nixUpdateBuild'] },
-    });
-
-    expect(execSnapshots).toMatchObject([
-      { cmd: `${nixRunCmd} --version 1.0.0 --build foo` },
-    ]);
-  });
-
-  it('skips --build when package system does not match runner system', async () => {
-    const execSnapshots = mockExecAll();
-    git.getRepoStatus.mockResolvedValue(
-      partial<StatusResult>({ modified: [], not_added: [] }),
-    );
-
-    await updateArtifacts({
-      packageFileName: 'flake.nix',
-      updatedDeps: [
-        {
-          depName: 'foo',
-          newVersion: '1.0.0',
-          managerData: {
-            attrName: 'foo',
-            system: 'aarch64-darwin', // runner is x86_64-linux
-            updateScriptArgs: [],
-            isBranchTracked: false,
-          },
-        },
-      ],
-      newPackageFileContent: 'content',
-      config: { ...config, postUpdateOptions: ['nixUpdateBuild'] },
-    });
-
-    // --build must NOT appear in the command
-    expect(execSnapshots[0].cmd).not.toContain('--build');
-  });
-
-  it('passes updateScriptArgs extracted from passthru.updateScript.command', async () => {
-    const execSnapshots = mockExecAll();
-    git.getRepoStatus.mockResolvedValue(
-      partial<StatusResult>({ modified: [], not_added: [] }),
-    );
-
-    await updateArtifacts({
-      packageFileName: 'flake.nix',
-      updatedDeps: [
-        {
-          depName: 'foo',
-          newVersion: 'unstable-2024-01-15',
-          managerData: {
-            attrName: 'foo',
-            system: 'x86_64-linux',
-            updateScriptArgs: ['--version=branch'],
-            isBranchTracked: true,
-          },
-        },
-      ],
-      newPackageFileContent: 'content',
-      config,
-    });
-
-    expect(execSnapshots).toMatchObject([
-      { cmd: `${nixRunCmd} --version=branch foo` },
-    ]);
-  });
-
-  it('returns artifactError if nix-update throws', async () => {
-    mockExecAll(new Error('nix-update failed'));
+  it('returns artifactError when prefetch fails (does not throw, does not abort)', async () => {
+    mockExecSequence([new Error('exec died')]);
 
     const result = await updateArtifacts({
-      packageFileName: 'flake.nix',
+      packageFileName: 'packages/foo/default.nix',
       updatedDeps: [
         {
           depName: 'foo',
-          newVersion: '1.0.0',
+          newVersion: '1.0.1',
           managerData: {
             attrName: 'foo',
-            system: 'x86_64-linux',
-            updateScriptArgs: [],
-            isBranchTracked: false,
+            system: 'x86_64-darwin',
+            pname: 'foo',
+            fods: [
+              makeFod(['src'], {
+                url: 'https://example.com/foo.tar.gz',
+                outputHashMode: 'flat',
+              }),
+            ],
           },
         },
       ],
-      newPackageFileContent: 'content',
+      newPackageFileContent: '...',
       config,
     });
 
     expect(result).toEqual([
       {
         artifactError: {
-          fileName: 'flake.nix',
-          stderr: 'nix-update failed',
+          fileName: 'packages/foo/default.nix',
+          stderr: expect.stringContaining('exec died'),
         },
       },
     ]);
   });
 
-  it('returns multiple changed files', async () => {
-    const execSnapshots = mockExecAll();
-    git.getRepoStatus.mockResolvedValue(
-      partial<StatusResult>({
-        modified: ['packages/foo/default.nix', 'packages/foo/extra.nix'],
-        not_added: [],
-      }),
-    );
-    fs.readLocalFile
-      .mockResolvedValueOnce('updated content 1')
-      .mockResolvedValueOnce('updated content 2');
-
+  it('returns null when localDir is unset', async () => {
+    GlobalConfig.set({} as RepoGlobalConfig);
     const result = await updateArtifacts({
       packageFileName: 'flake.nix',
+      updatedDeps: [
+        {
+          depName: 'foo',
+          managerData: {
+            attrName: 'foo',
+            system: 'x86_64-linux',
+            pname: 'foo',
+            fods: [makeFod(['src'], { url: 'https://x' })],
+          },
+        },
+      ],
+      newPackageFileContent: '',
+      config,
+    });
+    expect(result).toBeNull();
+  });
+
+  it('skips rewrite when prefetch returns the same hash as before', async () => {
+    git.getRepoStatus.mockResolvedValue(
+      partial<StatusResult>({ modified: [], not_added: [] }),
+    );
+
+    const fileContent = `{
+      src = fetchurl {
+        url = "https://example.com/x";
+        hash = "${NEW_HASH}";
+      };
+    }`;
+    mockExecSequence([makeMismatchError(stderrWithGot(NEW_HASH))]);
+
+    const result = await updateArtifacts({
+      packageFileName: 'packages/foo/default.nix',
       updatedDeps: [
         {
           depName: 'foo',
@@ -305,47 +274,283 @@ describe('modules/manager/nix-update/artifacts', () => {
           managerData: {
             attrName: 'foo',
             system: 'x86_64-linux',
-            updateScriptArgs: [],
-            isBranchTracked: false,
+            pname: 'foo',
+            fods: [
+              makeFod(['src'], {
+                url: 'https://example.com/x',
+                outputHashMode: 'flat',
+                outputHash: NEW_HASH, // same as what nix-build returns
+              }),
+            ],
           },
         },
       ],
-      newPackageFileContent: 'original',
+      newPackageFileContent: fileContent,
       config,
     });
 
-    expect(result).toHaveLength(2);
-    expect(execSnapshots[0]).toMatchObject({
-      cmd: `${nixRunCmd} --version 1.0.0 foo`,
-    });
+    // No file changes (hash matched).
+    expect(result).toBeNull();
   });
 
-  it('uses newValue as fallback when newVersion is absent', async () => {
-    const execSnapshots = mockExecAll();
+  it('bumps version in url/rev before prefetching (and strips leading v on inputs)', async () => {
     git.getRepoStatus.mockResolvedValue(
       partial<StatusResult>({ modified: [], not_added: [] }),
     );
+    fs.readLocalFile.mockResolvedValue('updated content');
+    const NEW = 'sha256-NEWNEWNEWNEWNEWNEWNEWNEWNEWNEWNEWNEWNEWNEW=';
+    const snapshots = mockExecSequence([makeMismatchError(stderrWithGot(NEW))]);
 
     await updateArtifacts({
-      packageFileName: 'flake.nix',
+      packageFileName: 'packages/k/default.nix',
       updatedDeps: [
         {
-          depName: 'foo',
-          newValue: '2.0.0',
+          depName: 'k',
+          currentValue: '0.0.60',
+          newVersion: 'v0.0.61', // newVersion may include the v prefix
           managerData: {
-            attrName: 'foo',
+            attrName: 'k',
             system: 'x86_64-linux',
-            updateScriptArgs: [],
-            isBranchTracked: false,
+            pname: 'k',
+            fods: [
+              makeFod(['src'], {
+                url: 'https://github.com/o/k/archive/v0.0.60.tar.gz',
+                rev: 'v0.0.60',
+                outputHashMode: 'recursive',
+              }),
+            ],
           },
         },
       ],
-      newPackageFileContent: 'content',
+      newPackageFileContent: `{ src = fetchFromGitHub { rev = "v0.0.60"; hash = "sha256-OLDOLDOLDOLDOLDOLDOLDOLDOLDOLDOLDOLDOLDOLDO="; }; }`,
       config,
     });
 
-    expect(execSnapshots).toMatchObject([
-      { cmd: `${nixRunCmd} --version 2.0.0 foo` },
+    const cmd = snapshots[0].cmd;
+    expect(cmd).toContain('rev = "v0.0.61"');
+    expect(cmd).not.toContain('vv0.0.61');
+  });
+
+  it('bumps via newDigest for branch-tracked packages', async () => {
+    git.getRepoStatus.mockResolvedValue(
+      partial<StatusResult>({ modified: [], not_added: [] }),
+    );
+    fs.readLocalFile.mockResolvedValue('updated content');
+    const NEW = 'sha256-NEWNEWNEWNEWNEWNEWNEWNEWNEWNEWNEWNEWNEWNEW=';
+    const snapshots = mockExecSequence([makeMismatchError(stderrWithGot(NEW))]);
+
+    await updateArtifacts({
+      packageFileName: 'packages/x/default.nix',
+      updatedDeps: [
+        {
+          depName: 'x',
+          currentValue: 'main',
+          newValue: 'main',
+          currentDigest: 'oldcommitsha1',
+          newDigest: 'newcommitsha2',
+          managerData: {
+            attrName: 'x',
+            system: 'x86_64-linux',
+            pname: 'x',
+            fods: [
+              makeFod(['src'], {
+                url: 'https://github.com/o/x.git',
+                rev: 'oldcommitsha1',
+                outputHashMode: 'recursive',
+              }),
+            ],
+          },
+        },
+      ],
+      newPackageFileContent: `{ src = fetchgit { rev = "oldcommitsha1"; hash = "sha256-OLDOLDOLDOLDOLDOLDOLDOLDOLDOLDOLDOLDOLDOLDO="; }; }`,
+      config,
+    });
+
+    const cmd = snapshots[0].cmd;
+    expect(cmd).toContain('rev = "newcommitsha2"');
+    expect(cmd).not.toContain('oldcommitsha1');
+  });
+
+  it('skips rewrite when file already has new hash (existing branch reuse)', async () => {
+    git.getRepoStatus.mockResolvedValue(
+      partial<StatusResult>({ modified: [], not_added: [] }),
+    );
+    const NEW = 'sha256-NEWNEWNEWNEWNEWNEWNEWNEWNEWNEWNEWNEWNEWNEW=';
+    mockExecSequence([makeMismatchError(stderrWithGot(NEW))]);
+
+    // newPackageFileContent already has NEW hash (existing PR branch). Our
+    // extract captured the OLD hash from main. rewriteHash's contextual
+    // path would no-op; we should not throw.
+    const content = `{
+      src = fetchurl {
+        hash = "${NEW}";
+      };
+    }`;
+    const result = await updateArtifacts({
+      packageFileName: 'p.nix',
+      updatedDeps: [
+        {
+          depName: 'foo',
+          currentValue: '0.0.60',
+          newVersion: '0.0.61',
+          managerData: {
+            attrName: 'foo',
+            system: 'x86_64-linux',
+            pname: 'foo',
+            fods: [
+              makeFod(['src'], {
+                url: 'https://example.com/x',
+                outputHash:
+                  'sha256-OLDOLDOLDOLDOLDOLDOLDOLDOLDOLDOLDOLDOLDOLDO=',
+              }),
+            ],
+          },
+        },
+      ],
+      newPackageFileContent: content,
+      config,
+    });
+    expect(result).toBeNull();
+  });
+
+  it('reports vendor-FOD failure when package has no src', async () => {
+    mockExecSequence([]);
+    const result = await updateArtifacts({
+      packageFileName: 'packages/foo/default.nix',
+      updatedDeps: [
+        {
+          depName: 'foo',
+          newVersion: '1.0.1',
+          managerData: {
+            attrName: 'foo',
+            system: 'x86_64-linux',
+            pname: 'foo',
+            fods: [makeFod(['goModules'], {})],
+          },
+        },
+      ],
+      newPackageFileContent: '...',
+      config,
+    });
+    expect(result?.[0].artifactError?.stderr).toMatch(
+      /vendor FOD requires a src/,
+    );
+  });
+
+  it('passes GITHUB_TOKEN env when host rules provide one', async () => {
+    const hostRules = await import('../../../util/host-rules.ts');
+    hostRules.add({
+      hostType: 'github',
+      matchHost: 'https://api.github.com/',
+      token: 'ghs_testtoken',
+    });
+    git.getRepoStatus.mockResolvedValue(
+      partial<StatusResult>({ modified: [], not_added: [] }),
+    );
+    fs.readLocalFile.mockResolvedValue('updated content');
+
+    const snapshots = mockExecSequence([
+      makeMismatchError(stderrWithGot(NEW_HASH)),
     ]);
+
+    await updateArtifacts({
+      packageFileName: 'packages/foo/default.nix',
+      updatedDeps: [
+        {
+          depName: 'foo',
+          newVersion: '1.0.1',
+          managerData: {
+            attrName: 'foo',
+            system: 'x86_64-linux',
+            pname: 'foo',
+            fods: [
+              makeFod(['src'], {
+                url: 'https://x',
+                outputHashMode: 'flat',
+              }),
+            ],
+          },
+        },
+      ],
+      newPackageFileContent: `{ src = fetchurl { hash = "sha256-OLDOLDOLDOLDOLDOLDOLDOLDOLDOLDOLDOLDOLDOLDO="; }; }`,
+      config,
+    });
+
+    const opts = snapshots[0].options as {
+      env?: Record<string, string>;
+    };
+    expect(opts.env?.GITHUB_TOKEN).toBe('ghs_testtoken');
+    hostRules.clear();
+  });
+
+  it('passes GITLAB_TOKEN env when gitlab host rule has a token', async () => {
+    const hostRules = await import('../../../util/host-rules.ts');
+    hostRules.add({
+      hostType: 'gitlab',
+      matchHost: 'https://gitlab.com/api/v4/',
+      token: 'glpat-testtoken',
+    });
+    git.getRepoStatus.mockResolvedValue(
+      partial<StatusResult>({ modified: [], not_added: [] }),
+    );
+    fs.readLocalFile.mockResolvedValue('updated');
+    const snapshots = mockExecSequence([
+      makeMismatchError(stderrWithGot(NEW_HASH)),
+    ]);
+    await updateArtifacts({
+      packageFileName: 'p.nix',
+      updatedDeps: [
+        {
+          depName: 'foo',
+          newVersion: '1',
+          managerData: {
+            attrName: 'foo',
+            system: 'x86_64-linux',
+            pname: 'foo',
+            fods: [makeFod(['src'], { url: 'https://x' })],
+          },
+        },
+      ],
+      newPackageFileContent: `{ hash = "sha256-OLDOLDOLDOLDOLDOLDOLDOLDOLDOLDOLDOLDOLDOLDO="; }`,
+      config,
+    });
+    const opts = snapshots[0].options as { env?: Record<string, string> };
+    expect(opts.env?.GITLAB_TOKEN).toBe('glpat-testtoken');
+    hostRules.clear();
+  });
+
+  it('collects multiple FOD errors into a single artifactError', async () => {
+    mockExecSequence([
+      makeMismatchError('garbage no got line here'),
+      new Error('boom'),
+    ]);
+
+    const result = await updateArtifacts({
+      packageFileName: 'packages/foo/default.nix',
+      updatedDeps: [
+        {
+          depName: 'foo',
+          newVersion: '1.0.1',
+          managerData: {
+            attrName: 'foo',
+            system: 'x86_64-darwin',
+            pname: 'foo',
+            fods: [
+              makeFod(['src'], {
+                url: 'https://example.com/x.tar.gz',
+                outputHashMode: 'flat',
+              }),
+              makeFod(['goModules'], {}),
+            ],
+          },
+        },
+      ],
+      newPackageFileContent: '...',
+      config,
+    });
+
+    expect(result).toHaveLength(1);
+    expect(result?.[0].artifactError?.stderr).toMatch(/fetchurl/);
+    expect(result?.[0].artifactError?.stderr).toMatch(/goModules/);
   });
 });
