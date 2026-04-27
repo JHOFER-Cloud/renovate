@@ -120,7 +120,7 @@ describe('modules/manager/nix-update/prefetch', () => {
       ).rejects.toThrow(/unexpectedly succeeded/);
     });
 
-    it('passes --eval-system and the expression to nix-build', async () => {
+    it('does not pass --eval-system so runnerPkgs resolves to the runner system', async () => {
       const stderr =
         '  got: sha256-AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA=';
       const snapshots = mockExecSequence([makeMismatchError(stderr)]);
@@ -131,9 +131,13 @@ describe('modules/manager/nix-update/prefetch', () => {
       });
       const cmd = snapshots[0].cmd;
       expect(cmd).toContain('nix build');
-      expect(cmd).toContain('--eval-system x86_64-darwin');
       expect(cmd).toContain('--no-link');
       expect(cmd).toContain('--impure');
+      // Critical: passing --eval-system would make `builtins.currentSystem`
+      // resolve to the package's system, then `runnerPkgs` would be darwin
+      // pkgs, then the fetcher would produce a darwin derivation linux
+      // can't build. We rely on currentSystem == runner system.
+      expect(cmd).not.toContain('--eval-system');
       // Multiline expr should have been collapsed.
       expect(cmd).not.toContain('\n');
     });

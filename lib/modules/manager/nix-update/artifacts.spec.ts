@@ -187,10 +187,10 @@ describe('modules/manager/nix-update/artifacts', () => {
       config,
     });
 
-    // first exec: src; second exec: vendor (with --eval-system darwin)
+    // first exec: src; second exec: vendor — both use runnerPkgs (no --eval-system)
     expect(snapshots[0].cmd).toContain('runnerPkgs.fetchFromGitHub');
     expect(snapshots[1].cmd).toContain('runnerPkgs.buildGoModule');
-    expect(snapshots[0].cmd).toContain('--eval-system x86_64-darwin');
+    expect(snapshots[0].cmd).not.toContain('--eval-system');
     // vendor expression should reference the now-known src hash, not the placeholder
     expect(snapshots[1].cmd).toContain(NEW_SRC);
   });

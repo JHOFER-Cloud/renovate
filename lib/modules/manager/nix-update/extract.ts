@@ -334,9 +334,9 @@ export async function extractAllPackageFiles(
 
   // Phase 3: iterate every system in .#packages, recording which system each
   // package belongs to. Later systems overwrite earlier ones for cross-platform
-  // packages (any system works). Per-system tracking lets us pass --system to
-  // nix-update so it evaluates Linux-only packages on Linux and macOS-only
-  // packages on macOS, regardless of which system renovate itself runs on.
+  // packages (any system works). The recorded system is passed through to
+  // updateArtifacts purely as a cache-namespacing key — prefetch itself runs
+  // on the runner regardless.
   // Collapse to a single line before JSON.stringify — shell passes the
   // --apply value as-is, so literal \n from JSON escaping would break nix.
   const singleLineExpr = evalExpr.replace(/\n\s*/g, ' ').trim();
