@@ -319,9 +319,10 @@ export async function getUpdatedPackageFiles(
           artifactUpdateNeeded[packageFile] = newContent;
         }
         if (manager === 'nix-update') {
-          // nix-update's updateDependency is always a no-op; the real work
-          // happens in updateArtifacts (runs nix-update binary). Always
-          // schedule an artifact update so updateArtifacts is called.
+          // nix-update's updateDependency may legitimately return unchanged
+          // content (branch-tracked packages where currentValue === newValue,
+          // or branches that already have the new version). In those cases
+          // we still need updateArtifacts to run so it can recompute hashes.
           artifactUpdateNeeded[packageFile] = newContent;
         }
       }
