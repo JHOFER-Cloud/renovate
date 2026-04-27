@@ -14,8 +14,9 @@ const base32Regex = regEx(/got:\s+([a-z0-9]{52})/);
 export interface PrefetchOptions {
   // raw nix expression (multi-line OK — we collapse before shell-quoting)
   expr: string;
-  // package's declared system, used for --eval-system to resolve cross-platform
-  // attrs in the expression. Build always runs on the runner.
+  // package's declared system. Not passed to nix-build (see comment in
+  // `prefetch` on why) — used purely to namespace the prefetch cache so
+  // entries from packages declaring different systems don't collide.
   pkgSystem: string;
   // algo of the FOD we're prefetching; used to validate the parsed result.
   algo: HashAlgo;
@@ -109,17 +110,25 @@ export async function prefetch(opts: PrefetchOptions): Promise<string> {
     );
     return cached;
   }
-  // --no-link:    don't pollute cwd with a result symlink.
-  // --eval-system lets the original-package evaluation resolve attrs declared
-  //               only on that system. Build still happens on the runner.
-  // --impure is required because we use `builtins.getFlake "<localPath>"`
-  //          (impure) and may fall back to `import <nixpkgs>`. Doesn't affect
-  //          the FOD hash — the output is still purely a function of the
-  //          fetcher inputs (URL/rev/etc.).
+  // --no-link: don't pollute cwd with a result symlink.
+  // --impure:  required because we use `builtins.getFlake "<localPath>"`
+  //            (impure) and may fall back to `import <nixpkgs>`. Doesn't
+  //            affect the FOD hash — the output is purely a function of the
+  //            fetcher inputs (URL/rev/etc.).
+  //
+  // We deliberately do *not* pass `--eval-system <pkgSystem>`. Doing so
+  // sets `builtins.currentSystem` to the package's system (e.g.
+  // `x86_64-darwin`), which then makes the expression's
+  // `flake.inputs.nixpkgs.legacyPackages.${builtins.currentSystem}` resolve
+  // to the *package's* pkgs — and re-instantiating the fetcher there
+  // produces a darwin derivation that the linux runner refuses to build
+  // ("platform mismatch"). Without `--eval-system`, `currentSystem`
+  // correctly reports the runner's actual system, runnerPkgs is the
+  // runner's pkgs, and the fetcher runs natively. The FOD hash is platform-
+  // agnostic regardless.
   const cmd =
     `nix build --no-link ` +
     `--extra-experimental-features 'nix-command flakes' ` +
-    `--eval-system ${pkgSystem} ` +
     `--impure ` +
     `--expr ${shellQuote(oneLine)}`;
 
