@@ -169,5 +169,7 @@ function truncate(s: string, max: number): string {
   if (s.length <= max) {
     return s;
   }
-  return `${s.slice(0, max)}…(${s.length - max} more chars)`;
+  // Keep the tail — nix prints the actual error/diagnostic at the end, after
+  // pages of "this derivation will be built" / "copying path" lines.
+  return `…(${s.length - max} more chars truncated)\n${s.slice(-max)}`;
 }

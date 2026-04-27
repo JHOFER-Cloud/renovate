@@ -73,10 +73,14 @@ describe('modules/manager/nix-update/prefetch', () => {
       ).rejects.toThrow(/Could not extract hash/);
     });
 
-    it('truncates very long stderr in error messages', async () => {
-      const longStderr = 'x'.repeat(5000) + '\nno got line';
+    it('truncates very long stderr but keeps the tail (real error at the end)', async () => {
+      const longStderr =
+        'x'.repeat(5000) + '\nactual error: the thing that actually broke';
       await expect(parseHashFromStderr(longStderr, 'sha256')).rejects.toThrow(
-        /more chars/,
+        /more chars truncated/,
+      );
+      await expect(parseHashFromStderr(longStderr, 'sha256')).rejects.toThrow(
+        /actual error: the thing that actually broke/,
       );
     });
 

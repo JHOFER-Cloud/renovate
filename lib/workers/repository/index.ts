@@ -33,17 +33,11 @@ import {
   PackageCacheStats,
 } from '../../util/stats.ts';
 import { setBranchCache } from './cache.ts';
-import {
-  extractNixUpdateArtifactWarnings,
-  extractRepoProblems,
-} from './common.ts';
+import { extractRepoProblems } from './common.ts';
 import { configMigration } from './config-migration/index.ts';
 import { ensureDependencyDashboard } from './dependency-dashboard.ts';
 import handleError from './error.ts';
-import {
-  raiseDependencyLookupWarningsIssue,
-  raiseNixUpdateArtifactErrorsIssue,
-} from './error-config.ts';
+import { raiseDependencyLookupWarningsIssue } from './error-config.ts';
 import { finalizeRepo } from './finalize/index.ts';
 import { pruneStaleBranches } from './finalize/prune.ts';
 import { initRepo } from './init/index.ts';
@@ -178,13 +172,6 @@ export async function renovateRepository(
           configMigrationRes,
         );
         await raiseDependencyLookupWarningsIssue(config, packageFiles);
-        // Independent of dependencyDashboard — surfaces nix-update artifact
-        // failures as a sticky repo issue so users notice even when the
-        // dashboard is disabled.
-        await raiseNixUpdateArtifactErrorsIssue(
-          config,
-          extractNixUpdateArtifactWarnings(config.repository),
-        );
       }
       await finalizeRepo(config, branchList, repoConfig);
       // TODO #22198

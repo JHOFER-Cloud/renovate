@@ -13,7 +13,6 @@ import {
   raiseConfigWarningIssue,
   raiseCredentialsWarningIssue,
   raiseDependencyLookupWarningsIssue,
-  raiseNixUpdateArtifactErrorsIssue,
   raiseRepositoryErrorIssue,
 } from './error-config.ts';
 
@@ -459,126 +458,6 @@ Message: some-message
       const res = await raiseRepositoryErrorIssue(config, new Error('oops'));
       expect(res).toBeUndefined();
       expect(logger.warn).not.toHaveBeenCalled();
-    });
-  });
-
-  describe('raiseNixUpdateArtifactErrorsIssue()', () => {
-    beforeEach(() => {
-      GlobalConfig.reset();
-    });
-
-    afterEach(() => {
-      clearRepoSanitizedSecretsList();
-    });
-
-    it('returns if mode is silent', async () => {
-      config.mode = 'silent';
-      await raiseNixUpdateArtifactErrorsIssue(config, ['nix-update: failed']);
-      expect(platform.ensureIssue).not.toHaveBeenCalled();
-      expect(platform.ensureIssueClosing).not.toHaveBeenCalled();
-    });
-
-    it('suppresses issue when suppressNotifications includes nixUpdateArtifactErrors', async () => {
-      config.suppressNotifications = ['nixUpdateArtifactErrors'];
-      await raiseNixUpdateArtifactErrorsIssue(config, ['nix-update: failed']);
-      expect(platform.ensureIssue).not.toHaveBeenCalled();
-      expect(logger.info).toHaveBeenCalledWith(
-        { notificationName: 'nixUpdateArtifactErrors' },
-        'nix-update artifact errors, issues will be suppressed',
-      );
-    });
-
-    it('logs dry-run message instead of creating issue', async () => {
-      GlobalConfig.set({ dryRun: 'full' });
-      await raiseNixUpdateArtifactErrorsIssue(config, ['nix-update: failed']);
-      expect(platform.ensureIssue).not.toHaveBeenCalled();
-      expect(logger.info).toHaveBeenCalledWith(
-        { warnings: ['nix-update: failed'] },
-        'DRY-RUN: Would ensure nix-update artifact errors issue',
-      );
-    });
-
-    it('logs dry-run close message when no warnings', async () => {
-      GlobalConfig.set({ dryRun: 'full' });
-      await raiseNixUpdateArtifactErrorsIssue(config, []);
-      expect(platform.ensureIssue).not.toHaveBeenCalled();
-      expect(platform.ensureIssueClosing).not.toHaveBeenCalled();
-      expect(logger.info).toHaveBeenCalledWith(
-        { warnings: [] },
-        'DRY-RUN: Would close nix-update artifact errors issue',
-      );
-    });
-
-    it('closes the issue when there are no warnings', async () => {
-      await raiseNixUpdateArtifactErrorsIssue(config, []);
-      expect(platform.ensureIssueClosing).toHaveBeenCalledExactlyOnceWith(
-        'Action Required: Fix nix-update Artifact Errors',
-      );
-      expect(platform.ensureIssue).not.toHaveBeenCalled();
-    });
-
-    it('creates the issue with sanitized URLs', async () => {
-      platform.ensureIssue.mockResolvedValueOnce('created');
-      await raiseNixUpdateArtifactErrorsIssue(config, [
-        'nix-update: failed to prefetch foo src (fetchurl): https://token@example.com/repo',
-      ]);
-      expect(platform.ensureIssue).toHaveBeenCalledExactlyOnceWith(
-        expect.objectContaining({
-          title: 'Action Required: Fix nix-update Artifact Errors',
-          body: expect.stringContaining('**redacted**'),
-          shouldReOpen: true,
-          once: false,
-        }),
-      );
-      expect(logger.warn).toHaveBeenCalledWith(
-        { count: 1, res: 'created' },
-        'nix-update Artifact Errors',
-      );
-    });
-
-    it('sanitizes registered secrets in warnings', async () => {
-      platform.ensureIssue.mockResolvedValueOnce('created');
-      addSecretForSanitizing('super-secret-token');
-      await raiseNixUpdateArtifactErrorsIssue(config, [
-        'nix-update: failed to prefetch foo src: super-secret-token leaked',
-      ]);
-      expect(platform.ensureIssue).toHaveBeenCalledExactlyOnceWith(
-        expect.objectContaining({
-          body: expect.not.stringContaining('super-secret-token'),
-        }),
-      );
-    });
-
-    it('escapes # and @ in warning text so GitHub does not auto-link', async () => {
-      platform.ensureIssue.mockResolvedValueOnce('created');
-      await raiseNixUpdateArtifactErrorsIssue(config, [
-        'nix-update: failed to prefetch foo src: see #1234 from @octocat',
-      ]);
-      expect(platform.ensureIssue).toHaveBeenCalledExactlyOnceWith(
-        expect.objectContaining({
-          body: expect.stringContaining('&#35;1234'),
-        }),
-      );
-      expect(platform.ensureIssue).toHaveBeenCalledExactlyOnceWith(
-        expect.objectContaining({
-          body: expect.stringContaining('&#64;octocat'),
-        }),
-      );
-    });
-
-    it('lists all warnings as bullets', async () => {
-      platform.ensureIssue.mockResolvedValueOnce('created');
-      await raiseNixUpdateArtifactErrorsIssue(config, [
-        'nix-update: failed to prefetch foo src (fetchurl)',
-        'nix-update: failed to prefetch bar goModules (goModules)',
-      ]);
-      const call = platform.ensureIssue.mock.calls[0][0];
-      expect(call.body).toContain(
-        '- nix-update: failed to prefetch foo src (fetchurl)',
-      );
-      expect(call.body).toContain(
-        '- nix-update: failed to prefetch bar goModules (goModules)',
-      );
     });
   });
 });
