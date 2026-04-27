@@ -21,7 +21,7 @@ describe('workers/repository/onboarding/pr/index', () => {
     let branches: BranchConfig[];
 
     const bodyStruct = {
-      hash: '3864212140a13f6ddfaf19c2c812187369a6b00e680a0ac443b4d23539317c41',
+      hash: '005117a1243f7674709594b6b84eb08a79d2ba2e47931752befa36590ea60ebd',
     };
 
     beforeEach(() => {
@@ -214,7 +214,7 @@ describe('workers/repository/onboarding/pr/index', () => {
         '(onboardingRebaseCheckbox="$onboardingRebaseCheckbox")',
       async ({ onboardingRebaseCheckbox }) => {
         const hash =
-          '1280e47eeebf596351163aef6d1367d083276b37bcc97fb3b05c4b4312ef357a'; // no rebase checkbox PR hash
+          '0fe1c050462d3240268f515b216f2d7dc4d33361c5d206d0d0f38d2836fe767d'; // no rebase checkbox PR hash
         config.onboardingRebaseCheckbox = onboardingRebaseCheckbox;
         OnboardingState.prUpdateRequested = true; // case 'false' is tested in "breaks early when onboarding"
         platform.getBranchPr.mockResolvedValue(

@@ -211,6 +211,9 @@ export interface GlobalOnlyConfigLegacy {
   repositories?: RenovateRepository[];
   useCloudMetadataServices?: boolean;
   deleteConfigFile?: boolean;
+  githubAppId?: string;
+  githubAppKey?: string;
+  githubAppCrossOrgTrustGroups?: string[][];
   deleteAdditionalConfigFile?: boolean;
 }
 
