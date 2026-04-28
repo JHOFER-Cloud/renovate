@@ -1606,6 +1606,10 @@ For example, if you wanted to disable Renovate completely on a repository, you c
 }
 ```
 
+<!-- prettier-ignore -->
+!!! note
+    When Renovate is disabled on a repository entirely (via `enabled=false`), if Renovate runs against the repo again, it will perform a one-time cleanup of the repository, closing open Issues, PRs and deleting any branches.
+
 To disable Renovate for all `eslint` packages, you can configure a package rule like:
 
 ```json
@@ -1808,6 +1812,32 @@ Renovate can fetch changelogs when they are hosted on one of these platforms:
 - GitLab (.com and CE/EE)
 
 If you are running on any platform except `github.com`, you need to [configure a Personal Access Token](./getting-started/running.md#githubcom-token-for-changelogs-and-tools) to allow Renovate to fetch changelogs notes from `github.com`.
+
+You may use [package rules](#packagerules) to override the value of `fetchChangeLogs` for matching depeendencies, with later rules overriding earlier ones.
+
+The following re-enables fetching of changelogs when creating pull-requests for lodash updates.
+
+```json
+{
+  "fetchChangeLogs": "off",
+  "packageRules": {
+    "matchSourceUrls": ["https://github.com/lodash/lodash"],
+    "fetchChangeLogs": "pr"
+  }
+}
+```
+
+The following disables fetching of changelogs for any package in aws-sdk-go-v2,
+which can be time-consuming due to the repository's large number of tags:
+
+```json
+{
+  "packageRules": {
+    "matchSourceUrls": ["https://github.com/aws/aws-sdk-go-v2{/**,}"],
+    "fetchChangeLogs": "off"
+  }
+}
+```
 
 <!-- prettier-ignore -->
 !!! note
