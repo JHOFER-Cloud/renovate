@@ -208,6 +208,7 @@ The below is a non-exhaustive list of public registries which support release ti
 | `docker`             | `https://quay.io`                                  | ❌        | [Issue](https://github.com/renovatebot/renovate/issues/38572)    |
 | `github-releases`    | `https://github.com`                               | ✅        |                                                                  |
 | `terraform-module`   | `https://registry.terraform.io`                    | ✅        |                                                                  |
+| `terraform-module`   | `https://registry.opentofu.org`                    | ✅        | Queries `api.opentofu.org` for release timestamps                |
 | `terraform-provider` | `https://registry.terraform.io`                    | ✅        |                                                                  |
 | `terraform-provider` | `https://registry.opentofu.org`                    | ✅        | Queries `api.opentofu.org` for release timestamps                |
 | `github-tags`        | `https://github.com`                               | ✅        |                                                                  |
@@ -391,7 +392,7 @@ Will then output:
       "registryUrls": ["https://ghcr.io"]
     },
     {
-      "manager": "renovate-config-presets",
+      "manager": "renovate-config",
       "datasource": null,
       "depName": "renovatebot/.github",
       "packageFile": "renovate.json",
