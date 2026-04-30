@@ -32,11 +32,7 @@ void (async () => {
 
   if (meta?.['push-slim']?.['containerimage.digest']) {
     await sign(
-      `ghcr.io/renovatebot/renovate@${meta['push-slim']['containerimage.digest']}`,
-      opts,
-    );
-    await sign(
-      `renovate/renovate@${meta['push-slim']['containerimage.digest']}`,
+      `ghcr.io/jhofer-cloud/renovate@${meta['push-slim']['containerimage.digest']}`,
       opts,
     );
   } else {
@@ -45,11 +41,7 @@ void (async () => {
 
   if (meta?.['push-full']?.['containerimage.digest']) {
     await sign(
-      `ghcr.io/renovatebot/renovate@${meta['push-full']['containerimage.digest']}`,
-      opts,
-    );
-    await sign(
-      `renovate/renovate@${meta['push-full']['containerimage.digest']}`,
+      `ghcr.io/jhofer-cloud/renovate@${meta['push-full']['containerimage.digest']}`,
       opts,
     );
   } else {
