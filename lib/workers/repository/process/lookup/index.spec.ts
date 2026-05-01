@@ -5672,5 +5672,69 @@ describe('workers/repository/process/lookup/index', () => {
         warnings: [],
       });
     });
+
+    it('adds sanitized warning when an unexpected error occurs during lookup', async () => {
+      config.datasource = GithubTagsDatasource.id;
+      config.packageName = 'some/pkg';
+      config.currentValue = 'v1.0.0';
+      config.currentDigest = 'abc123';
+      getGithubTags.mockResolvedValueOnce({
+        releases: [
+          {
+            version: 'v1.0.0',
+            gitRef: 'v1.0.0',
+          },
+        ],
+      });
+      vi.spyOn(
+        GithubTagsDatasource.prototype,
+        'getDigest',
+      ).mockRejectedValueOnce(
+        new Error('remote: Repository not found.\nfatal: repo not found'),
+      );
+
+      const res = await Result.wrap(
+        lookup.lookupUpdates(config),
+      ).unwrapOrThrow();
+
+      expect(res.skipReason).toBe('internal-error');
+      expect(res.warnings).toHaveLength(1);
+      expect(res.warnings[0]).toMatchObject({
+        topic: 'some/pkg',
+        message: expect.stringContaining('github-tags'),
+      });
+      expect(res.warnings[0].message).toContain('some/pkg');
+      expect(res.warnings[0].message).toContain('Repository not found');
+    });
+
+    it('sanitizes credentials from warning message on lookup error', async () => {
+      config.datasource = GithubTagsDatasource.id;
+      config.packageName = 'some/pkg';
+      config.currentValue = 'v1.0.0';
+      config.currentDigest = 'abc123';
+      getGithubTags.mockResolvedValueOnce({
+        releases: [
+          {
+            version: 'v1.0.0',
+            gitRef: 'v1.0.0',
+          },
+        ],
+      });
+      vi.spyOn(
+        GithubTagsDatasource.prototype,
+        'getDigest',
+      ).mockRejectedValueOnce(
+        new Error(
+          'auth failure: https://mytoken@api.github.com/repos/some/pkg',
+        ),
+      );
+
+      const res = await Result.wrap(
+        lookup.lookupUpdates(config),
+      ).unwrapOrThrow();
+
+      expect(res.warnings[0].message).not.toContain('mytoken');
+      expect(res.warnings[0].message).toContain('**redacted**');
+    });
   });
 });

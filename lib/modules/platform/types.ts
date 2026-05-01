@@ -11,6 +11,9 @@ export interface PlatformParams {
   username?: string;
   password?: string;
   gitAuthor?: string;
+  githubAppId?: string;
+  githubAppKey?: string;
+  githubAppCrossOrgTrustGroups?: string[][];
 }
 
 export interface PlatformResult {
