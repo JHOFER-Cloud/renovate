@@ -470,6 +470,7 @@ Other valid cache namespaces are as follows:
 - `datasource-dotnet-version`
 - `datasource-elm-package`
 - `datasource-endoflife-date`
+- `datasource-flakehub`
 - `datasource-forgejo-releases`
 - `datasource-forgejo-tags`
 - `datasource-galaxy-collection`
@@ -918,6 +919,35 @@ Possible values:
 - `default`: use HTTPS URLs provided by the platform for Git
 - `ssh`: use SSH URLs provided by the platform for Git
 - `endpoint`: ignore URLs provided by the platform and use the configured endpoint directly
+
+## githubAppCrossOrgTrustGroups
+
+Groups of GitHub orgs whose installation tokens may be used for cross-org dependency lookups.
+Each group is an array of org names; any org in a group may use the tokens of the others when resolving dependencies hosted under those orgs.
+Orgs not listed here never share tokens.
+
+Example:
+
+```json
+{
+  "githubAppCrossOrgTrustGroups": [
+    ["org-a", "org-b"],
+    ["org-c", "org-d"]
+  ]
+}
+```
+
+## githubAppId
+
+GitHub App ID. Use together with `githubAppKey` to let Renovate generate installation tokens automatically, instead of providing a personal access token or installation token directly.
+
+When both `githubAppId` and `githubAppKey` are set, Renovate discovers all installations of the GitHub App and processes repositories from each installation.
+
+## githubAppKey
+
+GitHub App private key (PEM format). Use together with `githubAppId` to let Renovate generate installation tokens automatically.
+
+Store this value securely (e.g. as an environment variable or in a secret manager) rather than in plain text configuration files.
 
 ## `githubTokenWarn`
 
