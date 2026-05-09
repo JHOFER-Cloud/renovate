@@ -46,5 +46,8 @@ function ensureIssuesClosing(): Promise<Awaited<void>[]> {
   return Promise.all([
     platform.ensureIssueClosing(`Action Required: Fix Renovate Configuration`),
     platform.ensureIssueClosing(`Action Required: Add missing credentials`),
+    platform.ensureIssueClosing(
+      `Action Required: Fix Renovate Repository Error`,
+    ),
   ]);
 }
