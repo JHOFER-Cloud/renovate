@@ -5,19 +5,19 @@ ARG BASE_IMAGE_TYPE=slim
 # --------------------------------------
 # slim image
 # --------------------------------------
-FROM ghcr.io/renovatebot/base-image:13.45.8@sha256:1727e34709dcdb6f2e1d01273cebeb6f5b3aceae15bae2ab54d8884247f81723 AS slim-base
+FROM ghcr.io/renovatebot/base-image:13.45.10@sha256:ea704e7b70034489f37a8ee99326c777725b5da2924ccab9da3b4645c5796f03 AS slim-base
 
 # --------------------------------------
 # full image
 # --------------------------------------
-FROM ghcr.io/renovatebot/base-image:13.45.8-full@sha256:df5d7ec23ffe02c8365f2c65a373141a6141bf99533e40724188d8108ff66e3c AS full-base
+FROM ghcr.io/renovatebot/base-image:13.45.10-full@sha256:b34b29fd5c9e78c2aa0ba3bef245f7a8fbe13aa79d3a7bcc3f72ae79246d7edd AS full-base
 
 ENV RENOVATE_BINARY_SOURCE=global
 
 # --------------------------------------
 # build image
 # --------------------------------------
-FROM --platform=$BUILDPLATFORM ghcr.io/renovatebot/base-image:13.45.8@sha256:1727e34709dcdb6f2e1d01273cebeb6f5b3aceae15bae2ab54d8884247f81723 AS build
+FROM --platform=$BUILDPLATFORM ghcr.io/renovatebot/base-image:13.45.10@sha256:ea704e7b70034489f37a8ee99326c777725b5da2924ccab9da3b4645c5796f03 AS build
 
 # We want a specific node version here
 # renovate: datasource=github-releases packageName=containerbase/node-prebuild versioning=node
@@ -76,7 +76,7 @@ COPY --link . ./
 # install npm packages
 RUN set -ex; \
   pnpm install --prod --offline --ignore-scripts; \
-  pnpm rebuild re2 better-sqlite3; \
+  pnpm rebuild re2; \
   true
 
 # --------------------------------------
@@ -129,7 +129,7 @@ RUN NIX_VERSION=$(curl -sL https://api.github.com/repos/NixOS/nix/tags | grep -o
 RUN set -ex; \
   renovate --version; \
   pushd /usr/local/renovate/; \
-  node -e "new require('re2')('.*').exec('test');new require('better-sqlite3')(':memory:')"; \
+  node -e "new require('re2')('.*').exec('test')"; \
   true
 
 LABEL \
