@@ -96,6 +96,7 @@ export interface PlatformConfig {
   hostType: string;
   endpoint: string;
   isGhe?: boolean;
+  isGheCloud?: boolean;
   gheVersion?: string | null;
   isGHApp?: boolean;
   existingRepos?: string[];
