@@ -13,6 +13,7 @@ import {
 import { getGitEnvironmentVariables } from '../../../util/git/auth.ts';
 import { getRepoStatus } from '../../../util/git/index.ts';
 import * as hostRules from '../../../util/host-rules.ts';
+import { parseUrl } from '../../../util/url.ts';
 import type { UpdateArtifact, UpdateArtifactsResult } from '../types.ts';
 
 export async function updateArtifacts({
@@ -54,8 +55,8 @@ export async function updateArtifacts({
     if (rule.hostType !== 'github' || !rule.matchHost) {
       continue;
     }
-    try {
-      const ruleUrl = new URL(rule.matchHost);
+    const ruleUrl = parseUrl(rule.matchHost);
+    if (ruleUrl) {
       const pathParts = ruleUrl.pathname.split('/').filter(Boolean);
       if (ruleUrl.hostname === 'github.com' && pathParts.length === 1) {
         const orgToken = findGithubToken(rule);
@@ -63,8 +64,6 @@ export async function updateArtifacts({
           accessTokenMap.set(`github.com/${pathParts[0]}`, orgToken);
         }
       }
-    } catch {
-      // matchHost is not a URL (e.g. bare hostname), skip
     }
   }
   if (accessTokenMap.size > 0) {

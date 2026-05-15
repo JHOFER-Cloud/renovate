@@ -47,7 +47,7 @@ import { coerceObject } from '../../../util/object.ts';
 import { regEx } from '../../../util/regex.ts';
 import { addSecretForSanitizing, sanitize } from '../../../util/sanitize.ts';
 import { fromBase64, looseEquals } from '../../../util/string.ts';
-import { ensureTrailingSlash } from '../../../util/url.ts';
+import { ensureTrailingSlash, parseUrl } from '../../../util/url.ts';
 import { incLimitedValue } from '../../../workers/global/limits.ts';
 import { normalizePythonDepName } from '../../datasource/pypi/common.ts';
 import type {
@@ -134,7 +134,11 @@ export function isGHApp(): boolean {
 }
 
 export async function detectGhe(token: string): Promise<void> {
-  const host = new URL(platformConfig.endpoint).host;
+  const parsedEndpoint = parseUrl(platformConfig.endpoint);
+  if (!parsedEndpoint) {
+    throw new Error(`Invalid GitHub endpoint: ${platformConfig.endpoint}`);
+  }
+  const host = parsedEndpoint.host;
   platformConfig.isGhe = host !== 'api.github.com';
   platformConfig.isGheCloud = host.endsWith('.ghe.com');
   if (platformConfig.isGhe) {
@@ -259,7 +263,14 @@ export async function initPlatform({
       if (platformConfig.isGheCloud) {
         ghHostname = 'ghe.com';
       } else if (platformConfig.isGhe) {
-        ghHostname = new URL(platformConfig.endpoint).hostname;
+        const parsedEndpoint = parseUrl(platformConfig.endpoint);
+        // v8 ignore if: endpoint is validated before initPlatform, this is here for defensive purposes
+        if (!parsedEndpoint) {
+          throw new Error(
+            `Invalid GitHub endpoint: ${platformConfig.endpoint}`,
+          );
+        }
+        ghHostname = parsedEndpoint.hostname;
       } else {
         ghHostname = 'github.com';
       }
@@ -564,7 +575,7 @@ export async function createFork(
  * For GHE both use the same hostname.
  */
 function getGitBaseUrl(endpoint: string): string {
-  const url = new URL(endpoint);
+  const url = parseUrl(endpoint)!;
   if (url.hostname === 'api.github.com') {
     return 'https://github.com/';
   }
@@ -630,7 +641,7 @@ export async function initRepo({
       // than accumulating a new rule on every initRepo() call. findAll() returns
       // live references (no clone), so mutating the element updates the stored
       // rule in-place. Falls back to add() on the first run when no rule exists.
-      const matchHost = new URL(platformConfig.endpoint).hostname;
+      const matchHost = parseUrl(platformConfig.endpoint)!.hostname;
       const token = `x-access-token:${rawToken}`;
       const allGitHubRules = hostRules.findAll({ hostType: 'github' });
       const existingRule = allGitHubRules.find(
@@ -940,7 +951,11 @@ export async function initRepo({
     }
   }
 
-  const parsedEndpoint = new URL(platformConfig.endpoint);
+  const parsedEndpoint = parseUrl(platformConfig.endpoint);
+  // v8 ignore if: endpoint is validated during initPlatform
+  if (!parsedEndpoint) {
+    throw new Error(`Invalid GitHub endpoint: ${platformConfig.endpoint}`);
+  }
   let authToken: string | null;
   if (forkToken) {
     logger.debug('Using forkToken for git init');
@@ -2051,7 +2066,32 @@ async function tryPrAutomerge(
 
   try {
     const mergeMethod = config.mergeMethod?.toUpperCase() || 'MERGE';
-    const variables = { pullRequestId: prNodeId, mergeMethod };
+
+    let commitHeadline: string | undefined;
+    let commitBody: string | undefined;
+    // For SQUASH and MERGE methods, pass the commit message explicitly to avoid
+    // GitHub using the PR description as the commit body when "Use PR title and
+    // body as commit message" is enabled in repository settings.
+    const automergeCommitMessage = platformPrOptions?.automergeCommitMessage;
+    if (mergeMethod !== 'REBASE' && automergeCommitMessage) {
+      const newlineIndex = automergeCommitMessage.indexOf('\n');
+      if (newlineIndex === -1) {
+        commitHeadline = automergeCommitMessage;
+      } else {
+        commitHeadline = automergeCommitMessage.slice(0, newlineIndex);
+        commitBody = automergeCommitMessage.slice(newlineIndex + 1).trim();
+      }
+
+      // Add PR number to the commit headline to match the default GitHub behavior
+      commitHeadline = `${commitHeadline} (#${prNumber})`;
+    }
+
+    const variables = {
+      pullRequestId: prNodeId,
+      mergeMethod,
+      commitHeadline,
+      commitBody,
+    };
     // set count to one bypass graphql check
     const queryOptions = { variables, count: 1 };
 
