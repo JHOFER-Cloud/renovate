@@ -3,6 +3,7 @@ import { mergeChildConfig } from '../../../../config/index.ts';
 import type { ValidationMessage } from '../../../../config/types.ts';
 import { CONFIG_VALIDATION } from '../../../../constants/error-messages.ts';
 import { logger } from '../../../../logger/index.ts';
+import { sanitizeUrls } from '../../../../logger/utils.ts';
 import {
   getDatasourceFor,
   getDefaultVersioning,
@@ -29,6 +30,7 @@ import { getElapsedDays } from '../../../../util/date.ts';
 import { applyPackageRules } from '../../../../util/package-rules/index.ts';
 import { regEx } from '../../../../util/regex.ts';
 import { Result } from '../../../../util/result.ts';
+import { sanitize } from '../../../../util/sanitize.ts';
 import type { Timestamp } from '../../../../util/timestamp.ts';
 import { calculateAbandonment } from './abandonment.ts';
 import { getBucket } from './bucket.ts';
@@ -796,7 +798,7 @@ export async function lookupUpdates(
       return Result.err(err);
     }
 
-    logger.error(
+    logger.warn(
       {
         currentDigest: config.currentDigest,
         currentValue: config.currentValue,
@@ -815,6 +817,13 @@ export async function lookupUpdates(
       'lookupUpdates error',
     );
     res.skipReason = 'internal-error';
+    const safeMessage = sanitize(
+      sanitizeUrls(err instanceof Error ? err.message : String(err)),
+    ).slice(0, 150);
+    res.warnings.push({
+      topic: config.packageName,
+      message: `Dependency lookup error for \`${config.datasource}\` package \`${config.packageName}\`: ${safeMessage}`,
+    });
   }
   return Result.ok(res);
 }
