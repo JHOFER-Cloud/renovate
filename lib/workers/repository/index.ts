@@ -77,7 +77,7 @@ export async function renovateRepository(
       logger.trace({ config });
       queue.clear();
       throttle.clear();
-      const localDir = GlobalConfig.get('localDir')!;
+      const localDir = GlobalConfig.get('localDir');
 
       try {
         await fs.ensureDir(localDir);

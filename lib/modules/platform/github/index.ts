@@ -598,7 +598,7 @@ export async function initRepo({
     repository,
     cloneSubmodules,
     cloneSubmodulesFilter,
-    ignorePrAuthor: GlobalConfig.get('ignorePrAuthor', false),
+    ignorePrAuthor: GlobalConfig.get('ignorePrAuthor'),
   } as any;
   config.renovateUsername = renovateUsername;
   [config.repositoryOwner, config.repositoryName] = repository.split('/');
