@@ -50,6 +50,7 @@ export const packageCacheNamespaces = [
   'datasource-dotnet-version',
   'datasource-elm-package',
   'datasource-endoflife-date',
+  'datasource-flakehub',
   'datasource-galaxy-collection',
   'datasource-galaxy',
   'datasource-git-refs',
