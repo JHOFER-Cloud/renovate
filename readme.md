@@ -9,74 +9,108 @@
 
 # What is the Mend Renovate CLI?
 
-Renovate is an automated dependency update tool.
-It helps to update dependencies in your code without needing to do it manually.
-When Renovate runs on your repo, it looks for references to dependencies (both public and private) and, if there are newer versions available, Renovate can create pull requests to update your versions automatically.
+Renovate is an automated dependency update tool. It helps to update dependencies
+in your code without needing to do it manually. When Renovate runs on your repo,
+it looks for references to dependencies (both public and private) and, if there
+are newer versions available, Renovate can create pull requests to update your
+versions automatically.
 
 ## Features
 
 - Delivers update PRs directly to your repo
   - Relevant package files are discovered automatically
   - Pull Requests automatically generated in your repo
-- Provides useful information to help you decide which updates to accept (age, adoption, pass rates, merge confidence)
-- Highly configurable and flexible to fit in with your needs and repository standards
+- Provides useful information to help you decide which updates to accept (age,
+  adoption, pass rates, merge confidence)
+- Highly configurable and flexible to fit in with your needs and repository
+  standards
 - Largest collection of languages and platforms (listed below)
 - Connects with private repositories and package registries
 
 ### Languages
 
-Renovate can provide updates for most popular languages, platforms, and registries including: npm, Java, Python, .NET, Scala, Ruby, Go, Docker and more.
-Supports over [90 different package managers](https://docs.renovatebot.com/modules/manager/).
+Renovate can provide updates for most popular languages, platforms, and
+registries including: npm, Java, Python, .NET, Scala, Ruby, Go, Docker and more.
+Supports over
+[90 different package managers](https://docs.renovatebot.com/modules/manager/).
 
 ### Platforms
 
-Renovate updates code repositories on the following platforms: GitHub, GitLab, Bitbucket, Azure DevOps, AWS Code Commit (experimental), Gitea, Forgejo, Gerrit (experimental), SCM-Manager (experimental)
+Renovate updates code repositories on the following platforms: GitHub, GitLab,
+Bitbucket, Azure DevOps, AWS Code Commit (experimental), Gitea, Forgejo, Gerrit
+(experimental), SCM-Manager (experimental)
 
 ## Ways to run Renovate
 
-The most effective way to run Renovate is to use an automated job scheduling system that regularly runs Renovate on all enabled repositories and responds with priority to user activity.
-Mend offers cloud-hosted and self-hosted solutions.
-See the options below.
+The most effective way to run Renovate is to use an automated job scheduling
+system that regularly runs Renovate on all enabled repositories and responds
+with priority to user activity. Mend offers cloud-hosted and self-hosted
+solutions. See the options below.
 
 ### Mend Renovate Community (Cloud-Hosted)
 
 **Supports: GitHub.com, Bitbucket Cloud**
 
-Hosted by Mend.io.
-No setup is needed.
-Community plan available (Free)
+Hosted by Mend.io. No setup is needed. Community plan available (Free)
 
-- GitHub Cloud: Install the [Renovate Cloud-Hosted App](https://github.com/apps/renovate) on your GitHub org, then select the repos to enable
-- Bitbucket Cloud: Add the [Mend App](https://marketplace.atlassian.com/apps/1232072/mend) to your Workspace, then add the Mend Renovate user to the projects you want to enable
+- GitHub Cloud: Install the
+  [Renovate Cloud-Hosted App](https://github.com/apps/renovate) on your GitHub
+  org, then select the repos to enable
+- Bitbucket Cloud: Add the
+  [Mend App](https://marketplace.atlassian.com/apps/1232072/mend) to your
+  Workspace, then add the Mend Renovate user to the projects you want to enable
 
 ### Mend Renovate Community (Self-hosted)
 
 **Supports: GitHub, GitLab, Bitbucket Data Center**
 
-Install and run your own Renovate server.
-Access internal packages.
+Install and run your own Renovate server. Access internal packages.
 
-- [Mend Renovate Community Self-Hosted](https://github.com/mend/renovate-ce-ee/tree/main/docs) (Free)
+- [Mend Renovate Community Self-Hosted](https://github.com/mend/renovate-ce-ee/tree/main/docs)
+  (Free)
 - [Mend Renovate Enterprise](https://www.mend.io/mend-renovate/) (Paid plan)
+
+### jhcloud-renovate (Community-Hosted GitHub App)
+
+**Supports: GitHub.com**
+
+A community-hosted Renovate runner available as a GitHub App:
+[github.com/apps/jhcloud-renovate](https://github.com/apps/jhcloud-renovate).
+
+This runner uses this fork's native GitHub App authentication support and is
+free to use.
+
+> **Note:** The runner has an autodiscoverFilter. New organizations must request
+> access by opening an issue before the runner will process their repositories.
 
 ### Other ways to run Renovate
 
-If you can’t use a pre-built job scheduling system, or want to build your own, the following options are available:
+If you can’t use a pre-built job scheduling system, or want to build your own,
+the following options are available:
 
 #### Run Renovate on your Pipeline
 
-Mend provides a _**GitHub Action**_ or a _**GitLab Runner**_ to help you run Renovate as a CI pipeline job.
+Mend provides a _**GitHub Action**_ or a _**GitLab Runner**_ to help you run
+Renovate as a CI pipeline job.
 
-- GitHub Action: [renovatebot/github-action](https://github.com/renovatebot/github-action).
-- GitLab Runner: [Renovate Runner project](https://gitlab.com/renovate-bot/renovate-runner/)
-- AzureDevOps action: [Renovate Me extension](https://marketplace.visualstudio.com/items?itemName=jyc.vsts-extensions-renovate-me)<br>
-  _Note: This extension is created and maintained personally by a Renovate developer/user. Support requests for the extension will not be answered directly in the main Renovate repository._
-- Custom pipeline: You can create a custom pipeline with a **yml** definition that triggers **npx renovate**. [More details on how to configure the pipeline](https://docs.renovatebot.com/modules/platform/azure/).
+- GitHub Action:
+  [renovatebot/github-action](https://github.com/renovatebot/github-action).
+- GitLab Runner:
+  [Renovate Runner project](https://gitlab.com/renovate-bot/renovate-runner/)
+- AzureDevOps action:
+  [Renovate Me extension](https://marketplace.visualstudio.com/items?itemName=jyc.vsts-extensions-renovate-me)<br>
+  _Note: This extension is created and maintained personally by a Renovate
+  developer/user. Support requests for the extension will not be answered
+  directly in the main Renovate repository._
+- Custom pipeline: You can create a custom pipeline with a **yml** definition
+  that triggers **npx renovate**.
+  [More details on how to configure the pipeline](https://docs.renovatebot.com/modules/platform/azure/).
 
 #### Run Renovate CLI
 
-There are several ways to run the Renovate CLI directly.
-See docs: [Running Renovate](https://docs.renovatebot.com/getting-started/running/) for all options.
+There are several ways to run the Renovate CLI directly. See docs:
+[Running Renovate](https://docs.renovatebot.com/getting-started/running/) for
+all options.
 
 **Supports: all platforms**
 
@@ -118,10 +152,12 @@ We only want maintainers to open Issues.
 
 ### Contributing
 
-To contribute to Renovate, or run a local copy, please read the contributing guidelines.
+To contribute to Renovate, or run a local copy, please read the contributing
+guidelines.
 
 - [Guidelines for Contributing](https://github.com/renovatebot/renovate/blob/main/.github/contributing.md)
-- Items that need contribution: [good first issues](https://github.com/renovatebot/renovate/contribute)
+- Items that need contribution:
+  [good first issues](https://github.com/renovatebot/renovate/contribute)
 
 ### Contact and Social Media
 
@@ -136,8 +172,9 @@ Follow us on:
 
 ## Security / Disclosure
 
-If you find any bug with Renovate that may be a security problem, then e-mail us at: [renovate-disclosure@mend.io](mailto:renovate-disclosure@mend.io).
-This way we can evaluate the bug and hopefully fix it before it gets abused.
-Please give us enough time to investigate the bug before you report it anywhere else.
+If you find any bug with Renovate that may be a security problem, then e-mail us
+at: [renovate-disclosure@mend.io](mailto:renovate-disclosure@mend.io). This way
+we can evaluate the bug and hopefully fix it before it gets abused. Please give
+us enough time to investigate the bug before you report it anywhere else.
 
 Please do not create GitHub issues for security-related doubts or problems.
