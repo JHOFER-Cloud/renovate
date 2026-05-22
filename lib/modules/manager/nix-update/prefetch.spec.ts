@@ -74,8 +74,7 @@ describe('modules/manager/nix-update/prefetch', () => {
     });
 
     it('truncates very long stderr but keeps the tail (real error at the end)', async () => {
-      const longStderr =
-        'x'.repeat(5000) + '\nactual error: the thing that actually broke';
+      const longStderr = `${'x'.repeat(5000)}\nactual error: the thing that actually broke`;
       await expect(parseHashFromStderr(longStderr, 'sha256')).rejects.toThrow(
         /more chars truncated/,
       );

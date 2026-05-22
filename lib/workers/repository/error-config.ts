@@ -198,7 +198,7 @@ export async function raiseDependencyLookupWarningsIssue(
       .replace(/@/g, '&#64;');
     body += `- ${line}\n`;
   }
-  body += `\nFiles affected: ${warningFiles.map((f) => '`' + f + '`').join(', ')}\n`;
+  body += `\nFiles affected: ${warningFiles.map((f) => `\`${f}\``).join(', ')}\n`;
   const res = await platform.ensureIssue({
     title,
     body,

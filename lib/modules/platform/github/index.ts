@@ -172,7 +172,7 @@ export async function initPlatform({
     platformConfig.endpoint = ensureTrailingSlash(endpoint);
     githubHttp.setBaseUrl(platformConfig.endpoint);
   } else {
-    logger.debug('Using default github endpoint: ' + platformConfig.endpoint);
+    logger.debug(`Using default github endpoint: ${platformConfig.endpoint}`);
   }
 
   if (!token && githubAppId && githubAppKey) {
@@ -464,7 +464,7 @@ export async function getRawFile(
 
   let url = `repos/${repo}/contents/${fileName}`;
   if (branchOrTag) {
-    url += `?ref=` + branchOrTag;
+    url += `?ref=${branchOrTag}`;
   }
   const res = await githubApi.getJsonUnchecked<{ content: string }>(
     url,
@@ -980,7 +980,7 @@ export async function initRepo({
   const url = parsedEndpoint.href;
   let upstreamUrl = undefined;
   if (forkCreation && config.parentRepo) {
-    parsedEndpoint.pathname = config.parentRepo + '.git';
+    parsedEndpoint.pathname = `${config.parentRepo}.git`;
     upstreamUrl = parsedEndpoint.href;
   }
   await git.initRepo({
