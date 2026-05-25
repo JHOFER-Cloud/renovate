@@ -37,6 +37,7 @@ import { extractRepoProblems } from './common.ts';
 import { configMigration } from './config-migration/index.ts';
 import { ensureDependencyDashboard } from './dependency-dashboard.ts';
 import handleError from './error.ts';
+import { raiseDependencyLookupWarningsIssue } from './error-config.ts';
 import { finalizeRepo } from './finalize/index.ts';
 import { pruneStaleBranches } from './finalize/prune.ts';
 import { initRepo } from './init/index.ts';
@@ -170,6 +171,7 @@ export async function renovateRepository(
           packageFiles,
           configMigrationRes,
         );
+        await raiseDependencyLookupWarningsIssue(config, packageFiles);
       }
       await finalizeRepo(config, branchList, repoConfig);
       // TODO #22198
