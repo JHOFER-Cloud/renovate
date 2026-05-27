@@ -1,4 +1,4 @@
-import { rewriteHash } from './rewrite.ts';
+import { rewriteHash, rewriteUrl } from './rewrite.ts';
 
 describe('modules/manager/nix-update/rewrite', () => {
   const oldHash = 'sha256-AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA=';
@@ -232,5 +232,64 @@ describe('modules/manager/nix-update/rewrite', () => {
         }),
       // fast path will swap (otherHash is unique) — should succeed
     ).not.toThrow();
+  });
+});
+
+describe('modules/manager/nix-update/rewrite', () => {
+  const oldUrl =
+    'https://x-r2.raycast-releases.com/Raycast_Beta_0.61.0.0_aaa_arm64.dmg';
+  const newUrl =
+    'https://x-r2.raycast-releases.com/Raycast_Beta_0.62.0.0_bbb_arm64.dmg';
+
+  it('fast-path: replaces the literal when oldUrl is unique', () => {
+    const content = `
+      {
+        src = fetchurl {
+          url = "${oldUrl}";
+          hash = "sha256-aaa=";
+        };
+      }
+    `;
+    const out = rewriteUrl(content, { attrPath: ['src'], oldUrl, newUrl });
+    expect(out).toContain(newUrl);
+    expect(out).not.toContain(oldUrl);
+  });
+
+  it('contextual: rewrites url inside the src block when same URL appears twice', () => {
+    // Same URL appears twice (in src and in a comment) — fast-path bails,
+    // contextual locator anchors on `src` and rewrites only the binding's url line.
+    const content = `
+      {
+        # historical: ${oldUrl}
+        src = fetchurl {
+          url = "${oldUrl}";
+          hash = "sha256-aaa=";
+        };
+      }
+    `;
+    const out = rewriteUrl(content, { attrPath: ['src'], oldUrl, newUrl });
+    // Comment-side reference must survive; only src's url is bumped.
+    expect(out).toContain(`# historical: ${oldUrl}`);
+    expect(out).toContain(`url = "${newUrl}"`);
+  });
+
+  it('is a no-op when oldUrl equals newUrl', () => {
+    const content = `src = fetchurl { url = "${oldUrl}"; };`;
+    expect(
+      rewriteUrl(content, { attrPath: ['src'], oldUrl, newUrl: oldUrl }),
+    ).toBe(content);
+  });
+
+  it('throws on empty attrPath', () => {
+    expect(() => rewriteUrl('x', { attrPath: [], oldUrl, newUrl })).toThrow(
+      /empty attrPath/,
+    );
+  });
+
+  it('throws when no matching url binding can be found', () => {
+    const content = `{ other = "x"; }`;
+    expect(() =>
+      rewriteUrl(content, { attrPath: ['src'], oldUrl, newUrl }),
+    ).toThrow(/Could not locate url/);
   });
 });

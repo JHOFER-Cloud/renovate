@@ -5,6 +5,7 @@ export { updateDependency } from './update.ts';
 export const supportedDatasources = [
   'bitbucket-tags',
   'crate',
+  'custom',
   'forgejo-tags',
   'git-tags',
   'gitea-tags',

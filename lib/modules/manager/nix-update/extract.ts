@@ -109,11 +109,26 @@ builtins.foldl'
           if p ? meta && p.meta ? position
           then p.meta.position
           else null;
+        /* Optional Renovate overrides declared on the package via
+           passthru.renovate = { datasource = "custom.foo"; ... }; — an
+           escape hatch for packages whose src URL the built-in classifier
+           can't infer a datasource for. All fields are optional. */
+        renovate =
+          if p ? passthru && p.passthru ? renovate && builtins.isAttrs p.passthru.renovate
+          then let r = p.passthru.renovate; in {
+            datasource =
+              if r ? datasource then discardCtx r.datasource else null;
+            packageName =
+              if r ? packageName then discardCtx r.packageName else null;
+            extractVersion =
+              if r ? extractVersion then discardCtx r.extractVersion else null;
+          }
+          else null;
       in {
         system = sys;
         version = p.version or null;
         pname = p.pname or null;
-        inherit srcUrl srcRev position;
+        inherit srcUrl srcRev position renovate;
         updateScriptArgs =
           if isNixUpdateScript && cmdLen >= 2
           then
@@ -151,6 +166,16 @@ export interface FodInfo {
   inputs: FodInputs;
 }
 
+// Optional overrides declared on a package via `passthru.renovate`. Lets a
+// .nix file opt into a Renovate `customDatasources` lookup (or override the
+// derived extractVersion / packageName) when the built-in URL→datasource
+// inference can't handle its src URL.
+export interface RenovateOverrides {
+  datasource: string | null;
+  packageName: string | null;
+  extractVersion: string | null;
+}
+
 interface PackageInfo {
   system: string;
   version: string | null;
@@ -162,6 +187,7 @@ interface PackageInfo {
   position: string | null;
   updateScriptArgs: string[];
   fods: FodInfo[];
+  renovate: RenovateOverrides | null;
 }
 
 // Parse `meta.position` (`<storePathOrAbs>/<file.nix>:<line>[:<col>]`) into a
@@ -389,11 +415,14 @@ export async function extractAllPackageFiles(
 
   for (const attrName of attrNames) {
     const info = packageInfos[attrName];
-    const ds = datasourceFromSrc(
-      info.srcUrl,
-      info.pname,
-      info.updateScriptArgs,
-    );
+    // Prefer an explicit passthru.renovate override; fall back to URL inference.
+    const overrides = info.renovate;
+    const ds = overrides?.datasource
+      ? {
+          datasource: overrides.datasource,
+          packageName: overrides.packageName ?? info.pname ?? '',
+        }
+      : datasourceFromSrc(info.srcUrl, info.pname, info.updateScriptArgs);
     if (!ds) {
       logger.warn(
         { attrName, srcUrl: info.srcUrl },
@@ -446,8 +475,10 @@ export async function extractAllPackageFiles(
     // If the package's nix-update-script passes --version-regex, repurpose
     // it as Renovate's `extractVersion` so tag-prefix patterns like
     // "ndcli-X.Y.Z" parse correctly. nix-update uses one capture group;
-    // Renovate uses a named (?<version>...) group.
-    const extractVersion = deriveExtractVersion(info.updateScriptArgs);
+    // Renovate uses a named (?<version>...) group. An explicit
+    // passthru.renovate.extractVersion takes precedence.
+    const extractVersion =
+      overrides?.extractVersion ?? deriveExtractVersion(info.updateScriptArgs);
     pushDep(file, {
       depName: attrName,
       datasource: ds.datasource,
