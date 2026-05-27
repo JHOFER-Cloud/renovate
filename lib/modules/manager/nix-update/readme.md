@@ -50,6 +50,70 @@ Add `nix-update` to your `enabledManagers` list:
 
 A package may carry several of these — they're all updated in one PR.
 
+### Overriding datasource detection (`passthru.renovate`)
+
+When a package's `src` URL doesn't match any of the built-in URL patterns above (e.g. a vendor-hosted binary release served from a CDN), the manager has nowhere to look up new versions. As an escape hatch, a package may declare overrides on `passthru.renovate`:
+
+```nix
+{
+  passthru = {
+    updateScript = nix-update-script {};
+    renovate = {
+      datasource = "custom.raycast-beta";   # any Renovate datasource id
+      # packageName = "raycast-beta";        # optional; defaults to pname
+      # extractVersion = "(?<version>...)";  # optional; overrides --version-regex
+    };
+  };
+}
+```
+
+`datasource` accepts any datasource Renovate knows about. The common case is `custom.<name>`, which dispatches to a `customDatasources.<name>` block in your `renovate.json` — letting you point Renovate at whatever version endpoint the upstream exposes:
+
+```json
+{
+  "customDatasources": {
+    "raycast-beta": {
+      "defaultRegistryUrlTemplate": "https://api.raycast.app/v2/releases/beta/latest",
+      "format": "json",
+      "transformTemplates": ["{ \"releases\": [{ \"version\": $.version }] }"]
+    }
+  }
+}
+```
+
+The override only affects version discovery — hash recomputation still goes through the package's existing fetcher unchanged. `passthru.updateScript` is left intact so `nix-update` CLI use locally is unaffected.
+
+#### Rewriting the src URL via `downloadUrl`
+
+Some upstreams stamp a per-release commit hash into the artifact filename (Raycast Beta, for example: `Raycast_Beta_0.61.0.0_e863712be6_arm64.dmg`). Simple `${version}` interpolation can't reconstruct the new URL — when the version bumps, the embedded commit hash also changes.
+
+To handle this, the customDatasource transform may return a `downloadUrl` on each release:
+
+```json
+{
+  "customDatasources": {
+    "raycast-beta": {
+      "defaultRegistryUrlTemplate": "https://x.raycast-releases.com/releases/latest?platform=macos&architecture=arm64&version=0.0.0.0",
+      "format": "json",
+      "transformTemplates": [
+        "{ \"releases\": [{ \"version\": $.version, \"downloadUrl\": $.download_url }] }"
+      ]
+    }
+  }
+}
+```
+
+When `downloadUrl` is present on the chosen release, the nix-update manager rewrites the matching `url = "..."` literal inside the package's `src` block before running the hash prefetch. The .nix file should use a **literal** URL (no `${finalAttrs.version}` interpolation), since the manager replaces the whole string per release:
+
+```nix
+src = fetchurl {
+  url = "https://x-r2.raycast-releases.com/Raycast_Beta_0.61.0.0_e863712be6_arm64.dmg";
+  hash = "sha256-...";
+};
+```
+
+This works alongside `passthru.renovate.datasource` — same opt-in surface; only the customDatasource transform changes.
+
 ### Limitations
 
 - Non-flake repos are not supported
