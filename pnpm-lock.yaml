@@ -122,8 +122,8 @@ importers:
         specifier: 8.1.0
         version: 8.1.0
       '@yarnpkg/core':
-        specifier: 4.7.0
-        version: 4.7.0(typanion@3.14.0)
+        specifier: 4.8.0
+        version: 4.8.0(typanion@3.14.0)
       '@yarnpkg/parsers':
         specifier: 3.0.3
         version: 3.0.3
@@ -245,8 +245,8 @@ importers:
         specifier: 2.2.3
         version: 2.2.3
       jsonata:
-        specifier: 2.2.0
-        version: 2.2.0
+        specifier: 2.2.1
+        version: 2.2.1
       jsonc-weaver:
         specifier: 0.2.4
         version: 0.2.4
@@ -254,8 +254,8 @@ importers:
         specifier: 2.0.6
         version: 2.0.6
       lru-cache:
-        specifier: 11.4.0
-        version: 11.4.0
+        specifier: 11.5.0
+        version: 11.5.0
       luxon:
         specifier: 3.7.2
         version: 3.7.2
@@ -287,8 +287,8 @@ importers:
         specifier: 7.0.4
         version: 7.0.4
       p-queue:
-        specifier: 9.2.0
-        version: 9.2.0
+        specifier: 9.3.0
+        version: 9.3.0
       p-throttle:
         specifier: 8.1.0
         version: 8.1.0
@@ -332,8 +332,8 @@ importers:
         specifier: 3.0.0
         version: 3.0.0
       simple-git:
-        specifier: 3.35.2
-        version: 3.35.2
+        specifier: 3.36.0
+        version: 3.36.0
       slugify:
         specifier: 1.6.9
         version: 1.6.9
@@ -2564,8 +2564,8 @@ packages:
   '@vitest/utils@4.1.6':
     resolution: {integrity: sha512-FxIY+U81R3LGKCxaHHFRQ5+g6/iRgGLmeHWdp2Amj4ljQRrEIWHmZyDfDYBRZlpyqA7qKxtS9DD1dhk8RnRIVQ==}
 
-  '@yarnpkg/core@4.7.0':
-    resolution: {integrity: sha512-/zOgPAcDvwx8NDzLidDFaZDg+3Jgv824C4fudqZFlUuWv/BzOEtjfRTAyi+O0h15FyT7YvlsMnQpmnIQB+LgKw==}
+  '@yarnpkg/core@4.8.0':
+    resolution: {integrity: sha512-knO69Rqtr5GkGwGOKKhX1gLv7i2SDujoe4TBODUUzY/NLRuNBHPtFoANGYrMsGSSbsnmLLbGEJGQQ6c/CJXF2w==}
     engines: {node: '>=18.12.0'}
 
   '@yarnpkg/fslib@3.1.5':
@@ -3944,8 +3944,8 @@ packages:
     engines: {node: '>=6'}
     hasBin: true
 
-  jsonata@2.2.0:
-    resolution: {integrity: sha512-rAsmwxKHDKQIQ8qJBDErhd34BpNHses6QtiEOJVzJwJSY48LRx0S/tb7cJ9EtgfoIyiVx72Lzi88+HYxwnUybw==}
+  jsonata@2.2.1:
+    resolution: {integrity: sha512-xd1uwUrKeIcJbsWhaoS3qAX4Ea8m0Mw0G5nlnAQvPT7TbZ5qaPdzBVTQia9KfyuyQm+nenfyjvzUDTRYHsC2sw==}
     engines: {node: '>= 8'}
 
   jsonc-morph@0.3.4:
@@ -4138,8 +4138,8 @@ packages:
   lru-cache@10.4.3:
     resolution: {integrity: sha512-JNAzZcXrCt42VGLuYz0zfAzDfAvJWW6AfYlDBQyDV5DClI2m5sAmK+OIO7s59XfsRsWHp02jAJrRadPRGTt6SQ==}
 
-  lru-cache@11.4.0:
-    resolution: {integrity: sha512-W+R+kFL4HgVxONq2bhXPi3bGpzGe/yEhVOp233qw9wCRtgncJ15P3bC+e4zZMu4Cq7d+WAJjXGW0uUkifhcatA==}
+  lru-cache@11.5.0:
+    resolution: {integrity: sha512-5YgH9UJd7wVb9hIouI2adWpgqrrICkt070Dnj8EUY1+B4B2P9eRLPAkAAo6NICA7CEhOIeBHl46u9zSNpNu7zA==}
     engines: {node: 20 || >=22}
 
   lru-cache@5.1.1:
@@ -4722,8 +4722,8 @@ packages:
     resolution: {integrity: sha512-tkAQEw8ysMzmkhgw8k+1U/iPhWNhykKnSk4Rd5zLoPJCuJaGRPo6YposrZgaxHKzDHdDWWZvE/Sk7hsL2X/CpQ==}
     engines: {node: '>=18'}
 
-  p-queue@9.2.0:
-    resolution: {integrity: sha512-dWgLE8AH0HjQ9fe74pUkKkvzzYT18Inp4zra3lKHnnwqGvcfcUBrvF2EAVX+envufDNBOzpPq/IBUONDbI7+3g==}
+  p-queue@9.3.0:
+    resolution: {integrity: sha512-7NED7xhQ74Ngp4JP/2e0VZHp7vSWfJfqeiR92jPgxsz6m0Se4P03YoTKa9dDXyZ3r6P616gUXttrB6nnHYKang==}
     engines: {node: '>=20'}
 
   p-reduce@3.0.0:
@@ -5181,8 +5181,8 @@ packages:
     resolution: {integrity: sha512-iuh+gPf28RkltuJC7W5MRi6XAjTDCAPC/prJUpQoG4vIP3MJZ+GTydVnodXA7pwvTKb2cA0m9OFZW/cdWy/I/w==}
     engines: {node: '>=6'}
 
-  simple-git@3.35.2:
-    resolution: {integrity: sha512-ZMjl06lzTm1EScxEGuM6+mEX+NQd14h/B3x0vWU+YOXAMF8sicyi1K4cjTfj5is+35ChJEHDl1EjypzYFWH2FA==}
+  simple-git@3.36.0:
+    resolution: {integrity: sha512-cGQjLjK8bxJw4QuYT7gxHw3/IouVESbhahSsHrX97MzCL1gu2u7oy38W6L2ZIGECEfIBG4BabsWDPjBxJENv9Q==}
 
   sinon@18.0.1:
     resolution: {integrity: sha512-a2N2TDY1uGviajJ6r4D1CyRAkzE9NNVlYOV1wX5xQDuAk0ONgzgRl0EjCQuRCPxOwp13ghsMwt9Gdldujs39qw==}
@@ -8339,7 +8339,7 @@ snapshots:
       convert-source-map: 2.0.0
       tinyrainbow: 3.1.0
 
-  '@yarnpkg/core@4.7.0(typanion@3.14.0)':
+  '@yarnpkg/core@4.8.0(typanion@3.14.0)':
     dependencies:
       '@arcanis/slice-ansi': 1.1.1
       '@types/semver': 7.7.1
@@ -8572,7 +8572,7 @@ snapshots:
       '@npmcli/fs': 5.0.0
       fs-minipass: 3.0.3
       glob: 13.0.6
-      lru-cache: 11.4.0
+      lru-cache: 11.5.0
       minipass: 7.1.3
       minipass-collect: 2.0.1
       minipass-flush: 1.0.7
@@ -9450,7 +9450,7 @@ snapshots:
 
   hosted-git-info@9.0.3:
     dependencies:
-      lru-cache: 11.4.0
+      lru-cache: 11.5.0
 
   hpagent@1.2.0: {}
 
@@ -9730,7 +9730,7 @@ snapshots:
 
   json5@2.2.3: {}
 
-  jsonata@2.2.0: {}
+  jsonata@2.2.1: {}
 
   jsonc-morph@0.3.4: {}
 
@@ -9901,7 +9901,7 @@ snapshots:
 
   lru-cache@10.4.3: {}
 
-  lru-cache@11.4.0: {}
+  lru-cache@11.5.0: {}
 
   lru-cache@5.1.1:
     dependencies:
@@ -10658,7 +10658,7 @@ snapshots:
 
   p-map@7.0.4: {}
 
-  p-queue@9.2.0:
+  p-queue@9.3.0:
     dependencies:
       eventemitter3: 5.0.4
       p-timeout: 7.0.1
@@ -10751,7 +10751,7 @@ snapshots:
 
   path-scurry@2.0.2:
     dependencies:
-      lru-cache: 11.4.0
+      lru-cache: 11.5.0
       minipass: 7.1.3
 
   path-to-regexp@8.4.2: {}
@@ -11188,7 +11188,7 @@ snapshots:
       figures: 2.0.0
       pkg-conf: 2.1.0
 
-  simple-git@3.35.2:
+  simple-git@3.36.0:
     dependencies:
       '@kwsites/file-exists': 1.1.1
       '@kwsites/promise-deferred': 1.1.1
