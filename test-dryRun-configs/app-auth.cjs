@@ -10,7 +10,7 @@
 //     pnpm start
 
 // eslint-disable-next-line @typescript-eslint/no-require-imports
-const fs = require('fs');
+const fs = require('node:fs');
 
 const appId = process.env.GITHUB_APP_ID;
 const keyFile = process.env.GITHUB_APP_KEY_FILE;
