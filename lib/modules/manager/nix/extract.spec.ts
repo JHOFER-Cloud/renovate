@@ -1,5 +1,5 @@
 import { codeBlock } from 'common-tags';
-import { ZodError } from 'zod/v3';
+import { ZodError } from 'zod/v4';
 import { fs, logger } from '~test/util.ts';
 import { GitRefsDatasource } from '../../datasource/git-refs/index.ts';
 import { id as nixpkgsVersioning } from '../../versioning/nixpkgs/index.ts';
