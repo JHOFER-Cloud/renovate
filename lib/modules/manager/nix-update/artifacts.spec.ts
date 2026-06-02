@@ -139,6 +139,63 @@ describe('modules/manager/nix-update/artifacts', () => {
     ]);
   });
 
+  it('rewrites the src url when upgrade carries downloadUrl', async () => {
+    git.getRepoStatus.mockResolvedValue(
+      partial<StatusResult>({ modified: [], not_added: [] }),
+    );
+    // Capture what artifacts writes back so we can assert on it.
+    let writtenContent: string | undefined;
+    const { writeLocalFile, readLocalFile } =
+      await import('../../../util/fs/index.ts');
+    vi.mocked(writeLocalFile).mockImplementation((_path, contents) => {
+      writtenContent = contents as string;
+      return Promise.resolve();
+    });
+    vi.mocked(readLocalFile).mockImplementation(() =>
+      Promise.resolve(writtenContent ?? ''),
+    );
+
+    mockExecSequence([makeMismatchError(stderrWithGot(NEW_HASH))]);
+
+    const oldUrl =
+      'https://x-r2.raycast-releases.com/Raycast_Beta_0.61.0.0_aaa_arm64.dmg';
+    const newUrl =
+      'https://x-r2.raycast-releases.com/Raycast_Beta_0.62.0.0_bbb_arm64.dmg';
+
+    const fileContent = `{
+      version = "0.62.0.0";
+      src = fetchurl {
+        url = "${oldUrl}";
+        hash = "sha256-OLDOLDOLDOLDOLDOLDOLDOLDOLDOLDOLDOLDOLDOLDO=";
+      };
+    }`;
+
+    const result = await updateArtifacts({
+      packageFileName: 'packages/raycast-beta/default.nix',
+      updatedDeps: [
+        {
+          depName: 'raycast-beta',
+          newVersion: '0.62.0.0',
+          downloadUrl: newUrl,
+          managerData: {
+            attrName: 'raycast-beta',
+            system: 'aarch64-darwin',
+            pname: 'raycast-beta',
+            fods: [makeFod(['src'], { url: oldUrl, outputHashMode: 'flat' })],
+          },
+        },
+      ],
+      newPackageFileContent: fileContent,
+      config,
+    });
+
+    // File written back contains the new URL and new hash.
+    expect(writtenContent).toContain(newUrl);
+    expect(writtenContent).not.toContain(oldUrl);
+    expect(writtenContent).toContain(NEW_HASH);
+    expect(result).not.toBeNull();
+  });
+
   it('runs src first then vendor FOD', async () => {
     git.getRepoStatus.mockResolvedValue(
       partial<StatusResult>({ modified: [], not_added: [] }),
