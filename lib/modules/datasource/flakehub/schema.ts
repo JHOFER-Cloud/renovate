@@ -24,4 +24,4 @@ export const FlakeHubRelease = z.object({
   spdx_identifier: z.string().nullable().optional(),
 });
 
-export type FlakeHubReleaseType = z.infer<typeof FlakeHubRelease>;
+export type FlakeHubRelease = z.infer<typeof FlakeHubRelease>;
