@@ -3079,6 +3079,7 @@ const options: Readonly<RenovateOptions>[] = [
       'branchAutomergeFailure',
       'configErrorIssue',
       'dependencyLookupWarnings',
+      'localPathWarningIssue',
       'lockFileErrors',
       'missingCredentialsError',
       'repositoryErrorIssue',
