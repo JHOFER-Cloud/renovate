@@ -300,6 +300,190 @@ describe('modules/manager/nix/extract', () => {
     );
   });
 
+  it('extracts git+file inputs as skipped local dependencies', async () => {
+    const flakeLock = codeBlock`{
+      "nodes": {
+        "my-local-flake": {
+          "locked": {
+            "lastModified": 1720031269,
+            "narHash": "sha256-rwz8NJZV+387rnWpTYcXaRNvzUSnnF9aHONoJIYmiUQ=",
+            "rev": "9f4128e00b0ae8ec65918efeba59db998750ead6",
+            "type": "git",
+            "url": "file:///home/user/projects/my-local-flake"
+          },
+          "original": {
+            "type": "git",
+            "url": "file:///home/user/projects/my-local-flake"
+          }
+        },
+        "root": {
+          "inputs": {
+            "my-local-flake": "my-local-flake"
+          }
+        }
+      },
+      "root": "root",
+      "version": 7
+    }`;
+    fs.readLocalFile.mockResolvedValueOnce(flakeLock);
+    expect(await extractPackageFile('', 'flake.nix')).toEqual({
+      deps: [
+        {
+          depName: 'my-local-flake',
+          skipReason: 'local-dependency',
+          managerData: {
+            localPath: 'file:///home/user/projects/my-local-flake',
+          },
+        },
+      ],
+    });
+  });
+
+  it('extracts inputs with an explicit git+file prefix as skipped local dependencies', async () => {
+    const flakeLock = codeBlock`{
+      "nodes": {
+        "my-local-flake": {
+          "locked": {
+            "lastModified": 1720031269,
+            "narHash": "sha256-rwz8NJZV+387rnWpTYcXaRNvzUSnnF9aHONoJIYmiUQ=",
+            "rev": "9f4128e00b0ae8ec65918efeba59db998750ead6",
+            "type": "git",
+            "url": "git+file:///home/user/projects/my-local-flake"
+          },
+          "original": {
+            "type": "git",
+            "url": "git+file:///home/user/projects/my-local-flake"
+          }
+        },
+        "root": {
+          "inputs": {
+            "my-local-flake": "my-local-flake"
+          }
+        }
+      },
+      "root": "root",
+      "version": 7
+    }`;
+    fs.readLocalFile.mockResolvedValueOnce(flakeLock);
+    expect(await extractPackageFile('', 'flake.nix')).toEqual({
+      deps: [
+        {
+          depName: 'my-local-flake',
+          skipReason: 'local-dependency',
+          managerData: {
+            localPath: 'git+file:///home/user/projects/my-local-flake',
+          },
+        },
+      ],
+    });
+  });
+
+  it('extracts absolute path inputs as skipped local dependencies', async () => {
+    const flakeLock = codeBlock`{
+      "nodes": {
+        "my-local-flake": {
+          "locked": {
+            "lastModified": 1720031269,
+            "narHash": "sha256-rwz8NJZV+387rnWpTYcXaRNvzUSnnF9aHONoJIYmiUQ=",
+            "path": "/home/user/projects/my-local-flake",
+            "type": "path"
+          },
+          "original": {
+            "path": "/home/user/projects/my-local-flake",
+            "type": "path"
+          }
+        },
+        "root": {
+          "inputs": {
+            "my-local-flake": "my-local-flake"
+          }
+        }
+      },
+      "root": "root",
+      "version": 7
+    }`;
+    fs.readLocalFile.mockResolvedValueOnce(flakeLock);
+    expect(await extractPackageFile('', 'flake.nix')).toEqual({
+      deps: [
+        {
+          depName: 'my-local-flake',
+          skipReason: 'local-dependency',
+          managerData: {
+            localPath: '/home/user/projects/my-local-flake',
+          },
+        },
+      ],
+    });
+  });
+
+  it('silently skips relative path inputs', async () => {
+    const flakeLock = codeBlock`{
+      "nodes": {
+        "subflake": {
+          "locked": {
+            "lastModified": 1720031269,
+            "narHash": "sha256-rwz8NJZV+387rnWpTYcXaRNvzUSnnF9aHONoJIYmiUQ=",
+            "path": "./pkgs/subflake",
+            "type": "path"
+          },
+          "original": {
+            "path": "./pkgs/subflake",
+            "type": "path"
+          }
+        },
+        "root": {
+          "inputs": {
+            "subflake": "subflake"
+          }
+        }
+      },
+      "root": "root",
+      "version": 7
+    }`;
+    fs.readLocalFile.mockResolvedValueOnce(flakeLock);
+    expect(await extractPackageFile('', 'flake.nix')).toBeNull();
+    expect(logger.logger.debug).toHaveBeenCalledExactlyOnceWith(
+      expect.objectContaining({ flakeLockFile: 'flake.lock' }),
+      'input is of type path, skipping',
+    );
+  });
+
+  it('skips inputs whose URL cannot be converted to a sourceUrl', async () => {
+    const flakeLock = codeBlock`{
+      "nodes": {
+        "broken": {
+          "locked": {
+            "lastModified": 1720031269,
+            "narHash": "sha256-rwz8NJZV+387rnWpTYcXaRNvzUSnnF9aHONoJIYmiUQ=",
+            "rev": "9f4128e00b0ae8ec65918efeba59db998750ead6",
+            "type": "git",
+            "url": "ssh:///foo/bar"
+          },
+          "original": {
+            "type": "git",
+            "url": "ssh:///foo/bar"
+          }
+        },
+        "root": {
+          "inputs": {
+            "broken": "broken"
+          }
+        }
+      },
+      "root": "root",
+      "version": 7
+    }`;
+    fs.readLocalFile.mockResolvedValueOnce(flakeLock);
+    expect(await extractPackageFile('', 'flake.nix')).toBeNull();
+    expect(logger.logger.debug).toHaveBeenCalledExactlyOnceWith(
+      expect.objectContaining({
+        flakeLockFile: 'flake.lock',
+        err: expect.any(Error),
+      }),
+      'failed to derive sourceUrl, skipping input',
+    );
+  });
+
   it('ignores locked inputs not tracking a rev', async () => {
     const flakeLock = codeBlock`{
       "nodes": {

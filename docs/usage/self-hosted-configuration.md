@@ -808,7 +808,7 @@ Orgs not listed here never share tokens.
 
 Example:
 
-```json
+```json {configType=global}
 {
   "githubAppCrossOrgTrustGroups": [
     ["org-a", "org-b"],

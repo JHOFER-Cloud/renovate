@@ -23,6 +23,8 @@ const flakeHubUrl = regEx(
   '^https://flakehub\\.com/f/(?<owner>[^/]+)/(?<repo>[^/]+)/(?<version>[^/]+?)(?:\\.tar\\.gz)?$',
 );
 
+const localFileUrl = regEx(/^(?:git\+)?file:/);
+
 export async function extractPackageFile(
   content: string,
   packageFile: string,
@@ -91,6 +93,27 @@ export async function extractPackageFile(
         { flakeLockFile, flakeInput },
         'input is of type indirect, skipping',
       );
+      continue;
+    }
+
+    // machine-local inputs (`git+file://` URLs or absolute `path:` inputs)
+    // can only be fetched on the machine that locked them. Emit a skipped dep
+    // so the local-path warning issue can notify the user about them.
+    const localPath =
+      [flakeOriginal.url, flakeLocked.url].find(
+        (u) => u && localFileUrl.test(u),
+      ) ??
+      [flakeOriginal.path, flakeLocked.path].find((p) => p?.startsWith('/'));
+    if (localPath) {
+      logger.debug(
+        { flakeLockFile, flakeInput, localPath },
+        'input uses a machine-local path, skipping',
+      );
+      deps.push({
+        depName: rootInputs.get(node),
+        skipReason: 'local-dependency',
+        managerData: { localPath },
+      });
       continue;
     }
 
@@ -204,7 +227,16 @@ export async function extractPackageFile(
     }
 
     if (flakeLocked.type !== 'tarball') {
-      dep.sourceUrl = getHttpUrl(dep.packageName!).replace(/\.git$/, '');
+      // safety net: a malformed URL must never abort the whole repository run
+      try {
+        dep.sourceUrl = getHttpUrl(dep.packageName!).replace(/\.git$/, '');
+      } catch (err) {
+        logger.debug(
+          { flakeLockFile, packageName: dep.packageName, err },
+          'failed to derive sourceUrl, skipping input',
+        );
+        continue;
+      }
     }
 
     deps.push(dep);
