@@ -449,6 +449,41 @@ describe('modules/manager/nix-update/extract', () => {
     });
   });
 
+  it('falls back to attrName when override packageName and pname are both null', async () => {
+    fs.readLocalFile
+      .mockResolvedValueOnce('passthru.updateScript = nix-update-script {};')
+      .mockResolvedValueOnce('{ outputs = ...; }');
+
+    const { exec } = await import('../../../util/exec/index.ts');
+    vi.mocked(exec).mockResolvedValueOnce({
+      stdout: JSON.stringify({
+        'no-pname': {
+          system: 'x86_64-linux',
+          version: '1.0.0',
+          pname: null,
+          srcUrl: 'https://example.com/x.tar.gz',
+          srcRev: null,
+          updateScriptArgs: [],
+          renovate: {
+            datasource: 'custom.mything',
+            packageName: null,
+            extractVersion: null,
+          },
+        },
+      }),
+      stderr: '',
+    });
+
+    const result = await extractAllPackageFiles({}, [
+      'packages/no-pname/default.nix',
+    ]);
+
+    expect(result?.[0].deps[0]).toMatchObject({
+      datasource: 'custom.mything',
+      packageName: 'no-pname',
+    });
+  });
+
   it('uses passthru.renovate.packageName when set, falls back to pname otherwise', async () => {
     fs.readLocalFile
       .mockResolvedValueOnce('passthru.updateScript = nix-update-script {};')

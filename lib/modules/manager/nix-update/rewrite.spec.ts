@@ -273,6 +273,41 @@ describe('modules/manager/nix-update/rewrite', () => {
     expect(out).toContain(`url = "${newUrl}"`);
   });
 
+  it('contextual: replaces only the binding matching oldUrl when range has multiple url attrs', () => {
+    // Two url attrs inside the src range — only the one whose value is
+    // exactly oldUrl may be rewritten; the unrelated one must survive.
+    const content = `
+      {
+        # historical: ${oldUrl}
+        src = fetchzip {
+          passthru = { url = "https://example.com/homepage"; };
+          url = "${oldUrl}";
+          hash = "sha256-aaa=";
+        };
+      }
+    `;
+    const out = rewriteUrl(content, { attrPath: ['src'], oldUrl, newUrl });
+    expect(out).toContain(`url = "https://example.com/homepage"`);
+    expect(out).toContain(`url = "${newUrl}"`);
+    expect(out).toContain(`# historical: ${oldUrl}`);
+  });
+
+  it('contextual: falls back to the first url attr when the value is interpolated', () => {
+    // Interpolated url never literally matches the eval-resolved oldUrl —
+    // the first url binding in the range is rewritten to the new literal.
+    const content = `
+      {
+        src = fetchurl {
+          url = "https://x-r2.raycast-releases.com/Raycast_Beta_\${version}_arm64.dmg";
+          hash = "sha256-aaa=";
+        };
+      }
+    `;
+    const out = rewriteUrl(content, { attrPath: ['src'], oldUrl, newUrl });
+    expect(out).toContain(`url = "${newUrl}"`);
+    expect(out).not.toContain('Raycast_Beta_${version}_arm64.dmg');
+  });
+
   it('is a no-op when oldUrl equals newUrl', () => {
     const content = `src = fetchurl { url = "${oldUrl}"; };`;
     expect(

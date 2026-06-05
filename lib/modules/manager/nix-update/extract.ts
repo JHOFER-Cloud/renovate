@@ -420,7 +420,10 @@ export async function extractAllPackageFiles(
     const ds = overrides?.datasource
       ? {
           datasource: overrides.datasource,
-          packageName: overrides.packageName ?? info.pname ?? '',
+          // attrName as last resort: release lookups require a non-empty
+          // packageName, and the flake attr name is the only identifier
+          // guaranteed to exist.
+          packageName: overrides.packageName ?? info.pname ?? attrName,
         }
       : datasourceFromSrc(info.srcUrl, info.pname, info.updateScriptArgs);
     if (!ds) {

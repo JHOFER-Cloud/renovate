@@ -132,10 +132,16 @@ export function rewriteUrl(content: string, ctx: UrlRewriteContext): string {
     const before = content.slice(0, range.start);
     const within = content.slice(range.start, range.end);
     const after = content.slice(range.end);
-    const updated = within.replace(urlAttrLine, (_m, lead, name) => {
-      return `${lead}${name} = "${newUrl}"`;
-    });
-    if (updated !== within) {
+    // Replace exactly one binding. Prefer the one whose current value is
+    // literally oldUrl; otherwise fall back to the first url attr in the
+    // range — interpolated urls (e.g. "https://.../${version}/x.tar.gz")
+    // never literally match the eval-resolved oldUrl.
+    const matches = [...within.matchAll(urlAttrLine)];
+    const target = matches.find((m) => m[3] === oldUrl) ?? matches[0];
+    if (target) {
+      const head = within.slice(0, target.index);
+      const tail = within.slice(target.index + target[0].length);
+      const updated = `${head}${target[1]}${target[2]} = "${newUrl}"${tail}`;
       return before + updated + after;
     }
   }
