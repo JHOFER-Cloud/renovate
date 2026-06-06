@@ -14,7 +14,7 @@ import type {
 import type { FodInfo } from './extract.ts';
 import { buildKnownSrcExpr, classifyFod } from './fetchers.ts';
 import { prefetch } from './prefetch.ts';
-import { rewriteHash } from './rewrite.ts';
+import { rewriteHash, rewriteUrl } from './rewrite.ts';
 
 export async function updateArtifacts({
   packageFileName,
@@ -85,6 +85,32 @@ export async function updateArtifacts({
     ),
   );
 
+  let content = newPackageFileContent;
+
+  // If the lookup surfaced an explicit downloadUrl (custom datasources can
+  // return one), the src URL's shape may have changed in ways simple version
+  // substitution can't reconstruct — e.g. Raycast embeds a per-release commit
+  // hash in the DMG filename. Override the src FOD's url before classify so
+  // the prefetch hits the right artifact, and rewrite the .nix file to keep
+  // the literal url in sync.
+  const downloadUrl = dep.downloadUrl;
+  if (downloadUrl) {
+    for (const fod of bumpedFods) {
+      if (fod.attrPath.length === 1 && fod.attrPath[0] === 'src') {
+        const oldUrl = fod.inputs.url;
+        if (oldUrl && oldUrl !== downloadUrl) {
+          content = rewriteUrl(content, {
+            attrPath: fod.attrPath,
+            oldUrl,
+            newUrl: downloadUrl,
+          });
+          fod.inputs.url = downloadUrl;
+        }
+        break;
+      }
+    }
+  }
+
   // Classify all FODs. Hard-fail surface area is the classifier — anything
   // unsupported throws here, before any nix-build runs.
   const classified = bumpedFods.map((fod) =>
@@ -92,8 +118,6 @@ export async function updateArtifacts({
   );
   // Run src first; vendor builders need src already in the runner's store.
   classified.sort((a, b) => Number(b.isSrc) - Number(a.isSrc));
-
-  let content = newPackageFileContent;
   const errors: ArtifactError[] = [];
   // Map src fods (by attrPath joined) → known new hash, for vendor srcExpr.
   const srcHashes = new Map<string, string>();

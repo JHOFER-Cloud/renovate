@@ -411,6 +411,181 @@ describe('modules/manager/nix-update/extract', () => {
     ]);
   });
 
+  it('uses passthru.renovate.datasource override when src URL is not classifiable', async () => {
+    fs.readLocalFile
+      .mockResolvedValueOnce('passthru.updateScript = nix-update-script {};')
+      .mockResolvedValueOnce('{ outputs = ...; }');
+
+    const { exec } = await import('../../../util/exec/index.ts');
+    vi.mocked(exec).mockResolvedValueOnce({
+      stdout: JSON.stringify({
+        'raycast-beta': {
+          system: 'aarch64-darwin',
+          version: '0.61.0.0',
+          pname: 'raycast-beta',
+          srcUrl:
+            'https://x-r2.raycast-releases.com/Raycast_Beta_0.61.0.0_e863712be6_arm64.dmg',
+          srcRev: null,
+          updateScriptArgs: [],
+          renovate: {
+            datasource: 'custom.raycast-beta',
+            packageName: null,
+            extractVersion: null,
+          },
+        },
+      }),
+      stderr: '',
+    });
+
+    const result = await extractAllPackageFiles({}, [
+      'packages/raycast-beta/default.nix',
+    ]);
+
+    expect(result?.[0].deps[0]).toMatchObject({
+      depName: 'raycast-beta',
+      datasource: 'custom.raycast-beta',
+      packageName: 'raycast-beta',
+      currentValue: '0.61.0.0',
+    });
+  });
+
+  it('falls back to attrName when override packageName and pname are both null', async () => {
+    fs.readLocalFile
+      .mockResolvedValueOnce('passthru.updateScript = nix-update-script {};')
+      .mockResolvedValueOnce('{ outputs = ...; }');
+
+    const { exec } = await import('../../../util/exec/index.ts');
+    vi.mocked(exec).mockResolvedValueOnce({
+      stdout: JSON.stringify({
+        'no-pname': {
+          system: 'x86_64-linux',
+          version: '1.0.0',
+          pname: null,
+          srcUrl: 'https://example.com/x.tar.gz',
+          srcRev: null,
+          updateScriptArgs: [],
+          renovate: {
+            datasource: 'custom.mything',
+            packageName: null,
+            extractVersion: null,
+          },
+        },
+      }),
+      stderr: '',
+    });
+
+    const result = await extractAllPackageFiles({}, [
+      'packages/no-pname/default.nix',
+    ]);
+
+    expect(result?.[0].deps[0]).toMatchObject({
+      datasource: 'custom.mything',
+      packageName: 'no-pname',
+    });
+  });
+
+  it('uses passthru.renovate.packageName when set, falls back to pname otherwise', async () => {
+    fs.readLocalFile
+      .mockResolvedValueOnce('passthru.updateScript = nix-update-script {};')
+      .mockResolvedValueOnce('{ outputs = ...; }');
+
+    const { exec } = await import('../../../util/exec/index.ts');
+    vi.mocked(exec).mockResolvedValueOnce({
+      stdout: JSON.stringify({
+        explicit: {
+          system: 'x86_64-linux',
+          version: '1.0.0',
+          pname: 'explicit',
+          srcUrl: 'https://example.com/x.tar.gz',
+          srcRev: null,
+          updateScriptArgs: [],
+          renovate: {
+            datasource: 'custom.mything',
+            packageName: 'overridden-name',
+            extractVersion: null,
+          },
+        },
+      }),
+      stderr: '',
+    });
+
+    const result = await extractAllPackageFiles({}, [
+      'packages/explicit/default.nix',
+    ]);
+
+    expect(result?.[0].deps[0]).toMatchObject({
+      datasource: 'custom.mything',
+      packageName: 'overridden-name',
+    });
+  });
+
+  it('passthru.renovate.extractVersion overrides --version-regex derivation', async () => {
+    fs.readLocalFile
+      .mockResolvedValueOnce('passthru.updateScript = nix-update-script {};')
+      .mockResolvedValueOnce('{ outputs = ...; }');
+
+    const { exec } = await import('../../../util/exec/index.ts');
+    vi.mocked(exec).mockResolvedValueOnce({
+      stdout: JSON.stringify({
+        foo: {
+          system: 'x86_64-linux',
+          version: '1.0.0',
+          pname: 'foo',
+          srcUrl: 'https://github.com/owner/foo',
+          srcRev: null,
+          updateScriptArgs: ['--version-regex', 'v([0-9.]+)'],
+          renovate: {
+            datasource: null,
+            packageName: null,
+            extractVersion: '(?<version>[0-9.]+)',
+          },
+        },
+      }),
+      stderr: '',
+    });
+
+    const result = await extractAllPackageFiles({}, [
+      'packages/foo/default.nix',
+    ]);
+
+    expect(result?.[0].deps[0].extractVersion).toBe('(?<version>[0-9.]+)');
+  });
+
+  it('passthru.renovate with all-null fields leaves existing URL inference intact', async () => {
+    fs.readLocalFile
+      .mockResolvedValueOnce('passthru.updateScript = nix-update-script {};')
+      .mockResolvedValueOnce('{ outputs = ...; }');
+
+    const { exec } = await import('../../../util/exec/index.ts');
+    vi.mocked(exec).mockResolvedValueOnce({
+      stdout: JSON.stringify({
+        foo: {
+          system: 'x86_64-linux',
+          version: '1.0.0',
+          pname: 'foo',
+          srcUrl: 'https://github.com/owner/foo',
+          srcRev: null,
+          updateScriptArgs: [],
+          renovate: {
+            datasource: null,
+            packageName: null,
+            extractVersion: null,
+          },
+        },
+      }),
+      stderr: '',
+    });
+
+    const result = await extractAllPackageFiles({}, [
+      'packages/foo/default.nix',
+    ]);
+
+    expect(result?.[0].deps[0]).toMatchObject({
+      datasource: 'github-tags',
+      packageName: 'owner/foo',
+    });
+  });
+
   it('falls back to flake.nix when meta.position is missing', async () => {
     fs.readLocalFile
       .mockResolvedValueOnce('passthru.updateScript = nix-update-script {};')

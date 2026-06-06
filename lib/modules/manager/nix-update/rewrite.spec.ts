@@ -1,4 +1,4 @@
-import { rewriteHash } from './rewrite.ts';
+import { rewriteHash, rewriteUrl } from './rewrite.ts';
 
 describe('modules/manager/nix-update/rewrite', () => {
   const oldHash = 'sha256-AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA=';
@@ -232,5 +232,99 @@ describe('modules/manager/nix-update/rewrite', () => {
         }),
       // fast path will swap (otherHash is unique) — should succeed
     ).not.toThrow();
+  });
+});
+
+describe('modules/manager/nix-update/rewrite', () => {
+  const oldUrl =
+    'https://x-r2.raycast-releases.com/Raycast_Beta_0.61.0.0_aaa_arm64.dmg';
+  const newUrl =
+    'https://x-r2.raycast-releases.com/Raycast_Beta_0.62.0.0_bbb_arm64.dmg';
+
+  it('fast-path: replaces the literal when oldUrl is unique', () => {
+    const content = `
+      {
+        src = fetchurl {
+          url = "${oldUrl}";
+          hash = "sha256-aaa=";
+        };
+      }
+    `;
+    const out = rewriteUrl(content, { attrPath: ['src'], oldUrl, newUrl });
+    expect(out).toContain(newUrl);
+    expect(out).not.toContain(oldUrl);
+  });
+
+  it('contextual: rewrites url inside the src block when same URL appears twice', () => {
+    // Same URL appears twice (in src and in a comment) — fast-path bails,
+    // contextual locator anchors on `src` and rewrites only the binding's url line.
+    const content = `
+      {
+        # historical: ${oldUrl}
+        src = fetchurl {
+          url = "${oldUrl}";
+          hash = "sha256-aaa=";
+        };
+      }
+    `;
+    const out = rewriteUrl(content, { attrPath: ['src'], oldUrl, newUrl });
+    // Comment-side reference must survive; only src's url is bumped.
+    expect(out).toContain(`# historical: ${oldUrl}`);
+    expect(out).toContain(`url = "${newUrl}"`);
+  });
+
+  it('contextual: replaces only the binding matching oldUrl when range has multiple url attrs', () => {
+    // Two url attrs inside the src range — only the one whose value is
+    // exactly oldUrl may be rewritten; the unrelated one must survive.
+    const content = `
+      {
+        # historical: ${oldUrl}
+        src = fetchzip {
+          passthru = { url = "https://example.com/homepage"; };
+          url = "${oldUrl}";
+          hash = "sha256-aaa=";
+        };
+      }
+    `;
+    const out = rewriteUrl(content, { attrPath: ['src'], oldUrl, newUrl });
+    expect(out).toContain(`url = "https://example.com/homepage"`);
+    expect(out).toContain(`url = "${newUrl}"`);
+    expect(out).toContain(`# historical: ${oldUrl}`);
+  });
+
+  it('contextual: falls back to the first url attr when the value is interpolated', () => {
+    // Interpolated url never literally matches the eval-resolved oldUrl —
+    // the first url binding in the range is rewritten to the new literal.
+    const content = `
+      {
+        src = fetchurl {
+          url = "https://x-r2.raycast-releases.com/Raycast_Beta_\${version}_arm64.dmg";
+          hash = "sha256-aaa=";
+        };
+      }
+    `;
+    const out = rewriteUrl(content, { attrPath: ['src'], oldUrl, newUrl });
+    expect(out).toContain(`url = "${newUrl}"`);
+    expect(out).not.toContain('Raycast_Beta_${version}_arm64.dmg');
+  });
+
+  it('is a no-op when oldUrl equals newUrl', () => {
+    const content = `src = fetchurl { url = "${oldUrl}"; };`;
+    expect(
+      rewriteUrl(content, { attrPath: ['src'], oldUrl, newUrl: oldUrl }),
+    ).toBe(content);
+  });
+
+  it('throws on empty attrPath', () => {
+    expect(() => rewriteUrl('x', { attrPath: [], oldUrl, newUrl })).toThrow(
+      /empty attrPath/,
+    );
+  });
+
+  it('throws when no matching url binding can be found', () => {
+    const content = `{ other = "x"; }`;
+    expect(() =>
+      rewriteUrl(content, { attrPath: ['src'], oldUrl, newUrl }),
+    ).toThrow(/Could not locate url/);
   });
 });

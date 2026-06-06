@@ -12,6 +12,9 @@ const hashLiteralRegex = regEx(
 const hashAttrLine =
   /(^|\s)(hash|sha256|sha512|sha1|outputHash)\s*=\s*"([^"]*)"/g;
 
+// Match `url = "<value>"` inside a fetcher block. Used by rewriteUrl below.
+const urlAttrLine = /(^|\s)(url)\s*=\s*"([^"]*)"/g;
+
 export interface RewriteContext {
   // Path of attributes from the package root down to the FOD.
   // E.g. ["src"], ["goModules"], ["passthru", "cargoDeps"].
@@ -91,6 +94,60 @@ export function rewriteHash(content: string, ctx: RewriteContext): string {
 
   throw new Error(
     `Could not locate hash for attrPath ${attrPath.join('.')} in nix file`,
+  );
+}
+
+export interface UrlRewriteContext {
+  // Path to the FOD whose url should be replaced (e.g. ["src"]).
+  attrPath: string[];
+  // URL currently in the file. Used for the unique-string fast path.
+  oldUrl: string;
+  // New URL to write.
+  newUrl: string;
+}
+
+// Rewrite a `url = "..."` attribute in the .nix file. Mirrors rewriteHash:
+// fast literal swap when oldUrl is unique, else contextual lookup via attrPath.
+// Used when a customDatasource provides `downloadUrl` and the new URL's shape
+// can't be derived from the old one by simple version interpolation (e.g.
+// a per-release commit-hash segment).
+export function rewriteUrl(content: string, ctx: UrlRewriteContext): string {
+  const { attrPath, oldUrl, newUrl } = ctx;
+
+  if (oldUrl === newUrl) {
+    return content;
+  }
+
+  if (content.includes(oldUrl) && countOccurrences(content, oldUrl) === 1) {
+    return content.replace(oldUrl, newUrl);
+  }
+
+  const anchor = attrPath[attrPath.length - 1];
+  if (!anchor) {
+    throw new Error('rewriteUrl: empty attrPath');
+  }
+
+  const range = locateAttrRange(content, anchor);
+  if (range) {
+    const before = content.slice(0, range.start);
+    const within = content.slice(range.start, range.end);
+    const after = content.slice(range.end);
+    // Replace exactly one binding. Prefer the one whose current value is
+    // literally oldUrl; otherwise fall back to the first url attr in the
+    // range — interpolated urls (e.g. "https://.../${version}/x.tar.gz")
+    // never literally match the eval-resolved oldUrl.
+    const matches = [...within.matchAll(urlAttrLine)];
+    const target = matches.find((m) => m[3] === oldUrl) ?? matches[0];
+    if (target) {
+      const head = within.slice(0, target.index);
+      const tail = within.slice(target.index + target[0].length);
+      const updated = `${head}${target[1]}${target[2]} = "${newUrl}"${tail}`;
+      return before + updated + after;
+    }
+  }
+
+  throw new Error(
+    `Could not locate url for attrPath ${attrPath.join('.')} in nix file`,
   );
 }
 
