@@ -717,6 +717,32 @@ export async function validateConfig(
                   continue;
                 }
               }
+            } else if (key === 'statusCheckWhen') {
+              const allowedWhenValues = ['always', 'never', 'failed'];
+              for (const [statusCheckKey, statusCheckValue] of Object.entries(
+                val,
+              )) {
+                if (
+                  !allowedStatusCheckStrings.includes(
+                    statusCheckKey as StatusCheckKey,
+                  )
+                ) {
+                  errors.push({
+                    topic: 'Configuration Error',
+                    message: `Invalid \`${currentPath}.${key}.${statusCheckKey}\` configuration: key is not allowed.`,
+                  });
+                }
+                if (
+                  !isString(statusCheckValue) ||
+                  !allowedWhenValues.includes(statusCheckValue)
+                ) {
+                  errors.push({
+                    topic: 'Configuration Error',
+                    message: `Invalid \`${currentPath}.${statusCheckKey}\` configuration: value must be one of "always", "never", or "failed".`,
+                  });
+                  continue;
+                }
+              }
             } else if (key === 'customDatasources') {
               const allowedKeys = [
                 'description',
@@ -1057,7 +1083,7 @@ async function validateGlobalConfig(
     } else if (type === 'array') {
       if (isArray(val)) {
         for (const [subIndex, subval] of val.entries()) {
-          if (isObject(subval)) {
+          if (isObject(subval) && !isArray(subval)) {
             const subValidation = await validateConfig(
               'global',
               subval as AllConfig,

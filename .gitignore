@@ -39,8 +39,10 @@ test/datasource/nuget/_fixtures/obj
 
 # local development directories
 /.agents
-/.claude
 /.opencode
+## Claude
+/.claude/settings.local.json
+/.claude/worktrees
 
 # nix
 .direnv
