@@ -17,9 +17,9 @@ import {
 import { ExternalHostError } from '../../../types/errors/external-host-error.ts';
 import * as repository from '../../../util/cache/repository/index.ts';
 import * as _git from '../../../util/git/index.ts';
-import type { LongCommitSha } from '../../../util/git/types.ts';
 import * as _hostRules from '../../../util/host-rules.ts';
 import { setBaseUrl } from '../../../util/http/github.ts';
+import type { LongCommitSha } from '../../../util/schema-utils/git.ts';
 import { toBase64 } from '../../../util/string.ts';
 import { hashBody } from '../pr-body.ts';
 import type {
@@ -6135,8 +6135,10 @@ describe('modules/platform/github/index', () => {
         .post('/repos/some/repo/git/trees')
         .reply(200, { sha: '111' })
         .post('/repos/some/repo/git/commits')
-        .reply(200, { sha: '222' })
-        .head('/repos/some/repo/git/commits/222')
+        .reply(200, { sha: '0123456789abcdef0123456789abcdef01234567' })
+        .head(
+          '/repos/some/repo/git/commits/0123456789abcdef0123456789abcdef01234567',
+        )
         .reply(200)
         .post('/repos/some/repo/git/refs')
         .reply(200);
@@ -6161,8 +6163,10 @@ describe('modules/platform/github/index', () => {
         .post('/repos/some/repo/git/trees')
         .reply(200, { sha: '111' })
         .post('/repos/some/repo/git/commits')
-        .reply(200, { sha: '222' })
-        .head('/repos/some/repo/git/commits/222')
+        .reply(200, { sha: '0123456789abcdef0123456789abcdef01234567' })
+        .head(
+          '/repos/some/repo/git/commits/0123456789abcdef0123456789abcdef01234567',
+        )
         .reply(200)
         .patch('/repos/some/repo/git/refs/heads/foo/bar')
         .reply(200);
@@ -6187,8 +6191,10 @@ describe('modules/platform/github/index', () => {
         .post('/repos/some/repo/git/trees')
         .reply(200, { sha: '111' })
         .post('/repos/some/repo/git/commits')
-        .reply(200, { sha: '222' })
-        .head('/repos/some/repo/git/commits/222')
+        .reply(200, { sha: '0123456789abcdef0123456789abcdef01234567' })
+        .head(
+          '/repos/some/repo/git/commits/0123456789abcdef0123456789abcdef01234567',
+        )
         .reply(200)
         .patch('/repos/some/repo/git/refs/heads/foo/bar')
         .reply(422)
@@ -6215,8 +6221,10 @@ describe('modules/platform/github/index', () => {
         .post('/repos/some/repo/git/trees')
         .reply(200, { sha: '111' })
         .post('/repos/some/repo/git/commits')
-        .reply(200, { sha: '222' })
-        .head('/repos/some/repo/git/commits/222')
+        .reply(200, { sha: '0123456789abcdef0123456789abcdef01234567' })
+        .head(
+          '/repos/some/repo/git/commits/0123456789abcdef0123456789abcdef01234567',
+        )
         .reply(200)
         .patch('/repos/some/repo/git/refs/heads/foo/bar')
         .reply(404);
@@ -6241,8 +6249,10 @@ describe('modules/platform/github/index', () => {
         .post('/repos/some/repo/git/trees')
         .reply(200, { sha: '111' })
         .post('/repos/some/repo/git/commits')
-        .reply(200, { sha: '222' })
-        .head('/repos/some/repo/git/commits/222')
+        .reply(200, { sha: '0123456789abcdef0123456789abcdef01234567' })
+        .head(
+          '/repos/some/repo/git/commits/0123456789abcdef0123456789abcdef01234567',
+        )
         .reply(404);
 
       const res = await github.commitFiles({
