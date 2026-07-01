@@ -2318,6 +2318,21 @@ describe('config/validation', () => {
       expect(errors).toBeEmptyArray();
     });
 
+    it('validates array of arrays option (githubAppCrossOrgTrustGroups)', async () => {
+      const config = {
+        githubAppCrossOrgTrustGroups: [
+          ['org-a', 'org-b'],
+          ['org-c', 'org-d'],
+        ],
+      };
+      const { warnings, errors } = await configValidation.validateConfig(
+        'global',
+        config,
+      );
+      expect(warnings).toBeEmptyArray();
+      expect(errors).toBeEmptyArray();
+    });
+
     it('handles prefixed onboardingConfigFileName', async () => {
       const config = {
         platform: 'forgejo',

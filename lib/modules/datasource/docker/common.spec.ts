@@ -233,12 +233,7 @@ describe('modules/datasource/docker/common', () => {
         'https://my.local.registry/prefix',
       );
 
-      // do not inline, otherwise we get false positive from codeql
-      expect(headers).toMatchInlineSnapshot(`
-        {
-          "authorization": "some-authType some-token",
-        }
-      `);
+      expect(headers).toEqual({ authorization: 'some-authType some-token' });
     });
 
     it('returns "Bearer token" if only token provided', async () => {
@@ -257,12 +252,7 @@ describe('modules/datasource/docker/common', () => {
         'https://my.local.registry/prefix',
       );
 
-      // do not inline, otherwise we get false positive from codeql
-      expect(headers).toMatchInlineSnapshot(`
-        {
-          "authorization": "Bearer some-token",
-        }
-      `);
+      expect(headers).toEqual({ authorization: 'Bearer some-token' });
     });
 
     it('fails', async () => {
@@ -307,12 +297,7 @@ describe('modules/datasource/docker/common', () => {
         'https://my.local.registry/v2/my/node/resource',
       );
 
-      // do not inline, otherwise we get false positive from codeql
-      expect(headers).toMatchInlineSnapshot(`
-        {
-          "authorization": "Bearer some-token",
-        }
-      `);
+      expect(headers).toEqual({ authorization: 'Bearer some-token' });
     });
 
     it('supports multiple challenges in www-authenticate header', async () => {
@@ -334,12 +319,7 @@ describe('modules/datasource/docker/common', () => {
         'my/node/prefix',
       );
 
-      // do not inline, otherwise we get false positive from codeql
-      expect(headers).toMatchInlineSnapshot(`
-        {
-          "authorization": "Bearer abc",
-        }
-      `);
+      expect(headers).toEqual({ authorization: 'Bearer abc' });
     });
   });
 
