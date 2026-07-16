@@ -37,9 +37,11 @@ import { extractRepoProblems } from './common.ts';
 import { configMigration } from './config-migration/index.ts';
 import { ensureDependencyDashboard } from './dependency-dashboard.ts';
 import handleError from './error.ts';
+import { raiseDependencyLookupWarningsIssue } from './error-config.ts';
 import { finalizeRepo } from './finalize/index.ts';
 import { pruneStaleBranches } from './finalize/prune.ts';
 import { initRepo } from './init/index.ts';
+import { ensureLocalPathInputIssues } from './local-path-issue.ts';
 import { OnboardingState } from './onboarding/common.ts';
 import { ensureOnboardingPr } from './onboarding/pr/index.ts';
 import type { ExtractResult } from './process/extract-update.ts';
@@ -168,6 +170,8 @@ export async function renovateRepository(
             packageFiles,
             configMigrationRes,
           );
+          await raiseDependencyLookupWarningsIssue(config, packageFiles);
+          await ensureLocalPathInputIssues(config, packageFiles);
         }
         await finalizeRepo(config, branchList, repoConfig);
         // TODO #22198

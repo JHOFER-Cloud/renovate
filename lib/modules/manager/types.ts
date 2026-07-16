@@ -224,6 +224,7 @@ export interface Upgrade<
   isLockfileUpdate?: boolean;
   currentRawValue?: any;
   depGroup?: string;
+  downloadUrl?: string;
   lockFiles?: string[];
   manager?: string;
   name?: string;
