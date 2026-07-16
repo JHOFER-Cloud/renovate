@@ -98,7 +98,9 @@ describe('modules/platform/github/app-token', () => {
         .post('/app/installations/99/access_tokens')
         .reply(404, { message: 'Not Found' });
 
-      await expect(fetchInstallationToken('test-jwt', 99)).rejects.toThrow();
+      await expect(fetchInstallationToken('test-jwt', 99)).rejects.toThrow(
+        'Request failed with status code 404 (Not Found)',
+      );
     });
   });
 });

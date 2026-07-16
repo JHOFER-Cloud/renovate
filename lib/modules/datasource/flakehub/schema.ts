@@ -1,4 +1,5 @@
 import { z } from 'zod/v4';
+import { Nullish } from '../../../util/schema-utils/index.ts';
 import { MaybeTimestamp } from '../../../util/timestamp.ts';
 
 export const FlakeHubRelease = z.object({
@@ -9,7 +10,7 @@ export const FlakeHubRelease = z.object({
   description: z.string().optional(),
   visibility: z.string().optional(),
   repo_url: z.string().optional(),
-  source_subdirectory: z.string().nullable().optional(),
+  source_subdirectory: Nullish(z.string()),
   mirrored: z.boolean().optional(),
   yanked_at: MaybeTimestamp.nullable(),
   readme: z.string().optional(),
@@ -21,7 +22,7 @@ export const FlakeHubRelease = z.object({
   pretty_download_url: z.string().optional(),
   created_at: MaybeTimestamp.optional(),
   source_github_owner_repo_pair: z.string().optional(),
-  spdx_identifier: z.string().nullable().optional(),
+  spdx_identifier: Nullish(z.string()),
 });
 
 export type FlakeHubRelease = z.infer<typeof FlakeHubRelease>;

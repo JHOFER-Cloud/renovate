@@ -47,7 +47,7 @@ export function rewriteHash(content: string, ctx: RewriteContext): string {
 
   // Contextual replacement. We need at least one attribute name in the path
   // to anchor the search.
-  const anchor = attrPath[attrPath.length - 1];
+  const anchor = attrPath.at(-1);
   if (!anchor) {
     throw new Error('rewriteHash: empty attrPath');
   }
@@ -122,7 +122,7 @@ export function rewriteUrl(content: string, ctx: UrlRewriteContext): string {
     return content.replace(oldUrl, newUrl);
   }
 
-  const anchor = attrPath[attrPath.length - 1];
+  const anchor = attrPath.at(-1);
   if (!anchor) {
     throw new Error('rewriteUrl: empty attrPath');
   }
