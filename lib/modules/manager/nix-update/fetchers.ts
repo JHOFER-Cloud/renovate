@@ -44,7 +44,7 @@ export function classifyFod(
 ): ClassifiedFod {
   const algo = normalizeAlgo(fod.inputs.outputHashAlgo);
   const currentHash = fod.inputs.outputHash || null;
-  const attr = fod.attrPath[fod.attrPath.length - 1];
+  const attr = fod.attrPath.at(-1)!;
 
   // Vendor / dep FODs identified by attribute name.
   if (attr !== 'src') {

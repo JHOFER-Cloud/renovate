@@ -133,9 +133,9 @@ export default async function handleError(
     if (err.message === CONFIG_VALIDATION) {
       delete config.branchList;
       if (config.configValidationError) {
-        logger.error({ error: err }, 'Repository has invalid config');
+        logger.error({ err }, 'Repository has invalid config');
       } else {
-        logger.warn({ error: err }, 'Repository has invalid config');
+        logger.warn({ err }, 'Repository has invalid config');
       }
       await raiseConfigWarningIssue(config, err);
       return err.message;
@@ -149,7 +149,7 @@ export default async function handleError(
     if (err.message === CONFIG_SECRETS_EXPOSED) {
       delete config.branchList;
       logger.warn(
-        { error: err },
+        { err },
         'Repository aborted due to potential secrets exposure',
       );
       return err.message;

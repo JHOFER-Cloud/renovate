@@ -167,7 +167,7 @@ export async function ensureLocalPathInputIssues(
     const openIssue = existing.find(isOpen);
     if (!openIssue && existing.length) {
       // previously closed: reopen only if Renovate closed it as fixed
-      const body = await getIssueBody(existing[existing.length - 1]);
+      const body = await getIssueBody(existing.at(-1)!);
       if (!body?.includes(LOCAL_PATH_FIXED_MARKER)) {
         logger.debug(
           { depName },

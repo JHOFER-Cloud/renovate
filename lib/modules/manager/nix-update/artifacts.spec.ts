@@ -1,3 +1,4 @@
+import { codeBlock } from 'common-tags';
 import type { StatusResult } from 'simple-git';
 import { mockExecSequence } from '~test/exec-util.ts';
 import { env, fs, git, partial } from '~test/util.ts';
@@ -98,7 +99,7 @@ describe('modules/manager/nix-update/artifacts', () => {
 
     mockExecSequence([makeMismatchError(stderrWithGot(NEW_HASH))]);
 
-    const fileContent = `{
+    const fileContent = codeBlock`{
       src = fetchurl {
         url = "https://example.com/foo.tar.gz";
         hash = "sha256-OLDOLDOLDOLDOLDOLDOLDOLDOLDOLDOLDOLDOLDOLDO=";
@@ -162,7 +163,7 @@ describe('modules/manager/nix-update/artifacts', () => {
     const newUrl =
       'https://x-r2.raycast-releases.com/Raycast_Beta_0.62.0.0_bbb_arm64.dmg';
 
-    const fileContent = `{
+    const fileContent = codeBlock`{
       version = "0.62.0.0";
       src = fetchurl {
         url = "${oldUrl}";
@@ -209,7 +210,7 @@ describe('modules/manager/nix-update/artifacts', () => {
       makeMismatchError(stderrWithGot(NEW_VENDOR)),
     ]);
 
-    const fileContent = `{
+    const fileContent = codeBlock`{
       src = fetchFromGitHub {
         owner = "o"; repo = "r"; rev = "v1";
         hash = "sha256-OLDOLDOLDOLDOLDOLDOLDOLDOLDOLDOLDOLDOLDOLDO=";
@@ -314,7 +315,7 @@ describe('modules/manager/nix-update/artifacts', () => {
       partial<StatusResult>({ modified: [], not_added: [] }),
     );
 
-    const fileContent = `{
+    const fileContent = codeBlock`{
       src = fetchurl {
         url = "https://example.com/x";
         hash = "${NEW_HASH}";
@@ -438,7 +439,7 @@ describe('modules/manager/nix-update/artifacts', () => {
     // newPackageFileContent already has NEW hash (existing PR branch). Our
     // extract captured the OLD hash from main. rewriteHash's contextual
     // path would no-op; we should not throw.
-    const content = `{
+    const content = codeBlock`{
       src = fetchurl {
         hash = "${NEW}";
       };

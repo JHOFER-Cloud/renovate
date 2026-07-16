@@ -170,12 +170,17 @@ export async function updateArtifacts({
     } catch (err) {
       // Per-package, per-FOD warning. Renovate posts this in the dependency
       // dashboard's "Repository Problems" so the *user* (not the renovate
-      // admin) knows what to fix. Keep the message specific — package name
-      // and FOD attribute path — so multiple failures don't dedupe to one
-      // generic line.
+      // admin) knows what to fix. The specifics — package name and FOD
+      // attribute path — live in the metadata so each failure stays
+      // distinguishable while the message can still be grouped in metrics.
       logger.warn(
-        { err, attrPath: fod.attrPath, fetcher: fod.fetcherName },
-        `nix-update: failed to prefetch ${attrName} ${fod.attrPath.join('.')} (${fod.fetcherName})`,
+        {
+          err,
+          attrName,
+          attrPath: fod.attrPath,
+          fetcher: fod.fetcherName,
+        },
+        'nix-update: failed to prefetch FOD',
       );
       errors.push({
         fileName: packageFileName,
@@ -286,9 +291,7 @@ function pickSrcExprFor(
   srcHashes: Map<string, string>,
   flakePath: string,
 ): string {
-  const srcFod = allFods.find(
-    (f) => f.attrPath[f.attrPath.length - 1] === 'src',
-  );
+  const srcFod = allFods.find((f) => f.attrPath.at(-1) === 'src');
   if (!srcFod) {
     throw new Error(
       'vendor FOD requires a src to rebuild on the runner side, but package has no src FOD',

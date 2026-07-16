@@ -142,7 +142,9 @@ describe('workers/repository/onboarding/pr/index', () => {
           branches,
         );
         expect(platform.createPr).toHaveBeenCalledTimes(1);
-        expect(platform.createPr.mock.calls[0][0].prBody).toMatchSnapshot();
+        expect(platform.createPr.mock.calls[0][0].prBody).toMatchSnapshot(
+          'PR body',
+        );
       },
     );
 
@@ -167,7 +169,9 @@ describe('workers/repository/onboarding/pr/index', () => {
           branches,
         );
         expect(platform.createPr).toHaveBeenCalledTimes(1);
-        expect(platform.createPr.mock.calls[0][0].prBody).toMatchSnapshot();
+        expect(platform.createPr.mock.calls[0][0].prBody).toMatchSnapshot(
+          'PR body',
+        );
       },
     );
 
@@ -201,7 +205,9 @@ describe('workers/repository/onboarding/pr/index', () => {
         expect(platform.createPr.mock.calls[0][0].prBody).toMatch(
           /repository:test/,
         );
-        expect(platform.createPr.mock.calls[0][0].prBody).toMatchSnapshot();
+        expect(platform.createPr.mock.calls[0][0].prBody).toMatchSnapshot(
+          'PR body',
+        );
       },
     );
 
@@ -553,6 +559,7 @@ describe('workers/repository/onboarding/pr/index', () => {
       beforeEach(() => {
         GlobalConfig.reset();
         scm.deleteBranch.mockResolvedValue();
+        // oxlint-disable-next-line renovate/no-redundant-mock-reset -- discards the once-value queued by the outer beforeEach
         platform.createPr.mockReset();
       });
 

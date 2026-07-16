@@ -99,7 +99,9 @@ describe('workers/repository/update/branch/get-updated', () => {
     it('handles autoreplace failure', async () => {
       config.upgrades.push({ manager: 'html', branchName: '' });
       autoReplace.doAutoReplace.mockResolvedValueOnce(null);
-      await expect(getUpdatedPackageFiles(config)).rejects.toThrow();
+      await expect(getUpdatedPackageFiles(config)).rejects.toThrow(
+        'update-failure',
+      );
     });
 
     it('handles autoreplace branch needs update', async () => {
@@ -136,7 +138,9 @@ describe('workers/repository/update/branch/get-updated', () => {
         manager: 'npm',
         branchName: 'some-branch',
       } satisfies BranchUpgradeConfig);
-      await expect(getUpdatedPackageFiles(config)).rejects.toThrow();
+      await expect(getUpdatedPackageFiles(config)).rejects.toThrow(
+        'update-failure',
+      );
     });
 
     it('handles content change', async () => {
@@ -1697,7 +1701,7 @@ describe('workers/repository/update/branch/get-updated', () => {
           branchName: 'renovate/pin',
           depName: undefined,
         },
-        "No depName found after updating 'composer.json'",
+        'No depName found after updating package file',
       );
     });
 
@@ -1777,7 +1781,7 @@ describe('workers/repository/update/branch/get-updated', () => {
           branchName: 'renovate/pin',
           depName: 'some-dep',
         },
-        "Could not determine resolved version for 'some-dep' after updating 'composer.json'; skipping pending-version check",
+        'Could not determine resolved version after updating package file; skipping pending-version check',
       );
     });
 

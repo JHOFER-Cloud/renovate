@@ -11,10 +11,6 @@ vi.mock('../../../util/fs/index.ts');
 vi.mock('../../../util/exec/index.ts');
 
 describe('modules/manager/nix-update/extract', () => {
-  beforeEach(() => {
-    vi.clearAllMocks();
-  });
-
   it('returns null if no file contains nix-update-script', async () => {
     fs.readLocalFile.mockResolvedValue('{ pname = "foo"; version = "1.0.0"; }');
     const execSnapshots = mockExecAll();
