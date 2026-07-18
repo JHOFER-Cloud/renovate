@@ -806,6 +806,35 @@ Possible values:
   `ssh` uses the repository's `sshUrl` and authenticates via SSH key.
   In fork mode (`forkToken` set with `forkCreation`), `ssh` applies to both the fork's working URL and the upstream URL.
 
+## githubAppCrossOrgTrustGroups
+
+Groups of GitHub orgs whose installation tokens may be used for cross-org dependency lookups.
+Each group is an array of org names; any org in a group may use the tokens of the others when resolving dependencies hosted under those orgs.
+Orgs not listed here never share tokens.
+
+Example:
+
+```json {configType=global}
+{
+  "githubAppCrossOrgTrustGroups": [
+    ["org-a", "org-b"],
+    ["org-c", "org-d"]
+  ]
+}
+```
+
+## githubAppId
+
+GitHub App ID. Use together with `githubAppKey` to let Renovate generate installation tokens automatically, instead of providing a personal access token or installation token directly.
+
+When both `githubAppId` and `githubAppKey` are set, Renovate discovers all installations of the GitHub App and processes repositories from each installation.
+
+## githubAppKey
+
+GitHub App private key (PEM format). Use together with `githubAppId` to let Renovate generate installation tokens automatically.
+
+Store this value securely (e.g. as an environment variable or in a secret manager) rather than in plain text configuration files.
+
 ## `githubTokenWarn`
 
 By default, Renovate logs and displays a warning when the `RENOVATE_GITHUB_COM_TOKEN` is not set.
