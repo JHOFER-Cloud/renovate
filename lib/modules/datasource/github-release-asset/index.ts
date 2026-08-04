@@ -2,6 +2,7 @@ import { logger } from '../../../logger/index.ts';
 import { withCache } from '../../../util/cache/package/with-cache.ts';
 import { getApiBaseUrl, getSourceUrl } from '../../../util/github/url.ts';
 import { GithubHttp } from '../../../util/http/github.ts';
+import { HttpError } from '../../../util/http/index.ts';
 import { regEx } from '../../../util/regex.ts';
 import * as exactVersioning from '../../versioning/exact/index.ts';
 import { Datasource } from '../datasource.ts';
@@ -73,6 +74,11 @@ export class GithubReleaseAssetDatasource extends Datasource {
 
   override readonly defaultRegistryUrls = ['https://github.com'];
 
+  // The asset URL parser is github.com-only, so a GHE registryUrl could never
+  // resolve. Advertise that rather than letting the generated docs promise
+  // custom-registry support that cannot work.
+  override readonly customRegistrySupport = false;
+
   override readonly defaultVersioning = exactVersioning.id;
 
   override readonly releaseTimestampSupport = false;
@@ -131,13 +137,19 @@ export class GithubReleaseAssetDatasource extends Datasource {
       ({ body: release } =
         await this.http.getJsonUnchecked<GithubRelease>(url));
     } catch (err) {
-      // Rolling releases are routinely deleted and recreated by CI, so a 404
-      // is an expected transient state rather than a datasource failure.
-      logger.debug(
-        { err, tag: parsed.tag, repo: parsed.repo },
-        'github-release-asset: could not fetch release',
-      );
-      return null;
+      // Rolling releases are routinely deleted and recreated by CI, so a 404 is
+      // an expected transient state rather than a datasource failure. Anything
+      // else — rate limiting, 5xx, ExternalHostError — must propagate: swallowing
+      // it would cache a null for the whole TTL and report "could not determine
+      // new digest" instead of a host error the admin can act on.
+      if (err instanceof HttpError && err.response?.statusCode === 404) {
+        logger.debug(
+          { tag: parsed.tag, repo: parsed.repo },
+          'github-release-asset: release not found',
+        );
+        return null;
+      }
+      throw err;
     }
 
     const asset = release.assets?.find((a) => a.name === parsed.assetName);

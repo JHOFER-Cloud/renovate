@@ -92,6 +92,19 @@ describe('modules/datasource/github-release-asset/index', () => {
       expect(await ds.getDigest({ packageName }, 'tip')).toBeNull();
     });
 
+    it('propagates a non-404 host error instead of caching a null', async () => {
+      // Swallowing this would persist `null` for the whole cache TTL and report
+      // "could not determine new digest" instead of an actionable host error.
+      httpMock
+        .scope(apiBaseUrl)
+        .get('/repos/ghostty-org/ghostty/releases/tags/tip')
+        .reply(403);
+
+      await expect(ds.getDigest({ packageName }, 'tip')).rejects.toThrow(
+        'Request failed with status code 403',
+      );
+    });
+
     it('returns null when the asset has no digest', async () => {
       httpMock
         .scope(apiBaseUrl)

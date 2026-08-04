@@ -138,7 +138,7 @@ stdenvNoCC.mkDerivation {
 }
 ```
 
-For artifacts hosted elsewhere, set `passthru.renovate.datasource` to a customDatasource whose version is the artifact's `sha256:<hex>` digest. Either way the package's `version` attribute is never rewritten — only the hash moves.
+Artifacts hosted elsewhere are **not** supported: `passthru.renovate.datasource` has no effect on `--version=skip` packages, because a customDatasource cannot implement the `getDigest` call this relies on. Such packages are skipped with a warning. The package's `version` attribute is never rewritten — only the hash moves.
 
 ### Limitations
 

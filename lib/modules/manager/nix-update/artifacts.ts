@@ -35,6 +35,7 @@ export async function updateArtifacts({
         attrName?: string;
         system?: string;
         pname?: string | null;
+        isBranchTracked?: boolean;
         fods?: FodInfo[];
       }
     | undefined;
@@ -42,6 +43,7 @@ export async function updateArtifacts({
   const attrName = md?.attrName;
   const pkgSystem = md?.system;
   const pname = md?.pname ?? null;
+  const isBranchTracked = md?.isBranchTracked === true;
   const fods = md?.fods ?? [];
 
   if (!attrName || !pkgSystem || !fods.length) {
@@ -130,7 +132,17 @@ export async function updateArtifacts({
     // ours intentionally does nothing when currentValue === newValue (both are
     // the branch name), so this is the only place the new commit can reach the
     // file.
-    if (dep.currentDigest && newDigest && dep.currentDigest !== newDigest) {
+    //
+    // Gate on isBranchTracked, NOT on currentDigest alone: `--version=skip`
+    // deps also carry a digest (the artifact's content hash), but their src is
+    // a plain fetchurl with no `rev` to rewrite — for those the hash rewrite in
+    // the FOD loop below is the whole update.
+    if (
+      isBranchTracked &&
+      dep.currentDigest &&
+      newDigest &&
+      dep.currentDigest !== newDigest
+    ) {
       const srcFod = bumpedFods.find((fod) => fod.attrPath.at(-1) === 'src');
       if (srcFod) {
         content = rewriteRev(content, {
@@ -150,6 +162,20 @@ export async function updateArtifacts({
       fileName: packageFileName,
       stderr: err instanceof Error ? err.message : String(err),
     });
+  }
+
+  // Bail before the prefetch loop: the rewrites above failed, so whatever the
+  // nix-build produced would be discarded by the early return at the end
+  // anyway. Vendor prefetches cost minutes of runner time.
+  if (errors.length) {
+    return [
+      {
+        artifactError: {
+          fileName: packageFileName,
+          stderr: errors.map((e) => e.stderr).join('\n'),
+        },
+      },
+    ];
   }
 
   // Classify all FODs. Hard-fail surface area is the classifier — anything
@@ -296,15 +322,27 @@ async function bumpUnstableDate(
   if (!datasource || !packageName || !currentValue) {
     return content;
   }
-  const releases = await getPkgReleases({
-    datasource,
-    packageName,
-    currentValue,
-    versioning: dep.versioning,
-  });
-  const timestamp = releases?.releases.find(
-    (r) => r.version === currentValue,
-  )?.releaseTimestamp;
+  let timestamp: string | null | undefined;
+  try {
+    const releases = await getPkgReleases({
+      datasource,
+      packageName,
+      currentValue,
+      versioning: dep.versioning,
+    });
+    timestamp = releases?.releases.find(
+      (r) => r.version === currentValue,
+    )?.releaseTimestamp;
+  } catch (err) {
+    // getPkgReleases re-throws ExternalHostError, rate limiting and 5xx. The
+    // date is cosmetic — never let a transient lookup failure discard an
+    // otherwise-complete rev + hash update.
+    logger.debug(
+      { err, packageName },
+      'nix-update: could not resolve commit date, leaving unstable date as-is',
+    );
+    return content;
+  }
   const newDate = /^(\d{4}-\d{2}-\d{2})/.exec(timestamp ?? '');
   return newDate ? rewriteUnstableDate(content, newDate[1]) : content;
 }

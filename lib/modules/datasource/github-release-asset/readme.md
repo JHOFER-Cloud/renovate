@@ -10,9 +10,8 @@ release whose _tag stays the same_ while the uploaded bytes change — the
 `tip` / `nightly` / `edge` pattern, where a release is re-published on every
 upstream commit.
 
-This datasource fills that gap: it returns the asset's digest as the version,
-so a content change surfaces as an ordinary version change and drives a normal
-update.
+This datasource fills that gap by tracking the asset's digest, so a content
+change drives an ordinary digest update.
 
 ## packageName format
 
