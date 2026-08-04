@@ -56,6 +56,10 @@ the field is absent — or the release 404s, which is routine for rolling
 releases that CI deletes and recreates — the datasource returns `null` so
 nothing is proposed.
 
+Any other failure (rate limiting, 5xx, `ExternalHostError`) propagates rather
+than being reported as "no digest". Swallowing those would cache a `null` for
+the full TTL and hide a host problem the administrator can act on.
+
 ## Used by
 
 The [`nix-update` manager](../../manager/nix-update/index.md) selects this

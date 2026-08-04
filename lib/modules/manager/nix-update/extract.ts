@@ -498,7 +498,9 @@ export async function extractAllPackageFiles(
       }
       const currentDigest = sriToHexDigest(srcFod.inputs.outputHash);
       if (!currentDigest) {
-        logger.debug(
+        // warn, not debug: like the other two bail-outs above this silently
+        // disables updates for the package, so it needs to be visible.
+        logger.warn(
           { attrName },
           'nix-update: --version=skip package has no usable sha256 src hash — skipping',
         );

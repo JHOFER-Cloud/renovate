@@ -138,7 +138,9 @@ stdenvNoCC.mkDerivation {
 }
 ```
 
-Artifacts hosted elsewhere are **not** supported: `passthru.renovate.datasource` has no effect on `--version=skip` packages, because a customDatasource cannot implement the `getDigest` call this relies on. Such packages are skipped with a warning. The package's `version` attribute is never rewritten — only the hash moves.
+Artifacts hosted elsewhere are **not** supported today: `passthru.renovate.datasource` is ignored for `--version=skip` packages. The manager selects `github-release-asset` unconditionally and skips any `src` that isn't a parseable GitHub release-asset URL. This is a wiring limitation rather than an architectural one — Renovate can drive digest updates from a customDatasource — so it could be extended if a non-GitHub case comes up.
+
+The package's `version` attribute is never rewritten; only the hash moves.
 
 ### Limitations
 
