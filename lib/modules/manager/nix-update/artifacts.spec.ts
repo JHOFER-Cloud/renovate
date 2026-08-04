@@ -7,6 +7,7 @@ import type {
   InternalGlobalConfigOptions,
   RepoGlobalConfig,
 } from '../../../config/types.ts';
+import type { Timestamp } from '../../../util/timestamp.ts';
 import type { UpdateArtifactsConfig } from '../types.ts';
 import { updateArtifacts } from './artifacts.ts';
 import type { FodInfo } from './extract.ts';
@@ -14,6 +15,7 @@ import { _resetPrefetchCacheForTesting } from './prefetch.ts';
 
 vi.mock('../../../util/exec/env.ts');
 vi.mock('../../../util/fs/index.ts');
+vi.mock('../../datasource/index.ts');
 
 const adminConfig: RepoGlobalConfig & InternalGlobalConfigOptions = {
   localDir: '/tmp/repo',
@@ -415,6 +417,8 @@ describe('modules/manager/nix-update/artifacts', () => {
             attrName: 'x',
             system: 'x86_64-linux',
             pname: 'x',
+            // No datasource on the dep, so the commit-date lookup is skipped.
+            isBranchTracked: true,
             fods: [
               makeFod(['src'], {
                 url: 'https://github.com/o/x.git',
@@ -432,6 +436,259 @@ describe('modules/manager/nix-update/artifacts', () => {
     const cmd = snapshots[0].cmd;
     expect(cmd).toContain('rev = "newcommitsha2"');
     expect(cmd).not.toContain('oldcommitsha1');
+  });
+
+  it('writes the new commit into the file for branch-tracked packages', async () => {
+    git.getRepoStatus.mockResolvedValue(
+      partial<StatusResult>({ modified: [], not_added: [] }),
+    );
+    // Capture what artifacts writes back so we can assert on it.
+    let writtenContent: string | undefined;
+    const { writeLocalFile, readLocalFile } =
+      await import('../../../util/fs/index.ts');
+    vi.mocked(writeLocalFile).mockImplementation((_path, contents) => {
+      writtenContent = contents as string;
+      return Promise.resolve();
+    });
+    vi.mocked(readLocalFile).mockImplementation(() =>
+      Promise.resolve(writtenContent ?? ''),
+    );
+
+    const NEW = 'sha256-NEWNEWNEWNEWNEWNEWNEWNEWNEWNEWNEWNEWNEWNEW=';
+    mockExecSequence([makeMismatchError(stderrWithGot(NEW))]);
+
+    // The unstable date comes from the datasource, not the upgrade: digest
+    // updates never carry a releaseTimestamp.
+    const { getPkgReleases } = await import('../../datasource/index.ts');
+    vi.mocked(getPkgReleases).mockResolvedValue({
+      releases: [
+        {
+          version: 'main',
+          releaseTimestamp: '2026-06-30T17:00:31.000Z' as Timestamp,
+        },
+      ],
+    });
+
+    const fileContent = codeBlock`{
+      version = "0-unstable-2025-11-17";
+      src = fetchFromGitHub {
+        owner = "acsandmann"; repo = "aerospace-swipe";
+        rev = "oldcommitsha1";
+        hash = "sha256-OLDOLDOLDOLDOLDOLDOLDOLDOLDOLDOLDOLDOLDOLDO=";
+      };
+    }`;
+
+    await updateArtifacts({
+      packageFileName: 'packages/aerospace-swipe/default.nix',
+      updatedDeps: [
+        {
+          depName: 'aerospace-swipe',
+          datasource: 'github-digest',
+          packageName: 'acsandmann/aerospace-swipe',
+          currentValue: 'main',
+          newValue: 'main',
+          currentDigest: 'oldcommitsha1',
+          newDigest: 'newcommitsha2',
+          managerData: {
+            attrName: 'aerospace-swipe',
+            system: 'aarch64-darwin',
+            pname: 'aerospace-swipe',
+            isBranchTracked: true,
+            fods: [
+              makeFod(['src'], {
+                url: 'https://github.com/acsandmann/aerospace-swipe/archive/oldcommitsha1.tar.gz',
+                rev: 'oldcommitsha1',
+                outputHashMode: 'recursive',
+              }),
+            ],
+          },
+        },
+      ],
+      newPackageFileContent: fileContent,
+      config,
+    });
+
+    // Both the commit and the hash must land in the file — pairing the newly
+    // computed hash with the old rev is a guaranteed build failure.
+    expect(writtenContent).toContain('rev = "newcommitsha2"');
+    expect(writtenContent).not.toContain('oldcommitsha1');
+    expect(writtenContent).toContain(NEW);
+    // ...and the nixpkgs unstable date follows the commit date.
+    expect(writtenContent).toContain('version = "0-unstable-2026-06-30"');
+  });
+
+  it('rewrites only the hash for --version=skip packages', async () => {
+    // skip deps carry a currentDigest too (the artifact's content hash), but
+    // their src is a plain fetchurl with no `rev` anywhere. Gating the rev
+    // rewrite on the digest alone made every one of these updates fail.
+    git.getRepoStatus.mockResolvedValue(
+      partial<StatusResult>({ modified: [], not_added: [] }),
+    );
+    let writtenContent: string | undefined;
+    const { writeLocalFile, readLocalFile } =
+      await import('../../../util/fs/index.ts');
+    vi.mocked(writeLocalFile).mockImplementation((_path, contents) => {
+      writtenContent = contents as string;
+      return Promise.resolve();
+    });
+    vi.mocked(readLocalFile).mockImplementation(() =>
+      Promise.resolve(writtenContent ?? ''),
+    );
+
+    const NEW = 'sha256-NEWNEWNEWNEWNEWNEWNEWNEWNEWNEWNEWNEWNEWNEW=';
+    mockExecSequence([makeMismatchError(stderrWithGot(NEW))]);
+
+    const url =
+      'https://github.com/ghostty-org/ghostty/releases/download/tip/ghostty-macos-universal.zip';
+    const fileContent = codeBlock`{
+      version = "tip";
+      src = fetchurl {
+        url = "${url}";
+        hash = "sha256-OLDOLDOLDOLDOLDOLDOLDOLDOLDOLDOLDOLDOLDOLDO=";
+      };
+    }`;
+
+    const result = await updateArtifacts({
+      packageFileName: 'packages/ghostty-tip/default.nix',
+      updatedDeps: [
+        {
+          depName: 'ghostty-tip',
+          currentValue: 'tip',
+          newValue: 'tip',
+          currentDigest: `sha256:${'a'.repeat(64)}`,
+          newDigest: `sha256:${'b'.repeat(64)}`,
+          managerData: {
+            attrName: 'ghostty-tip',
+            system: 'aarch64-darwin',
+            pname: 'ghostty-tip',
+            isBranchTracked: false,
+            fods: [makeFod(['src'], { url, outputHashMode: 'flat' })],
+          },
+        },
+      ],
+      newPackageFileContent: fileContent,
+      config,
+    });
+
+    expect(result?.[0].artifactError).toBeUndefined();
+    expect(writtenContent).toContain(NEW);
+    // The frozen version attribute is left alone.
+    expect(writtenContent).toContain('version = "tip"');
+  });
+
+  it('keeps the rev update when the commit-date lookup fails', async () => {
+    // getPkgReleases re-throws host errors; the date is cosmetic and must never
+    // discard an otherwise-complete rev + hash update.
+    git.getRepoStatus.mockResolvedValue(
+      partial<StatusResult>({ modified: [], not_added: [] }),
+    );
+    let writtenContent: string | undefined;
+    const { writeLocalFile, readLocalFile } =
+      await import('../../../util/fs/index.ts');
+    vi.mocked(writeLocalFile).mockImplementation((_path, contents) => {
+      writtenContent = contents as string;
+      return Promise.resolve();
+    });
+    vi.mocked(readLocalFile).mockImplementation(() =>
+      Promise.resolve(writtenContent ?? ''),
+    );
+
+    const { getPkgReleases } = await import('../../datasource/index.ts');
+    vi.mocked(getPkgReleases).mockRejectedValue(
+      new Error('external-host-error'),
+    );
+
+    const NEW = 'sha256-NEWNEWNEWNEWNEWNEWNEWNEWNEWNEWNEWNEWNEWNEW=';
+    mockExecSequence([makeMismatchError(stderrWithGot(NEW))]);
+
+    const result = await updateArtifacts({
+      packageFileName: 'packages/aerospace-swipe/default.nix',
+      updatedDeps: [
+        {
+          depName: 'aerospace-swipe',
+          datasource: 'github-digest',
+          packageName: 'acsandmann/aerospace-swipe',
+          currentValue: 'main',
+          newValue: 'main',
+          currentDigest: 'oldcommitsha1',
+          newDigest: 'newcommitsha2',
+          managerData: {
+            attrName: 'aerospace-swipe',
+            system: 'aarch64-darwin',
+            pname: 'aerospace-swipe',
+            isBranchTracked: true,
+            fods: [
+              makeFod(['src'], {
+                url: 'https://github.com/acsandmann/aerospace-swipe.git',
+                rev: 'oldcommitsha1',
+                outputHashMode: 'recursive',
+              }),
+            ],
+          },
+        },
+      ],
+      newPackageFileContent: codeBlock`{
+        version = "0-unstable-2025-11-17";
+        src = fetchgit {
+          rev = "oldcommitsha1";
+          hash = "sha256-OLDOLDOLDOLDOLDOLDOLDOLDOLDOLDOLDOLDOLDOLDO=";
+        };
+      }`,
+      config,
+    });
+
+    expect(result?.[0].artifactError).toBeUndefined();
+    expect(writtenContent).toContain('rev = "newcommitsha2"');
+    expect(writtenContent).toContain(NEW);
+    // Date left stale rather than the whole update being thrown away.
+    expect(writtenContent).toContain('version = "0-unstable-2025-11-17"');
+  });
+
+  it('reports a failed rev rewrite as an artifactError instead of throwing', async () => {
+    // These rewrites run outside the per-FOD loop; if they threw,
+    // getUpdatedPackageFiles() would fail for the whole branch instead of
+    // surfacing a per-package problem.
+    git.getRepoStatus.mockResolvedValue(
+      partial<StatusResult>({ modified: [], not_added: [] }),
+    );
+    fs.readLocalFile.mockResolvedValue('unchanged');
+    mockExecSequence([
+      makeMismatchError(
+        stderrWithGot('sha256-NEWNEWNEWNEWNEWNEWNEWNEWNEWNEWNEWNEWNEWNEW='),
+      ),
+    ]);
+
+    const result = await updateArtifacts({
+      packageFileName: 'packages/x/default.nix',
+      updatedDeps: [
+        {
+          depName: 'x',
+          currentValue: 'main',
+          newValue: 'main',
+          currentDigest: 'oldcommitsha1',
+          newDigest: 'newcommitsha2',
+          managerData: {
+            attrName: 'x',
+            system: 'x86_64-linux',
+            pname: 'x',
+            isBranchTracked: true,
+            fods: [
+              makeFod(['src'], {
+                url: 'https://github.com/o/x.git',
+                rev: 'oldcommitsha1',
+                outputHashMode: 'recursive',
+              }),
+            ],
+          },
+        },
+      ],
+      // No `rev` binding anywhere, and the old sha is absent — both the fast
+      // path and the contextual scan fail, so rewriteRev throws.
+      newPackageFileContent: `{ other = "nothing to anchor on"; }`,
+      config,
+    });
+
+    expect(result?.[0].artifactError?.stderr).toMatch(/Could not locate rev/);
   });
 
   it('skips rewrite when file already has new hash (existing branch reuse)', async () => {

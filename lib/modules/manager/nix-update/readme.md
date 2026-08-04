@@ -114,11 +114,41 @@ src = fetchurl {
 
 This works alongside `passthru.renovate.datasource` — same opt-in surface; only the customDatasource transform changes.
 
+#### Rolling artifacts (`--version=skip`)
+
+Some packages pin a tag that never moves while the bytes behind it do — a `tip` or `nightly` release that is force-pushed on every upstream commit. `nix-update` models this as `--version=skip`: never touch the version, just re-fetch the hash.
+
+Renovate needs _something_ to change before it will open a PR, and here the only thing that changes is the artifact's content. These packages are therefore modelled exactly like a Docker `:latest` pin: `currentValue` is the frozen **tag**, and `currentDigest` is the artifact's content hash — converted from nix's SRI encoding (`sha256-<base64>`) to the hex form GitHub reports (`sha256:<hex>`); they are the same 32 bytes. The update then travels Renovate's digest path, which terminates on its own: once `updateArtifacts` writes the new hash back, `currentDigest === newDigest` and nothing further is proposed.
+
+Only a **flat** hash works — `fetchurl`, not `fetchzip`. A recursive (NAR) hash describes the unpacked tree and could never equal the digest GitHub reports for the file, so such packages are skipped with a warning rather than looping forever.
+
+When the `src` is a GitHub release asset this needs **no configuration at all** — the manager selects the [`github-release-asset`](../../datasource/github-release-asset/index.md) datasource, which reports the asset's digest for a fixed tag:
+
+```nix
+stdenvNoCC.mkDerivation {
+  pname = "ghostty-tip";
+  version = "tip";
+
+  src = fetchurl {
+    url = "https://github.com/ghostty-org/ghostty/releases/download/tip/ghostty-macos-universal.zip";
+    hash = "sha256-...";
+  };
+
+  passthru.updateScript = nix-update-script { extraArgs = [ "--version=skip" ]; };
+}
+```
+
+Artifacts hosted elsewhere are **not** supported today: `passthru.renovate.datasource` is ignored for `--version=skip` packages. The manager selects `github-release-asset` unconditionally and skips any `src` that isn't a parseable GitHub release-asset URL. This is a wiring limitation rather than an architectural one — Renovate can drive digest updates from a customDatasource — so it could be extended if a non-GitHub case comes up.
+
+The package's `version` attribute is never rewritten; only the hash moves.
+
 ### Limitations
 
 - Non-flake repos are not supported
 - Only packages with `passthru.updateScript = nix-update-script { ... }` are detected; other update scripts (e.g., `gitUpdater`) are ignored
 - For branch-tracked packages (`--version=branch`), the branch name defaults to `main` when not explicitly specified via `--version=branch:<name>`. Repos using `master` or other default branches should set the explicit form in their `updateScript`
+- For branch-tracked packages a nixpkgs-style `version = "<base>-unstable-YYYY-MM-DD"` date is bumped from the commit date, which the manager resolves through the datasource (`github-digest` derives its release timestamp from it). Digest updates carry no timestamp of their own, so this costs one extra — already cached — datasource lookup. When the date can't be established it is left untouched: the `rev` and hash still update, so the package builds either way. Note the date is derived in UTC, so it can differ by a day from what the `nix-update` CLI writes (which uses the committer's offset)
+- `--version=skip` is supported only for GitHub release assets fetched with a flat hash (`fetchurl`); anything else is skipped with a warning, since there is no way to observe the content changing
 - Custom out-of-nixpkgs fetchers (a `fetchMyThing` defined in your own flake) won't be recognised; the manager will emit an `artifactError` naming the FOD attribute path so you can either rename to a standard fetcher or open an issue
 - The flake's `nixpkgs` input is reused for runner-side hash computation. If your flake names it differently, the manager falls back to the host's `<nixpkgs>` channel, which may diverge from your pinned nixpkgs and produce different vendor hashes for some ecosystems
 - **Custom builder overrides** (e.g. a package that wraps `buildGoModule` to inject extra steps into the vendor build) are not faithfully reproduced. The manager calls plain `runnerPkgs.buildGoModule` / `runnerPkgs.rustPlatform.buildRustPackage` / etc., not the user's wrapper. If your `goModules`/`cargoDeps` build phase is non-standard, the computed hash may differ from what `nix build .#yourPkg` would produce. Open an issue if you hit this

@@ -5,6 +5,7 @@ import {
   deriveExtractVersion,
   extractAllPackageFiles,
   packageFileFromPosition,
+  sriToHexDigest,
 } from './extract.ts';
 
 vi.mock('../../../util/fs/index.ts');
@@ -917,5 +918,160 @@ describe('modules/manager/nix-update/extract', () => {
     expect(
       deriveExtractVersion(['--version-regex', '(?:prefix-)?([0-9.]+)']),
     ).toBe('(?:prefix-)?(?<version>[0-9.]+)');
+  });
+});
+
+describe('modules/manager/nix-update/extract', () => {
+  describe('sriToHexDigest', () => {
+    it('converts an SRI hash to the hex form content APIs report', () => {
+      // Verified against the real artifact: nix's flat fetchurl hash and
+      // GitHub's asset digest are the same 32 bytes, base64 vs hex.
+      expect(
+        sriToHexDigest('sha256-W3xQjkMsiMgiZchMLxWlQw39HKaL8WdbLhZsz9eCmCU='),
+      ).toBe(
+        'sha256:5b7c508e432c88c82265c84c2f15a5430dfd1ca68bf1675b2e166ccfd7829825',
+      );
+    });
+
+    it('returns null for null, empty or non-SRI input', () => {
+      expect(sriToHexDigest(null)).toBeNull();
+      expect(sriToHexDigest('')).toBeNull();
+      expect(sriToHexDigest('not-a-hash')).toBeNull();
+      expect(sriToHexDigest('md5-abc')).toBeNull();
+    });
+
+    it('rejects algorithms GitHub never reports', () => {
+      // Asset digests are always sha256; anything else could only ever produce
+      // a permanent mismatch, so refuse it rather than loop forever.
+      expect(sriToHexDigest('sha512-YWJj')).toBeNull();
+      expect(sriToHexDigest('sha1-YWJj')).toBeNull();
+    });
+
+    it('rejects a hash that does not decode to 32 bytes', () => {
+      // Buffer.from silently tolerates malformed base64, so length is the only
+      // reliable validation.
+      expect(sriToHexDigest('sha256-aaa=')).toBeNull();
+      expect(sriToHexDigest('sha256-!!!!')).toBeNull();
+    });
+
+    it('rejects nix base32 and legacy hex hashes', () => {
+      expect(sriToHexDigest('0'.repeat(52))).toBeNull();
+      expect(sriToHexDigest('a'.repeat(64))).toBeNull();
+    });
+  });
+
+  describe('--version=skip', () => {
+    const srcUrl =
+      'https://github.com/ghostty-org/ghostty/releases/download/tip/ghostty-macos-universal.zip';
+    const sri = 'sha256-W3xQjkMsiMgiZchMLxWlQw39HKaL8WdbLhZsz9eCmCU=';
+    const hex =
+      'sha256:5b7c508e432c88c82265c84c2f15a5430dfd1ca68bf1675b2e166ccfd7829825';
+
+    function skipPackage(overrides: Record<string, unknown> = {}) {
+      return {
+        'ghostty-tip': {
+          system: 'aarch64-darwin',
+          version: 'tip',
+          pname: 'ghostty-tip',
+          srcUrl,
+          srcRev: null,
+          updateScriptArgs: ['--version=skip'],
+          fods: [
+            {
+              attrPath: ['src'],
+              inputs: {
+                outputHash: sri,
+                outputHashMode: 'flat',
+                url: srcUrl,
+              },
+            },
+          ],
+          ...overrides,
+        },
+      };
+    }
+
+    async function extractSkip(overrides: Record<string, unknown> = {}) {
+      fs.readLocalFile
+        .mockResolvedValueOnce(
+          'passthru.updateScript = nix-update-script {extraArgs = ["--version=skip"];};',
+        )
+        .mockResolvedValueOnce('{ outputs = ...; }');
+
+      const { exec } = await import('../../../util/exec/index.ts');
+      vi.mocked(exec).mockResolvedValueOnce({
+        stdout: JSON.stringify(skipPackage(overrides)),
+        stderr: '',
+      });
+
+      return await extractAllPackageFiles({}, [
+        'packages/ghostty-tip/default.nix',
+      ]);
+    }
+
+    it('pins the tag and tracks the artifact digest', async () => {
+      const result = await extractSkip();
+
+      // Modelled like a Docker `:latest` pin — the tag is the frozen value and
+      // the digest is what moves. Tracking the digest as the *version* instead
+      // would never produce an update, because `exact` versioning hardwires
+      // isGreaterThan to false.
+      expect(result?.[0].deps[0]).toMatchObject({
+        depName: 'ghostty-tip',
+        datasource: 'github-release-asset',
+        packageName: srcUrl,
+        currentValue: 'tip',
+        currentDigest: hex,
+        versioning: 'exact',
+      });
+    });
+
+    it('skips a recursive (NAR) src hash', async () => {
+      // A recursive hash describes the unpacked tree, so it can never equal
+      // the digest GitHub reports for the artifact.
+      const result = await extractSkip({
+        fods: [
+          {
+            attrPath: ['src'],
+            inputs: {
+              outputHash: sri,
+              outputHashMode: 'recursive',
+              url: srcUrl,
+            },
+          },
+        ],
+      });
+
+      expect(result).toBeNull();
+    });
+
+    it('skips when the src is not a GitHub release asset', async () => {
+      const result = await extractSkip({
+        srcUrl: 'https://github.com/o/r/archive/refs/heads/main.tar.gz',
+      });
+
+      expect(result).toBeNull();
+    });
+
+    it('skips when the src hash is not usable sha256', async () => {
+      const result = await extractSkip({
+        fods: [
+          {
+            attrPath: ['src'],
+            inputs: {
+              outputHash: 'sha512-YWJj',
+              outputHashMode: 'flat',
+              url: srcUrl,
+            },
+          },
+        ],
+      });
+
+      expect(result).toBeNull();
+    });
+
+    it('skips when there is no src FOD at all', async () => {
+      expect(await extractSkip({ fods: [] })).toBeNull();
+    });
   });
 });

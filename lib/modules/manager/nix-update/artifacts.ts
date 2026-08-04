@@ -6,15 +6,22 @@ import { readLocalFile, writeLocalFile } from '../../../util/fs/index.ts';
 import { getGitEnvironmentVariables } from '../../../util/git/auth.ts';
 import { getRepoStatus } from '../../../util/git/index.ts';
 import * as hostRules from '../../../util/host-rules.ts';
+import { getPkgReleases } from '../../datasource/index.ts';
 import type {
   ArtifactError,
   UpdateArtifact,
   UpdateArtifactsResult,
+  Upgrade,
 } from '../types.ts';
 import type { FodInfo } from './extract.ts';
 import { buildKnownSrcExpr, classifyFod } from './fetchers.ts';
 import { prefetch } from './prefetch.ts';
-import { rewriteHash, rewriteUrl } from './rewrite.ts';
+import {
+  rewriteHash,
+  rewriteRev,
+  rewriteUnstableDate,
+  rewriteUrl,
+} from './rewrite.ts';
 
 export async function updateArtifacts({
   packageFileName,
@@ -28,6 +35,7 @@ export async function updateArtifacts({
         attrName?: string;
         system?: string;
         pname?: string | null;
+        isBranchTracked?: boolean;
         fods?: FodInfo[];
       }
     | undefined;
@@ -35,6 +43,7 @@ export async function updateArtifacts({
   const attrName = md?.attrName;
   const pkgSystem = md?.system;
   const pname = md?.pname ?? null;
+  const isBranchTracked = md?.isBranchTracked === true;
   const fods = md?.fods ?? [];
 
   if (!attrName || !pkgSystem || !fods.length) {
@@ -93,22 +102,80 @@ export async function updateArtifacts({
   // hash in the DMG filename. Override the src FOD's url before classify so
   // the prefetch hits the right artifact, and rewrite the .nix file to keep
   // the literal url in sync.
-  const downloadUrl = dep.downloadUrl;
-  if (downloadUrl) {
-    for (const fod of bumpedFods) {
-      if (fod.attrPath.length === 1 && fod.attrPath[0] === 'src') {
-        const oldUrl = fod.inputs.url;
-        if (oldUrl && oldUrl !== downloadUrl) {
-          content = rewriteUrl(content, {
-            attrPath: fod.attrPath,
-            oldUrl,
-            newUrl: downloadUrl,
-          });
-          fod.inputs.url = downloadUrl;
+  const errors: ArtifactError[] = [];
+
+  // These rewrites run before the prefetch loop so a failure aborts before we
+  // spend nix-build time — but they must not throw out of updateArtifacts, or
+  // getUpdatedPackageFiles() fails for the whole branch instead of surfacing a
+  // per-package problem. Collect failures the same way the FOD loop does.
+  try {
+    const downloadUrl = dep.downloadUrl;
+    if (downloadUrl) {
+      for (const fod of bumpedFods) {
+        if (fod.attrPath.length === 1 && fod.attrPath[0] === 'src') {
+          const oldUrl = fod.inputs.url;
+          if (oldUrl && oldUrl !== downloadUrl) {
+            content = rewriteUrl(content, {
+              attrPath: fod.attrPath,
+              oldUrl,
+              newUrl: downloadUrl,
+            });
+            fod.inputs.url = downloadUrl;
+          }
+          break;
         }
-        break;
       }
     }
+
+    // Branch-tracked packages pin a literal commit in `rev`. Renovate's
+    // auto-replace is skipped for managers that define `updateDependency`, and
+    // ours intentionally does nothing when currentValue === newValue (both are
+    // the branch name), so this is the only place the new commit can reach the
+    // file.
+    //
+    // Gate on isBranchTracked, NOT on currentDigest alone: `--version=skip`
+    // deps also carry a digest (the artifact's content hash), but their src is
+    // a plain fetchurl with no `rev` to rewrite — for those the hash rewrite in
+    // the FOD loop below is the whole update.
+    if (
+      isBranchTracked &&
+      dep.currentDigest &&
+      newDigest &&
+      dep.currentDigest !== newDigest
+    ) {
+      const srcFod = bumpedFods.find((fod) => fod.attrPath.at(-1) === 'src');
+      if (srcFod) {
+        content = rewriteRev(content, {
+          attrPath: srcFod.attrPath,
+          oldRev: dep.currentDigest,
+          newRev: newDigest,
+        });
+      }
+      content = await bumpUnstableDate(content, dep);
+    }
+  } catch (err) {
+    logger.warn(
+      { err, attrName },
+      'nix-update: failed to rewrite package metadata',
+    );
+    errors.push({
+      fileName: packageFileName,
+      stderr: err instanceof Error ? err.message : String(err),
+    });
+  }
+
+  // Bail before the prefetch loop: the rewrites above failed, so whatever the
+  // nix-build produced would be discarded by the early return at the end
+  // anyway. Vendor prefetches cost minutes of runner time.
+  if (errors.length) {
+    return [
+      {
+        artifactError: {
+          fileName: packageFileName,
+          stderr: errors.map((e) => e.stderr).join('\n'),
+        },
+      },
+    ];
   }
 
   // Classify all FODs. Hard-fail surface area is the classifier — anything
@@ -118,7 +185,6 @@ export async function updateArtifacts({
   );
   // Run src first; vendor builders need src already in the runner's store.
   classified.sort((a, b) => Number(b.isSrc) - Number(a.isSrc));
-  const errors: ArtifactError[] = [];
   // Map src fods (by attrPath joined) → known new hash, for vendor srcExpr.
   const srcHashes = new Map<string, string>();
 
@@ -233,6 +299,52 @@ export async function updateArtifacts({
       },
     })),
   );
+}
+
+// nixpkgs encodes the pinned commit's date in the version of branch-tracked
+// packages (`<base>-unstable-YYYY-MM-DD`).
+//
+// The date can't come off the upgrade: branch-tracked packages only ever
+// produce a *digest* update, and Renovate builds those as a bare
+// `{ updateType, newValue, newDigest }` — `releaseTimestamp` is set in
+// `generateUpdate()`, which digest updates never reach. So resolve it through
+// the datasource layer instead, which is also where the commit date legitimately
+// lives (`github-digest` derives its release timestamp from it). The result is
+// already cached — the same lookup ran for this dep earlier in the run.
+//
+// Returns content unchanged whenever the date can't be established; a stale
+// date is cosmetic, a wrong one is not.
+async function bumpUnstableDate(
+  content: string,
+  dep: Upgrade,
+): Promise<string> {
+  const { datasource, packageName, currentValue } = dep;
+  if (!datasource || !packageName || !currentValue) {
+    return content;
+  }
+  let timestamp: string | null | undefined;
+  try {
+    const releases = await getPkgReleases({
+      datasource,
+      packageName,
+      currentValue,
+      versioning: dep.versioning,
+    });
+    timestamp = releases?.releases.find(
+      (r) => r.version === currentValue,
+    )?.releaseTimestamp;
+  } catch (err) {
+    // getPkgReleases re-throws ExternalHostError, rate limiting and 5xx. The
+    // date is cosmetic — never let a transient lookup failure discard an
+    // otherwise-complete rev + hash update.
+    logger.debug(
+      { err, packageName },
+      'nix-update: could not resolve commit date, leaving unstable date as-is',
+    );
+    return content;
+  }
+  const newDate = /^(\d{4}-\d{2}-\d{2})/.exec(timestamp ?? '');
+  return newDate ? rewriteUnstableDate(content, newDate[1]) : content;
 }
 
 // Replace the OLD version (and/or digest) with the NEW one across the fetcher

@@ -2,6 +2,10 @@ import { logger } from '../../../logger/index.ts';
 import { exec } from '../../../util/exec/index.ts';
 import type { ExecOptions } from '../../../util/exec/types.ts';
 import { readLocalFile } from '../../../util/fs/index.ts';
+import {
+  GithubReleaseAssetDatasource,
+  parseAssetUrl,
+} from '../../datasource/github-release-asset/index.ts';
 import type { ExtractConfig, PackageFile } from '../types.ts';
 
 // Nix expression passed to `nix eval .#packages --apply` to introspect all
@@ -228,6 +232,33 @@ export function deriveExtractVersion(args: string[]): string | undefined {
   return pattern.replace(/\((?!\?)/, '(?<version>');
 }
 
+// nix records fixed-output hashes in SRI form (`sha256-<base64>`), while
+// content APIs — and the Renovate customDatasources built on them — report the
+// same bytes as hex (`sha256:<hex>`). Convert so a `--version=skip` dep's
+// currentValue is directly comparable with what its datasource returns.
+// Without this the two encodings would never match and Renovate would keep
+// proposing the same update forever.
+export function sriToHexDigest(sri: string | null): string | null {
+  if (!sri) {
+    return null;
+  }
+  // sha256 only: GitHub reports asset digests as sha256, so any other
+  // algorithm could never compare equal — better to skip the package than to
+  // emit a digest that guarantees a permanent mismatch.
+  const m = /^sha256-([A-Za-z0-9+/]+={0,2})$/.exec(sri);
+  if (!m) {
+    return null;
+  }
+  // Buffer.from is lenient with base64 — it silently drops invalid characters
+  // and tolerates bad padding — so validate the decoded length rather than
+  // trusting the parse to have rejected malformed input.
+  const bytes = Buffer.from(m[1], 'base64');
+  if (bytes.length !== 32) {
+    return null;
+  }
+  return `sha256:${bytes.toString('hex')}`;
+}
+
 export function datasourceFromSrc(
   srcUrl: string | null,
   pname: string | null,
@@ -437,6 +468,62 @@ export async function extractAllPackageFiles(
       a.startsWith('--version=branch'),
     );
     const file = packageFileFromPosition(info.position) ?? 'flake.nix';
+
+    // `--version=skip` pins a rolling artifact: the version attribute never
+    // changes (e.g. `version = "tip"`), only the bytes behind a fixed URL do.
+    // Modelled exactly like a Docker `:latest` pin — the value (the tag) is
+    // frozen and the *digest* moves — so the update flows through Renovate's
+    // digest path. Tracking it as a version instead cannot work: `exact`
+    // versioning hardwires `isGreaterThan` to false, so `filterVersions` would
+    // discard every candidate and no update would ever be proposed.
+    if (info.updateScriptArgs.includes('--version=skip')) {
+      const assetUrl = info.srcUrl ? parseAssetUrl(info.srcUrl) : null;
+      if (!assetUrl) {
+        logger.warn(
+          { attrName, srcUrl: info.srcUrl },
+          'nix-update: --version=skip is only supported for GitHub release assets — skipping',
+        );
+        continue;
+      }
+      const srcFod = info.fods.find((f) => f.attrPath.at(-1) === 'src');
+      // Only a flat fetch hashes the file itself. A recursive (NAR) hash
+      // describes the *unpacked* tree, so it could never equal the digest
+      // GitHub reports for the artifact — silently looping forever.
+      if (srcFod?.inputs.outputHashMode !== 'flat') {
+        logger.warn(
+          { attrName, outputHashMode: srcFod?.inputs.outputHashMode },
+          'nix-update: --version=skip needs a flat src hash (e.g. fetchurl, not fetchzip) — skipping',
+        );
+        continue;
+      }
+      const currentDigest = sriToHexDigest(srcFod.inputs.outputHash);
+      if (!currentDigest) {
+        // warn, not debug: like the other two bail-outs above this silently
+        // disables updates for the package, so it needs to be visible.
+        logger.warn(
+          { attrName },
+          'nix-update: --version=skip package has no usable sha256 src hash — skipping',
+        );
+        continue;
+      }
+      pushDep(file, {
+        depName: attrName,
+        datasource: GithubReleaseAssetDatasource.id,
+        packageName: info.srcUrl!,
+        currentValue: assetUrl.tag,
+        currentDigest,
+        versioning: 'exact',
+        managerData: {
+          attrName,
+          system: info.system,
+          pname: info.pname,
+          updateScriptArgs: info.updateScriptArgs,
+          isBranchTracked: false,
+          fods: info.fods,
+        },
+      });
+      continue;
+    }
 
     if (isBranchTracked) {
       if (!info.srcRev) {

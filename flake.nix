@@ -23,7 +23,7 @@
             gh
             git
             jq
-            nodejs_25
+            nodejs_24
             oxlint
             pnpm
             tsx

@@ -15,6 +15,9 @@ const hashAttrLine =
 // Match `url = "<value>"` inside a fetcher block. Used by rewriteUrl below.
 const urlAttrLine = /(^|\s)(url)\s*=\s*"([^"]*)"/g;
 
+// Match `rev = "<value>"` inside a fetcher block. Used by rewriteRev below.
+const revAttrLine = /(^|\s)(rev)\s*=\s*"([^"]*)"/g;
+
 export interface RewriteContext {
   // Path of attributes from the package root down to the FOD.
   // E.g. ["src"], ["goModules"], ["passthru", "cargoDeps"].
@@ -149,6 +152,90 @@ export function rewriteUrl(content: string, ctx: UrlRewriteContext): string {
   throw new Error(
     `Could not locate url for attrPath ${attrPath.join('.')} in nix file`,
   );
+}
+
+export interface RevRewriteContext {
+  // Path to the FOD whose rev should be replaced (e.g. ["src"]).
+  attrPath: string[];
+  // Commit currently pinned in the file.
+  oldRev: string;
+  // Commit to pin instead.
+  newRev: string;
+}
+
+// Rewrite a `rev = "..."` attribute in the .nix file.
+//
+// Branch-tracked packages (`--version=branch`) pin a literal commit sha that
+// nothing else in this manager writes: `updateDependency` is a deliberate
+// no-op for them (currentValue === newValue === the branch name) and
+// `rewriteHash` only matches hash attributes. Without this the rewritten file
+// would pair the freshly computed hash with the *previous* commit — a
+// guaranteed fixed-output hash mismatch at build time.
+//
+// Mirrors rewriteHash/rewriteUrl: fast literal swap when oldRev is unique,
+// else contextual lookup via attrPath. The fast path is what covers the
+// `let rev = "..."; in ... { inherit rev; }` form, where the binding sits
+// outside the src block and so is invisible to the contextual scan.
+export function rewriteRev(content: string, ctx: RevRewriteContext): string {
+  const { attrPath, oldRev, newRev } = ctx;
+
+  if (oldRev === newRev) {
+    return content;
+  }
+
+  if (content.includes(oldRev) && countOccurrences(content, oldRev) === 1) {
+    return content.replace(oldRev, newRev);
+  }
+
+  const anchor = attrPath.at(-1);
+  if (!anchor) {
+    throw new Error('rewriteRev: empty attrPath');
+  }
+
+  const range = locateAttrRange(content, anchor);
+  if (range) {
+    const before = content.slice(0, range.start);
+    const within = content.slice(range.start, range.end);
+    const after = content.slice(range.end);
+    // Prefer the binding whose current value is literally oldRev; otherwise
+    // fall back to the first rev attr in the range — an interpolated rev
+    // (e.g. "v${version}") never literally matches the eval-resolved oldRev.
+    const matches = [...within.matchAll(revAttrLine)];
+    const target = matches.find((m) => m[3] === oldRev) ?? matches[0];
+    if (target) {
+      const head = within.slice(0, target.index);
+      const tail = within.slice(target.index + target[0].length);
+      const updated = `${head}${target[1]}${target[2]} = "${newRev}"${tail}`;
+      return before + updated + after;
+    }
+  }
+
+  throw new Error(
+    `Could not locate rev for attrPath ${attrPath.join('.')} in nix file`,
+  );
+}
+
+// Match the date in a nixpkgs-style unstable version, e.g.
+// `version = "0-unstable-2025-11-17"` or `version = "1.2.0-unstable-2026-06-30"`.
+const unstableVersionLine =
+  /(\bversion\s*=\s*"[^"]*-unstable-)(\d{4}-\d{2}-\d{2})(")/;
+
+// Bump the date in a `-unstable-YYYY-MM-DD` version string.
+//
+// nixpkgs encodes the *commit date* of the pinned revision into the version of
+// branch-tracked packages. `updateDependency` can't do this — for branch-tracked
+// deps currentValue === newValue (the branch name), so it returns early — and
+// the date isn't derivable from the commit sha, so it has to come from the
+// datasource's release timestamp.
+//
+// Returns content unchanged when there's no unstable version string or the date
+// already matches, so callers don't need to pre-check.
+export function rewriteUnstableDate(content: string, newDate: string): string {
+  const m = unstableVersionLine.exec(content);
+  if (!m || m[2] === newDate) {
+    return content;
+  }
+  return content.replace(unstableVersionLine, `$1${newDate}$3`);
 }
 
 interface AttrRange {

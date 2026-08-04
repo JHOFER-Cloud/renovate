@@ -10,6 +10,7 @@ export const supportedDatasources = [
   'git-tags',
   'gitea-tags',
   'github-digest',
+  'github-release-asset',
   'github-tags',
   'gitlab-tags',
   'pypi',
