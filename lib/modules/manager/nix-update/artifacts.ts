@@ -14,7 +14,12 @@ import type {
 import type { FodInfo } from './extract.ts';
 import { buildKnownSrcExpr, classifyFod } from './fetchers.ts';
 import { prefetch } from './prefetch.ts';
-import { rewriteHash, rewriteRev, rewriteUrl } from './rewrite.ts';
+import {
+  rewriteHash,
+  rewriteRev,
+  rewriteUnstableDate,
+  rewriteUrl,
+} from './rewrite.ts';
 
 export async function updateArtifacts({
   packageFileName,
@@ -125,6 +130,13 @@ export async function updateArtifacts({
         oldRev: dep.currentDigest,
         newRev: newDigest,
       });
+    }
+    // nixpkgs encodes the pinned commit's date in the version of branch-tracked
+    // packages (`<base>-unstable-YYYY-MM-DD`). github-digest derives its release
+    // timestamp from that same commit date, so it's the right source here.
+    const newDate = /^(\d{4}-\d{2}-\d{2})/.exec(dep.releaseTimestamp ?? '');
+    if (newDate) {
+      content = rewriteUnstableDate(content, newDate[1]);
     }
   }
 

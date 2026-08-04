@@ -1,4 +1,9 @@
-import { rewriteHash, rewriteRev, rewriteUrl } from './rewrite.ts';
+import {
+  rewriteHash,
+  rewriteRev,
+  rewriteUnstableDate,
+  rewriteUrl,
+} from './rewrite.ts';
 
 describe('modules/manager/nix-update/rewrite', () => {
   const oldHash = 'sha256-AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA=';
@@ -417,5 +422,35 @@ describe('modules/manager/nix-update/rewrite', () => {
     expect(() =>
       rewriteRev(content, { attrPath: ['src'], oldRev, newRev }),
     ).toThrow(/Could not locate rev/);
+  });
+});
+
+describe('modules/manager/nix-update/rewrite', () => {
+  it('bumps the date in an unstable version string', () => {
+    const content = `
+      {
+        pname = "aerospace-swipe";
+        version = "0-unstable-2025-11-17";
+      }
+    `;
+    const out = rewriteUnstableDate(content, '2026-06-30');
+    expect(out).toContain('version = "0-unstable-2026-06-30"');
+    expect(out).not.toContain('2025-11-17');
+  });
+
+  it('bumps the date when the version has a numeric base', () => {
+    const content = `version = "0.1.0-unstable-2026-03-09";`;
+    const out = rewriteUnstableDate(content, '2026-08-01');
+    expect(out).toBe(`version = "0.1.0-unstable-2026-08-01";`);
+  });
+
+  it('is a no-op when the date already matches', () => {
+    const content = `version = "0-unstable-2026-06-30";`;
+    expect(rewriteUnstableDate(content, '2026-06-30')).toBe(content);
+  });
+
+  it('is a no-op when there is no unstable version string', () => {
+    const content = `version = "1.2.3";`;
+    expect(rewriteUnstableDate(content, '2026-06-30')).toBe(content);
   });
 });

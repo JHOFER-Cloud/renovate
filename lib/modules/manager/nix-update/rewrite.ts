@@ -215,6 +215,29 @@ export function rewriteRev(content: string, ctx: RevRewriteContext): string {
   );
 }
 
+// Match the date in a nixpkgs-style unstable version, e.g.
+// `version = "0-unstable-2025-11-17"` or `version = "1.2.0-unstable-2026-06-30"`.
+const unstableVersionLine =
+  /(\bversion\s*=\s*"[^"]*-unstable-)(\d{4}-\d{2}-\d{2})(")/;
+
+// Bump the date in a `-unstable-YYYY-MM-DD` version string.
+//
+// nixpkgs encodes the *commit date* of the pinned revision into the version of
+// branch-tracked packages. `updateDependency` can't do this — for branch-tracked
+// deps currentValue === newValue (the branch name), so it returns early — and
+// the date isn't derivable from the commit sha, so it has to come from the
+// datasource's release timestamp.
+//
+// Returns content unchanged when there's no unstable version string or the date
+// already matches, so callers don't need to pre-check.
+export function rewriteUnstableDate(content: string, newDate: string): string {
+  const m = unstableVersionLine.exec(content);
+  if (!m || m[2] === newDate) {
+    return content;
+  }
+  return content.replace(unstableVersionLine, `$1${newDate}$3`);
+}
+
 interface AttrRange {
   start: number;
   end: number;

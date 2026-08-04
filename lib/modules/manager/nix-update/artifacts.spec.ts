@@ -7,6 +7,7 @@ import type {
   InternalGlobalConfigOptions,
   RepoGlobalConfig,
 } from '../../../config/types.ts';
+import type { Timestamp } from '../../../util/timestamp.ts';
 import type { UpdateArtifactsConfig } from '../types.ts';
 import { updateArtifacts } from './artifacts.ts';
 import type { FodInfo } from './extract.ts';
@@ -471,6 +472,7 @@ describe('modules/manager/nix-update/artifacts', () => {
           newValue: 'main',
           currentDigest: 'oldcommitsha1',
           newDigest: 'newcommitsha2',
+          releaseTimestamp: '2026-06-30T17:00:31.000Z' as Timestamp,
           managerData: {
             attrName: 'aerospace-swipe',
             system: 'aarch64-darwin',
@@ -494,6 +496,8 @@ describe('modules/manager/nix-update/artifacts', () => {
     expect(writtenContent).toContain('rev = "newcommitsha2"');
     expect(writtenContent).not.toContain('oldcommitsha1');
     expect(writtenContent).toContain(NEW);
+    // ...and the nixpkgs unstable date follows the commit date.
+    expect(writtenContent).toContain('version = "0-unstable-2026-06-30"');
   });
 
   it('skips rewrite when file already has new hash (existing branch reuse)', async () => {
