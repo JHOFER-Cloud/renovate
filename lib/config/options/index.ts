@@ -681,7 +681,7 @@ const options: Readonly<RenovateOptions>[] = [
     description:
       'Change this value to override the default Renovate sidecar image.',
     type: 'string',
-    default: 'ghcr.io/renovatebot/base-image:13.76.2',
+    default: 'ghcr.io/renovatebot/base-image:13.81.1',
     globalOnly: true,
     deprecationMsg:
       'The usage of `binarySource=docker` is deprecated, and will be removed in the future',
@@ -1453,6 +1453,14 @@ const options: Readonly<RenovateOptions>[] = [
       'The id of an existing work item on Azure Boards to link to each PR.',
     type: 'integer',
     default: 0,
+    supportedPlatforms: ['azure'],
+  },
+  {
+    name: 'azureWorkItemType',
+    description:
+      'The work item type Renovate uses for its issues (e.g. the Dependency Dashboard) on Azure DevOps.',
+    type: 'string',
+    default: 'Issue',
     supportedPlatforms: ['azure'],
   },
   {
@@ -2476,6 +2484,17 @@ const options: Readonly<RenovateOptions>[] = [
     default: false,
   },
   {
+    name: 'commitTrailers',
+    description:
+      'Structured git trailers (`Key: value` lines) to add in the final block of the commit message.',
+    type: 'array',
+    subType: 'string',
+    default: null,
+    mergeable: true,
+    cli: false,
+    supportsTemplating: true,
+  },
+  {
     name: 'commitMessagePrefix',
     description:
       'Prefix to add to start of commit messages and PR titles. Uses a semantic prefix if `semanticCommits` is enabled.',
@@ -3335,7 +3354,13 @@ const options: Readonly<RenovateOptions>[] = [
     type: 'array',
     subType: 'string',
     default: [],
-    allowedValues: ['bazelModDeps', 'goGenerate', 'gradleWrapper', 'mise'],
+    allowedValues: [
+      'bazelModDeps',
+      'goGenerate',
+      'gradleWrapper',
+      'mise',
+      'pixi',
+    ],
     stage: 'repository',
     globalOnly: true,
   },

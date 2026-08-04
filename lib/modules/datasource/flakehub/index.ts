@@ -92,9 +92,9 @@ export class FlakeHubDatasource extends Datasource {
         sourceUrl,
       };
     } catch (err) {
-      /* v8 ignore next */
+      /* v8 ignore next -- defensive: error shape from http layer is not exercised in tests */
       const statusCode = err?.statusCode;
-      /* v8 ignore next */
+      /* v8 ignore next -- non-404 error branch is covered via handleGenericErrors */
       if (statusCode === 404) {
         logger.debug(
           { packageName, currentValue },
@@ -102,7 +102,7 @@ export class FlakeHubDatasource extends Datasource {
         );
         return null;
       }
-      /* v8 ignore next */
+      /* v8 ignore next -- rethrow path delegated to shared error handler */
       this.handleGenericErrors(err);
     }
   }
@@ -124,7 +124,7 @@ export class FlakeHubDatasource extends Datasource {
     }
 
     // gitRef is required by schema but TypeScript doesn't know that
-    /* v8 ignore next */
+    /* v8 ignore next -- gitRef is guaranteed by the schema, nullish branch is unreachable */
     return releases.releases[0].gitRef ?? null;
   }
 }

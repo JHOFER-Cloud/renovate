@@ -114,11 +114,11 @@ export function exprForSrcFetcher(
 
 function buildSrcFetcherArgs(name: string, inp: FetcherInputs): string {
   const out: string[] = [];
-  const set = (k: string, v: unknown): void => {
+  function set(k: string, v: unknown): void {
     if (v !== undefined) {
       out.push(`${k} = ${nixVal(v)};`);
     }
-  };
+  }
 
   switch (name) {
     case 'fetchurl':

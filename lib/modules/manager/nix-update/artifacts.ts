@@ -254,20 +254,24 @@ function bumpFodToNewVersion(
   oldDigest: string | undefined | null,
   newDigest: string | undefined | null,
 ): FodInfo {
-  const swap = (
+  function swap(
     s: string | null,
     from: string | null | undefined,
     to: string | null | undefined,
-  ): string | null => {
+  ): string | null {
     if (s === null || !from || !to || from === to) {
       return s;
     }
     return s.split(from).join(to);
-  };
-  const stripV = (s: string): string =>
-    s.length > 1 && (s.startsWith('v') || s.startsWith('V')) && /\d/.test(s[1])
+  }
+
+  function stripV(s: string): string {
+    return s.length > 1 &&
+      (s.startsWith('v') || s.startsWith('V')) &&
+      /\d/.test(s[1])
       ? s.slice(1)
       : s;
+  }
   let { url, rev, name } = fod.inputs;
   if (oldVersion && newVersion) {
     // Replace the bare-number form. Any leading `v` in url/rev sticks; the

@@ -233,7 +233,7 @@ function classifySrcFetcher(fod: FodInfo): string {
   if (!url) {
     // Defensive: extract.ts only emits FodInfo with url=null for vendor FODs
     // (goModules/cargoDeps/etc.), and those don't reach this function.
-    /* v8 ignore next */
+    /* v8 ignore next -- defensive: vendor FODs with url=null never reach here */
     return 'fetchurl';
   }
 
@@ -410,7 +410,7 @@ function parseRegistryUrl(url: string, fetcher: string): FetcherInputs | null {
     }
     default:
       // defensive; only registry fetchers reach this dispatch
-      /* v8 ignore next */
+      /* v8 ignore next -- defensive: only registry fetchers reach this dispatch */
       return null;
   }
 }

@@ -1,8 +1,9 @@
+import { codeBlock } from 'common-tags';
 import { RequestError } from 'got';
 import { DateTime } from 'luxon';
-import { mockDeep } from 'vitest-mock-extended';
+import { hostRules } from '~test/host-rules.ts';
 import * as httpMock from '~test/http-mock.ts';
-import { logger } from '~test/util.ts';
+import { fakeSha, logger } from '~test/util.ts';
 import { GlobalConfig } from '../../../config/global.ts';
 import {
   CONFIG_GIT_URL_UNAVAILABLE,
@@ -15,11 +16,10 @@ import {
   REPOSITORY_RENAMED,
 } from '../../../constants/error-messages.ts';
 import { ExternalHostError } from '../../../types/errors/external-host-error.ts';
+import type { HostRule } from '../../../types/index.ts';
 import * as repository from '../../../util/cache/repository/index.ts';
 import * as _git from '../../../util/git/index.ts';
-import * as _hostRules from '../../../util/host-rules.ts';
 import { setBaseUrl } from '../../../util/http/github.ts';
-import type { LongCommitSha } from '../../../util/schema-utils/git.ts';
 import { toBase64 } from '../../../util/string.ts';
 import { hashBody } from '../pr-body.ts';
 import type {
@@ -36,13 +36,13 @@ const githubApiHost = 'https://api.github.com';
 
 vi.mock('timers/promises');
 
-vi.mock('../../../util/host-rules.ts', () => mockDeep());
 vi.mock('../../../util/http/queue.ts');
 vi.mock('./app-token.ts');
-const hostRules = vi.mocked(_hostRules);
 const appToken = vi.mocked(_appToken);
 
 const git = vi.mocked(_git);
+
+const branchCommitSha = fakeSha('0d9c7726c3d628b7e28af234595cfd20febdbf8e');
 
 describe('modules/platform/github/index', () => {
   beforeEach(() => {
@@ -52,10 +52,8 @@ describe('modules/platform/github/index', () => {
     setBaseUrl(githubApiHost);
 
     git.isBranchBehindBase.mockResolvedValue(true);
-    git.getBranchCommit.mockReturnValue(
-      '0d9c7726c3d628b7e28af234595cfd20febdbf8e' as LongCommitSha,
-    );
-    hostRules.find.mockReturnValue({
+    git.getBranchCommit.mockReturnValue(branchCommitSha);
+    hostRules.add({
       token: '123test',
     });
 
@@ -750,12 +748,19 @@ describe('modules/platform/github/index', () => {
     const futureExpiry = new Date(Date.now() + 3600 * 1000);
     const pastExpiry = new Date(Date.now() - 60 * 1000);
 
+    // The platform code reads and mutates the real hostRules store, so assert
+    // against its contents rather than on calls to add(). hostRules is cleared
+    // before every test by the `~test/host-rules.ts` setup.
+    function githubRules(): HostRule[] {
+      return hostRules.findAll({ hostType: 'github' });
+    }
+
+    function githubRule(matchHost: string): HostRule | undefined {
+      return githubRules().find((rule) => rule.matchHost === matchHost);
+    }
+
     beforeEach(() => {
       appToken.generateJWT.mockReturnValue('mock-jwt');
-      // findAll() is used to look up an existing host rule before deciding
-      // whether to update in-place or add. Default to empty so tests that
-      // don't care about this path get a safe, non-undefined return value.
-      hostRules.findAll.mockReturnValue([]);
     });
 
     describe('initPlatform()', () => {
@@ -884,7 +889,7 @@ describe('modules/platform/github/index', () => {
         initRepoMock(scope, 'myorg/myrepo');
         await github.initRepo({ repository: 'myorg/myrepo' });
 
-        expect(hostRules.add).toHaveBeenCalledWith(
+        expect(githubRules()).toContainEqual(
           expect.objectContaining({
             matchHost: 'api.github.com',
             hostType: 'github',
@@ -910,7 +915,7 @@ describe('modules/platform/github/index', () => {
 
         // fetchInstallationToken: once during initPlatform, once during refresh
         expect(appToken.fetchInstallationToken).toHaveBeenCalledTimes(2);
-        expect(hostRules.add).toHaveBeenCalledWith(
+        expect(githubRules()).toContainEqual(
           expect.objectContaining({
             token: 'x-access-token:ghs_refreshed',
           }),
@@ -939,7 +944,7 @@ describe('modules/platform/github/index', () => {
           'Failed to refresh GitHub App installation token; using existing token',
         );
         // Falls back to the original (expired) token
-        expect(hostRules.add).toHaveBeenCalledWith(
+        expect(githubRules()).toContainEqual(
           expect.objectContaining({
             token: 'x-access-token:ghs_expired',
           }),
@@ -953,21 +958,22 @@ describe('modules/platform/github/index', () => {
         );
 
         // Simulate an existing host rule already present from a previous run
-        const existingRule: Record<string, unknown> = {
-          resolvedHost: 'api.github.com',
+        hostRules.add({
+          hostType: 'github',
+          matchHost: 'api.github.com',
           token: 'x-access-token:ghs_old',
-        };
-        hostRules.findAll.mockReturnValue([existingRule as any]);
+        });
 
         const scope = httpMock.scope(githubApiHost);
         initRepoMock(scope, 'myorg/myrepo');
         await github.initRepo({ repository: 'myorg/myrepo' });
 
-        // Token updated in-place; add() not called again
-        expect(hostRules.add).not.toHaveBeenCalledWith(
-          expect.objectContaining({ hostType: 'github' }),
+        // Token updated in-place rather than a second rule being accumulated
+        const apiRules = githubRules().filter(
+          (rule) => rule.resolvedHost === 'api.github.com',
         );
-        expect(existingRule.token).toBe('x-access-token:ghs_myorgtoken');
+        expect(apiRules).toHaveLength(1);
+        expect(apiRules[0].token).toBe('x-access-token:ghs_myorgtoken');
       });
 
       it('warns and does not add host rule when owner not found in ownerTokens', async () => {
@@ -980,9 +986,9 @@ describe('modules/platform/github/index', () => {
         initRepoMock(scope, 'other-org/repo');
         await github.initRepo({ repository: 'other-org/repo' });
 
-        expect(hostRules.add).not.toHaveBeenCalledWith(
-          expect.objectContaining({ token: expect.stringContaining('ghs_') }),
-        );
+        expect(
+          githubRules().filter((rule) => rule.token?.includes('ghs_')),
+        ).toEqual([]);
         expect(logger.logger.warn).toHaveBeenCalledWith(
           expect.objectContaining({ repository: 'other-org/repo' }),
           'GitHub App has no installation for this repository owner; API calls may fail',
@@ -1034,11 +1040,7 @@ describe('modules/platform/github/index', () => {
           initRepoMock(scope, 'org1/repo');
           await github.initRepo({ repository: 'org1/repo' });
 
-          expect(hostRules.add).not.toHaveBeenCalledWith(
-            expect.objectContaining({
-              matchHost: expect.stringContaining('github.com/org2/'),
-            }),
-          );
+          expect(githubRule('https://github.com/org2/')).toBeUndefined();
         });
 
         it('adds per-owner rules for trusted orgs in the same group', async () => {
@@ -1058,7 +1060,7 @@ describe('modules/platform/github/index', () => {
           initRepoMock(scope, 'org1/repo');
           await github.initRepo({ repository: 'org1/repo' });
 
-          expect(hostRules.add).toHaveBeenCalledWith(
+          expect(githubRule('https://github.com/org2/')).toEqual(
             expect.objectContaining({
               matchHost: 'https://github.com/org2/',
               hostType: 'github',
@@ -1086,12 +1088,8 @@ describe('modules/platform/github/index', () => {
           initRepoMock(scope, 'org1/repo');
           await github.initRepo({ repository: 'org1/repo' });
 
-          expect(hostRules.add).toHaveBeenCalledWith(
-            expect.objectContaining({ matchHost: 'https://github.com/org2/' }),
-          );
-          expect(hostRules.add).not.toHaveBeenCalledWith(
-            expect.objectContaining({ matchHost: 'https://github.com/org3/' }),
-          );
+          expect(githubRule('https://github.com/org2/')).toBeDefined();
+          expect(githubRule('https://github.com/org3/')).toBeUndefined();
         });
 
         it('matches trust group members case-insensitively', async () => {
@@ -1111,7 +1109,7 @@ describe('modules/platform/github/index', () => {
           initRepoMock(scope, 'Org1/repo');
           await github.initRepo({ repository: 'Org1/repo' });
 
-          expect(hostRules.add).toHaveBeenCalledWith(
+          expect(githubRule('https://github.com/Org2/')).toEqual(
             expect.objectContaining({
               matchHost: 'https://github.com/Org2/',
               token: 'x-access-token:ghs_org2',
@@ -1138,17 +1136,9 @@ describe('modules/platform/github/index', () => {
           initRepoMock(scope, 'org1/repo');
           await github.initRepo({ repository: 'org1/repo' });
 
-          expect(hostRules.add).toHaveBeenCalledWith(
-            expect.objectContaining({ matchHost: 'https://github.com/org2/' }),
-          );
-          expect(hostRules.add).toHaveBeenCalledWith(
-            expect.objectContaining({ matchHost: 'https://github.com/org3/' }),
-          );
-          expect(hostRules.add).not.toHaveBeenCalledWith(
-            expect.objectContaining({
-              matchHost: 'https://github.com/org1/',
-            }),
-          );
+          expect(githubRule('https://github.com/org2/')).toBeDefined();
+          expect(githubRule('https://github.com/org3/')).toBeDefined();
+          expect(githubRule('https://github.com/org1/')).toBeUndefined();
         });
 
         it('updates existing per-owner rule in-place instead of adding a new one', async () => {
@@ -1164,27 +1154,27 @@ describe('modules/platform/github/index', () => {
             [['org1', 'org2']],
           );
 
-          const existingGenericRule: Record<string, unknown> = {
-            resolvedHost: 'api.github.com',
+          hostRules.add({
+            hostType: 'github',
+            matchHost: 'api.github.com',
             token: 'x-access-token:ghs_org1_old',
-          };
-          const existingOwnerRule: Record<string, unknown> = {
+          });
+          hostRules.add({
+            hostType: 'github',
             matchHost: 'https://github.com/org2/',
             token: 'x-access-token:ghs_org2_old',
-          };
-          hostRules.findAll.mockReturnValue([
-            existingGenericRule as any,
-            existingOwnerRule as any,
-          ]);
+          });
 
           const scope = httpMock.scope(githubApiHost);
           initRepoMock(scope, 'org1/repo');
           await github.initRepo({ repository: 'org1/repo' });
 
-          expect(hostRules.add).not.toHaveBeenCalledWith(
-            expect.objectContaining({ matchHost: 'https://github.com/org2/' }),
+          // Updated in-place rather than a second org2 rule being accumulated
+          const ownerRules = githubRules().filter(
+            (rule) => rule.matchHost === 'https://github.com/org2/',
           );
-          expect(existingOwnerRule.token).toBe('x-access-token:ghs_org2');
+          expect(ownerRules).toHaveLength(1);
+          expect(ownerRules[0].token).toBe('x-access-token:ghs_org2');
         });
 
         it('uses GHE hostname in matchHost for GHE endpoints', async () => {
@@ -1206,18 +1196,14 @@ describe('modules/platform/github/index', () => {
           initRepoMock(scope, 'org1/repo');
           await github.initRepo({ repository: 'org1/repo' });
 
-          expect(hostRules.add).toHaveBeenCalledWith(
+          expect(githubRule('https://ghe.renovatebot.com/org2/')).toEqual(
             expect.objectContaining({
               matchHost: 'https://ghe.renovatebot.com/org2/',
               hostType: 'github',
               token: 'x-access-token:ghs_org2',
             }),
           );
-          expect(hostRules.add).not.toHaveBeenCalledWith(
-            expect.objectContaining({
-              matchHost: expect.stringContaining('github.com/org2/'),
-            }),
-          );
+          expect(githubRule('https://github.com/org2/')).toBeUndefined();
         });
       });
     });
@@ -1361,7 +1347,7 @@ describe('modules/platform/github/index', () => {
 
     // for coverage
     it('no token', async () => {
-      hostRules.find.mockReturnValue({});
+      hostRules.clear();
       const scope = httpMock.scope(githubApiHost);
       initRepoMock(scope, 'some/repo');
       await expect(github.initRepo({ repository: 'some/repo' })).toResolve();
@@ -1369,7 +1355,8 @@ describe('modules/platform/github/index', () => {
 
     // for coverage
     it('app token', async () => {
-      hostRules.find.mockReturnValue({
+      hostRules.clear();
+      hostRules.add({
         token: 'x-access-token:123test',
       });
       const scope = httpMock.scope(githubApiHost);
@@ -2017,7 +2004,7 @@ describe('modules/platform/github/index', () => {
       number: 1,
       head: {
         ref: 'branch-1',
-        sha: '111' as LongCommitSha,
+        sha: fakeSha('111'),
         repo: { full_name: 'some/repo' },
       },
       base: { repo: { pushed_at: '' }, ref: 'repo/fork_branch' },
@@ -2034,7 +2021,7 @@ describe('modules/platform/github/index', () => {
       number: 2,
       head: {
         ref: 'branch-2',
-        sha: '222' as LongCommitSha,
+        sha: fakeSha('222'),
         repo: { full_name: 'some/repo' },
       },
       state: 'open',
@@ -2047,7 +2034,7 @@ describe('modules/platform/github/index', () => {
       number: 3,
       head: {
         ref: 'branch-3',
-        sha: '333' as LongCommitSha,
+        sha: fakeSha('333'),
         repo: { full_name: 'some/repo' },
       },
       state: 'open',
@@ -2055,10 +2042,12 @@ describe('modules/platform/github/index', () => {
       updated_at: t3,
     };
 
-    const pagePath = (x: number, perPage = 100) =>
-      `/repos/some/repo/pulls?per_page=${perPage}&state=all&sort=updated&direction=desc&page=${x}`;
-    const pageLink = (x: number) =>
-      `<${githubApiHost}${pagePath(x)}>; rel="next"`;
+    function pagePath(x: number, perPage = 100) {
+      return `/repos/some/repo/pulls?per_page=${perPage}&state=all&sort=updated&direction=desc&page=${x}`;
+    }
+    function pageLink(x: number) {
+      return `<${githubApiHost}${pagePath(x)}>; rel="next"`;
+    }
 
     it('fetches single page', async () => {
       const scope = httpMock.scope(githubApiHost);
@@ -2138,10 +2127,12 @@ describe('modules/platform/github/index', () => {
     describe('Body compaction', () => {
       type PrCache = ApiPageCache<GhRestPr>;
 
-      const prWithBody = (body: string): GhRestPr => ({
-        ...pr1,
-        body,
-      });
+      function prWithBody(body: string): GhRestPr {
+        return {
+          ...pr1,
+          body,
+        };
+      }
 
       it('compacts body from response', async () => {
         const scope = httpMock.scope(githubApiHost);
@@ -2169,7 +2160,7 @@ describe('modules/platform/github/index', () => {
         number: 1,
         head: {
           ref: 'renovate-branch',
-          sha: '111' as LongCommitSha,
+          sha: fakeSha('111'),
           repo: { full_name: 'some/repo' },
         },
         title: 'Renovate PR',
@@ -2181,7 +2172,7 @@ describe('modules/platform/github/index', () => {
         number: 2,
         head: {
           ref: 'other-branch',
-          sha: '222' as LongCommitSha,
+          sha: fakeSha('222'),
           repo: { full_name: 'some/repo' },
         },
         title: 'Other PR',
@@ -2657,18 +2648,20 @@ describe('modules/platform/github/index', () => {
   });
 
   describe('tryReuseAutoclosedPr()', () => {
+    const prSha = fakeSha('1234');
+
     it('should reopen autoclosed PR', async () => {
       const scope = httpMock.scope(githubApiHost);
       initRepoMock(scope, 'some/repo');
       scope
-        .head('/repos/some/repo/git/commits/1234')
+        .head(`/repos/some/repo/git/commits/${prSha}`)
         .reply(200)
         .post('/repos/some/repo/git/refs')
         .reply(201)
         .patch('/repos/some/repo/pulls/91')
         .reply(200, {
           number: 91,
-          base: { sha: '1234' },
+          base: { sha: prSha },
           head: { ref: 'somebranch', repo: { full_name: 'some/repo' } },
           state: 'open',
           title: 'old title',
@@ -2684,7 +2677,7 @@ describe('modules/platform/github/index', () => {
           state: 'closed',
           closedAt: DateTime.now().minus({ days: 6 }).toISO(),
           sourceBranch: 'somebranch',
-          sha: '1234' as LongCommitSha,
+          sha: prSha,
         },
         'new title',
       );
@@ -2696,14 +2689,14 @@ describe('modules/platform/github/index', () => {
       const scope = httpMock.scope(githubApiHost);
       initRepoMock(scope, 'some/repo');
       scope
-        .head('/repos/some/repo/git/commits/1234')
+        .head(`/repos/some/repo/git/commits/${prSha}`)
         .reply(200)
         .post('/repos/some/repo/git/refs')
         .reply(201)
         .patch('/repos/some/repo/pulls/91')
         .reply(200, {
           number: 91,
-          base: { sha: '1234' },
+          base: { sha: prSha },
           head: { ref: 'somebranch', repo: { full_name: 'some/repo' } },
           state: 'open',
           title: 'old title',
@@ -2711,7 +2704,8 @@ describe('modules/platform/github/index', () => {
         });
       await github.initRepo({ repository: 'some/repo' });
       vi.spyOn(branch, 'remoteBranchExists').mockResolvedValueOnce(false);
-      git.getBranchCommit.mockReturnValueOnce('5678' as LongCommitSha);
+      const localSha = fakeSha('5678');
+      git.getBranchCommit.mockReturnValueOnce(localSha);
 
       const pr = await github.tryReuseAutoclosedPr(
         {
@@ -2720,7 +2714,7 @@ describe('modules/platform/github/index', () => {
           state: 'closed',
           closedAt: DateTime.now().minus({ days: 6 }).toISO(),
           sourceBranch: 'somebranch',
-          sha: '1234' as LongCommitSha,
+          sha: prSha,
         },
         'new title',
       );
@@ -2728,7 +2722,7 @@ describe('modules/platform/github/index', () => {
       expect(pr).toMatchObject({
         number: 91,
         sourceBranch: 'somebranch',
-        sha: '5678',
+        sha: localSha,
       });
       expect(git.forcePushToRemote).toHaveBeenCalledExactlyOnceWith(
         'somebranch',
@@ -2740,7 +2734,7 @@ describe('modules/platform/github/index', () => {
       const scope = httpMock.scope(githubApiHost);
       initRepoMock(scope, 'some/repo');
       scope
-        .head('/repos/some/repo/git/commits/1234')
+        .head(`/repos/some/repo/git/commits/${prSha}`)
         .reply(200)
         .post('/repos/some/repo/git/refs')
         .reply(201)
@@ -2757,7 +2751,7 @@ describe('modules/platform/github/index', () => {
           state: 'closed',
           closedAt: DateTime.now().minus({ days: 6 }).toISO(),
           sourceBranch: 'somebranch',
-          sha: '1234' as LongCommitSha,
+          sha: prSha,
         },
         'new title',
       );
@@ -2768,7 +2762,7 @@ describe('modules/platform/github/index', () => {
     it('aborts reopening if PR reopening fails', async () => {
       const scope = httpMock.scope(githubApiHost);
       initRepoMock(scope, 'some/repo');
-      scope.head('/repos/some/repo/git/commits/1234').reply(400);
+      scope.head(`/repos/some/repo/git/commits/${prSha}`).reply(400);
 
       await github.initRepo({ repository: 'some/repo' });
 
@@ -2779,7 +2773,7 @@ describe('modules/platform/github/index', () => {
           state: 'closed',
           closedAt: DateTime.now().minus({ days: 6 }).toISO(),
           sourceBranch: 'somebranch',
-          sha: '1234' as LongCommitSha,
+          sha: prSha,
         },
         'new title',
       );
@@ -2965,9 +2959,7 @@ describe('modules/platform/github/index', () => {
       const scope = httpMock.scope(githubApiHost);
       initRepoMock(scope, 'some/repo');
       scope
-        .get(
-          '/repos/some/repo/commits/0d9c7726c3d628b7e28af234595cfd20febdbf8e/statuses',
-        )
+        .get(`/repos/some/repo/commits/${branchCommitSha}/statuses`)
         .reply(200, [
           {
             context: 'context-1',
@@ -2994,9 +2986,7 @@ describe('modules/platform/github/index', () => {
       const scope = httpMock.scope(githubApiHost);
       initRepoMock(scope, 'some/repo');
       scope
-        .get(
-          '/repos/some/repo/commits/0d9c7726c3d628b7e28af234595cfd20febdbf8e/statuses',
-        )
+        .get(`/repos/some/repo/commits/${branchCommitSha}/statuses`)
         .reply(200, [
           {
             context: 'context-1',
@@ -3020,9 +3010,7 @@ describe('modules/platform/github/index', () => {
       const scope = httpMock.scope(githubApiHost);
       initRepoMock(scope, 'some/repo');
       scope
-        .get(
-          '/repos/some/repo/commits/0d9c7726c3d628b7e28af234595cfd20febdbf8e/statuses',
-        )
+        .get(`/repos/some/repo/commits/${branchCommitSha}/statuses`)
         .reply(200, [
           {
             context: 'context-1',
@@ -3039,9 +3027,7 @@ describe('modules/platform/github/index', () => {
       const scope = httpMock.scope(githubApiHost);
       initRepoMock(scope, 'some/repo');
       scope
-        .get(
-          '/repos/some/repo/commits/0d9c7726c3d628b7e28af234595cfd20febdbf8e/statuses',
-        )
+        .get(`/repos/some/repo/commits/${branchCommitSha}/statuses`)
         .reply(200, [
           {
             context: 'some-context',
@@ -3064,9 +3050,7 @@ describe('modules/platform/github/index', () => {
       const scope = httpMock.scope(githubApiHost);
       initRepoMock(scope, 'some/repo');
       scope
-        .get(
-          '/repos/some/repo/commits/0d9c7726c3d628b7e28af234595cfd20febdbf8e/statuses',
-        )
+        .get(`/repos/some/repo/commits/${branchCommitSha}/statuses`)
         .reply(200, [
           {
             context: 'context-1',
@@ -3081,15 +3065,11 @@ describe('modules/platform/github/index', () => {
             state: 'state-3',
           },
         ])
-        .post(
-          '/repos/some/repo/statuses/0d9c7726c3d628b7e28af234595cfd20febdbf8e',
-        )
+        .post(`/repos/some/repo/statuses/${branchCommitSha}`)
         .reply(200)
         .get('/repos/some/repo/commits/some-branch/status')
         .reply(200, {})
-        .get(
-          '/repos/some/repo/commits/0d9c7726c3d628b7e28af234595cfd20febdbf8e/statuses',
-        )
+        .get(`/repos/some/repo/commits/${branchCommitSha}/statuses`)
         .reply(200, {});
 
       await github.initRepo({ repository: 'some/repo' });
@@ -4557,7 +4537,7 @@ describe('modules/platform/github/index', () => {
         platformPrOptions: { usePlatformAutomerge: true },
       };
 
-      const mockScope = async (repoOpts: any = {}): Promise<httpMock.Scope> => {
+      async function mockScope(repoOpts: any = {}): Promise<httpMock.Scope> {
         const scope = httpMock.scope(githubApiHost);
         initRepoMock(scope, 'some/repo', repoOpts);
         scope
@@ -4567,7 +4547,7 @@ describe('modules/platform/github/index', () => {
           .reply(200, []);
         await github.initRepo({ repository: 'some/repo' });
         return scope;
-      };
+      }
 
       const graphqlGetRepo = {
         method: 'POST',
@@ -4646,9 +4626,6 @@ describe('modules/platform/github/index', () => {
           endpoint: 'https://github.company.com',
           token: '123test',
         });
-        hostRules.find.mockReturnValue({
-          token: '123test',
-        });
         await github.initRepo({ repository: 'some/repo' });
         await github.createPr(prConfig);
 
@@ -4691,9 +4668,6 @@ describe('modules/platform/github/index', () => {
         initRepoMock(scope, 'some/repo');
         await github.initPlatform({
           endpoint: 'https://github.company.com',
-          token: '123test',
-        });
-        hostRules.find.mockReturnValue({
           token: '123test',
         });
         await github.initRepo({ repository: 'some/repo' });
@@ -5327,7 +5301,7 @@ describe('modules/platform/github/index', () => {
       platformPrOptions: { usePlatformAutomerge: true },
     };
 
-    const mockScope = async (repoOpts: any = {}): Promise<httpMock.Scope> => {
+    async function mockScope(repoOpts: any = {}): Promise<httpMock.Scope> {
       const scope = httpMock.scope(githubApiHost);
       initRepoMock(scope, 'some/repo', repoOpts);
       scope
@@ -5338,7 +5312,7 @@ describe('modules/platform/github/index', () => {
       scope.get('/repos/some/repo/pulls/123').reply(200, getPrResp);
       await github.initRepo({ repository: 'some/repo' });
       return scope;
-    };
+    }
 
     const graphqlGetRepo = {
       method: 'POST',
@@ -5584,9 +5558,6 @@ describe('modules/platform/github/index', () => {
       initRepoMock(scope, 'some/repo');
       await github.initPlatform({
         endpoint: 'https://github.company.com',
-        token: '123test',
-      });
-      hostRules.find.mockReturnValue({
         token: '123test',
       });
       await github.initRepo({ repository: 'some/repo' });
@@ -6074,27 +6045,27 @@ describe('modules/platform/github/index', () => {
   });
 
   describe('pushFiles', () => {
+    const fetchedSha = fakeSha('0abcdef');
+
     beforeEach(() => {
       git.prepareCommit.mockImplementation(({ files }) =>
         Promise.resolve({
-          parentCommitSha: '1234567' as LongCommitSha,
-          commitSha: '7654321' as LongCommitSha,
+          parentCommitSha: fakeSha('1234567'),
+          commitSha: fakeSha('7654321'),
           files,
         }),
       );
-      git.fetchBranch.mockImplementation(() =>
-        Promise.resolve('0abcdef' as LongCommitSha),
-      );
+      git.fetchBranch.mockImplementation(() => Promise.resolve(fetchedSha));
       git.pushCommitToRenovateRef.mockResolvedValue(undefined);
       git.getCommitTreeSha.mockResolvedValue(
-        '0000000000000000000000000000000000000000' as LongCommitSha,
+        fakeSha('0000000000000000000000000000000000000000'),
       );
       git.diffCommitTree.mockResolvedValue([
         {
           path: 'foo.bar',
           mode: '100644',
           type: 'blob',
-          sha: 'abc0000000000000000000000000000000000000' as LongCommitSha,
+          sha: fakeSha('abc0000000000000000000000000000000000000'),
         },
       ]);
     });
@@ -6174,7 +6145,44 @@ describe('modules/platform/github/index', () => {
         message: 'Foobar',
       });
 
-      expect(res).toBe('0abcdef');
+      expect(res).toBe(fetchedSha);
+    });
+
+    it('includes commit trailers in the platform-native commit message', async () => {
+      const scope = httpMock.scope(githubApiHost);
+
+      initRepoMock(scope, 'some/repo');
+      await github.initRepo({ repository: 'some/repo' });
+
+      scope
+        .post('/repos/some/repo/git/trees')
+        .reply(200, { sha: '111' })
+        .post('/repos/some/repo/git/commits', {
+          message: codeBlock`
+            Foobar
+
+            Signed-off-by: Renovate Bot <bot@renovateapp.com>
+          `,
+          tree: '111',
+          parents: [fakeSha('1234567')],
+        })
+        .reply(200, { sha: '0123456789abcdef0123456789abcdef01234567' })
+        .head(
+          '/repos/some/repo/git/commits/0123456789abcdef0123456789abcdef01234567',
+        )
+        .reply(200)
+        .post('/repos/some/repo/git/refs')
+        .reply(200);
+      vi.spyOn(branch, 'remoteBranchExists').mockResolvedValueOnce(false);
+
+      const res = await github.commitFiles({
+        branchName: 'foo/bar',
+        files: [{ type: 'addition', path: 'foo.bar', contents: 'foobar' }],
+        message: 'Foobar',
+        trailers: ['Signed-off-by: Renovate Bot <bot@renovateapp.com>'],
+      });
+
+      expect(res).toBe(fetchedSha);
     });
 
     it('performs rebase', async () => {
@@ -6202,7 +6210,7 @@ describe('modules/platform/github/index', () => {
         message: 'Foobar',
       });
 
-      expect(res).toBe('0abcdef');
+      expect(res).toBe(fetchedSha);
     });
 
     it('continues if rebase fails due to 422', async () => {
@@ -6232,7 +6240,7 @@ describe('modules/platform/github/index', () => {
         message: 'Foobar',
       });
 
-      expect(res).toBe('0abcdef');
+      expect(res).toBe(fetchedSha);
     });
 
     it('aborts if rebase fails due to non-422', async () => {

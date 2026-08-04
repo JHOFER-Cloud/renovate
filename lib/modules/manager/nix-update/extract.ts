@@ -407,11 +407,11 @@ export async function extractAllPackageFiles(
   // that file, and our updateArtifacts receives the right newPackageFileContent.
   // Packages with no resolvable position fall back to flake.nix.
   const depsByFile = new Map<string, PackageFile['deps']>();
-  const pushDep = (file: string, dep: PackageFile['deps'][number]): void => {
+  function pushDep(file: string, dep: PackageFile['deps'][number]): void {
     const list = depsByFile.get(file) ?? [];
     list.push(dep);
     depsByFile.set(file, list);
-  };
+  }
 
   for (const attrName of attrNames) {
     const info = packageInfos[attrName];

@@ -1,4 +1,5 @@
 import { createSign } from 'node:crypto';
+import { DateTime } from 'luxon';
 import { logger } from '../../../logger/index.ts';
 import { githubApi } from './common.ts';
 
@@ -63,6 +64,6 @@ export async function fetchInstallationToken(
   );
   return {
     token: res.body.token,
-    expiresAt: new Date(res.body.expires_at),
+    expiresAt: DateTime.fromISO(res.body.expires_at).toJSDate(),
   };
 }

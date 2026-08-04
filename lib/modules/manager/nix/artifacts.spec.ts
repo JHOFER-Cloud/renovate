@@ -1,19 +1,21 @@
 import type { StatusResult } from 'simple-git';
 import upath from 'upath';
-import { mockDeep } from 'vitest-mock-extended';
 import { envMock, mockExecAll, mockExecSequence } from '~test/exec-util.ts';
-import { env, fs, git, hostRules, partial } from '~test/util.ts';
+import { hostRules } from '~test/host-rules.ts';
+import { env, fs, git, partial } from '~test/util.ts';
 import { GlobalConfig } from '../../../config/global.ts';
-import type { RepoGlobalConfig } from '../../../config/types.ts';
+import type {
+  InternalGlobalConfigOptions,
+  RepoGlobalConfig,
+} from '../../../config/types.ts';
 import * as docker from '../../../util/exec/docker/index.ts';
 import type { UpdateArtifactsConfig } from '../types.ts';
 import { updateArtifacts } from './index.ts';
 
 vi.mock('../../../util/exec/env.ts');
 vi.mock('../../../util/fs/index.ts');
-vi.mock('../../../util/host-rules.ts', () => mockDeep());
 
-const adminConfig: RepoGlobalConfig = {
+const adminConfig: RepoGlobalConfig & InternalGlobalConfigOptions = {
   // `join` fixes Windows CI
   localDir: upath.join('/tmp/github/some/repo'),
   cacheDir: upath.join('/tmp/renovate/cache'),
@@ -43,8 +45,8 @@ describe('modules/manager/nix/artifacts', () => {
     });
     GlobalConfig.set(adminConfig);
     docker.resetPrefetchedImages();
-    hostRules.find.mockReturnValue({ token: undefined });
-    hostRules.getAll.mockReturnValue([]);
+    // This manager still derives the lock file via getSiblingFileName, and
+    // `util/fs` is mocked above, so give it a passthrough implementation.
     fs.getSiblingFileName.mockImplementation(
       (fileName, siblingName) => siblingName,
     );
@@ -121,7 +123,7 @@ describe('modules/manager/nix/artifacts', () => {
       }),
     );
     fs.readLocalFile.mockResolvedValueOnce('new flake.lock');
-    hostRules.find.mockReturnValueOnce({ token: 'token' });
+    hostRules.add({ matchHost: 'github.com', token: 'token' });
 
     const res = await updateArtifacts({
       packageFileName: 'flake.nix',
@@ -151,7 +153,7 @@ describe('modules/manager/nix/artifacts', () => {
       }),
     );
     fs.readLocalFile.mockResolvedValueOnce('new flake.lock');
-    hostRules.find.mockReturnValueOnce({ token: 'x-access-token:token' });
+    hostRules.add({ matchHost: 'github.com', token: 'x-access-token:token' });
 
     const res = await updateArtifacts({
       packageFileName: 'flake.nix',
@@ -181,14 +183,12 @@ describe('modules/manager/nix/artifacts', () => {
       }),
     );
     fs.readLocalFile.mockResolvedValueOnce('new flake.lock');
-    hostRules.find.mockReturnValueOnce({ token: 'main-token' });
-    hostRules.getAll.mockReturnValue([
-      {
-        hostType: 'github',
-        matchHost: 'https://github.com/TrustedOrg/',
-        token: 'x-access-token:trusted-token',
-      },
-    ]);
+    hostRules.add({ matchHost: 'github.com', token: 'main-token' });
+    hostRules.add({
+      hostType: 'github',
+      matchHost: 'https://github.com/TrustedOrg/',
+      token: 'x-access-token:trusted-token',
+    });
 
     const res = await updateArtifacts({
       packageFileName: 'flake.nix',

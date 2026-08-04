@@ -47,6 +47,8 @@ export interface RepoParams {
   renovateUsername?: string;
   cloneSubmodules?: boolean;
   cloneSubmodulesFilter?: string[];
+  /** Azure only: work item type to use when creating issues. */
+  azureWorkItemType?: string;
 }
 
 export interface PrDebugData {
@@ -331,6 +333,7 @@ export interface PlatformScm {
   branchExists(branchName: string): Promise<boolean>;
   getBranchCommit(branchName: string): Promise<LongCommitSha | null>;
   getBranchUpdateDate(branchName: string): Promise<DateTime | null>;
+  getAllBranchUpdateDates(): Promise<Record<string, DateTime>>;
   deleteBranch(branchName: string): Promise<void>;
   commitAndPush(commitConfig: CommitFilesConfig): Promise<LongCommitSha | null>;
   getFileList(): Promise<string[]>;

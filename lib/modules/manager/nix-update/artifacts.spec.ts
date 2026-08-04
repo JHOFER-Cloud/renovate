@@ -3,7 +3,10 @@ import type { StatusResult } from 'simple-git';
 import { mockExecSequence } from '~test/exec-util.ts';
 import { env, fs, git, partial } from '~test/util.ts';
 import { GlobalConfig } from '../../../config/global.ts';
-import type { RepoGlobalConfig } from '../../../config/types.ts';
+import type {
+  InternalGlobalConfigOptions,
+  RepoGlobalConfig,
+} from '../../../config/types.ts';
 import type { UpdateArtifactsConfig } from '../types.ts';
 import { updateArtifacts } from './artifacts.ts';
 import type { FodInfo } from './extract.ts';
@@ -12,7 +15,7 @@ import { _resetPrefetchCacheForTesting } from './prefetch.ts';
 vi.mock('../../../util/exec/env.ts');
 vi.mock('../../../util/fs/index.ts');
 
-const adminConfig: RepoGlobalConfig = {
+const adminConfig: RepoGlobalConfig & InternalGlobalConfigOptions = {
   localDir: '/tmp/repo',
   cacheDir: '/tmp/cache',
   containerbaseDir: '/tmp/cache/containerbase',
@@ -52,7 +55,9 @@ function makeFod(
 }
 
 const NEW_HASH = 'sha256-AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA=';
-const stderrWithGot = (h: string) => `error: hash mismatch\n  got: ${h}`;
+function stderrWithGot(h: string): string {
+  return `error: hash mismatch\n  got: ${h}`;
+}
 
 describe('modules/manager/nix-update/artifacts', () => {
   beforeEach(() => {
@@ -290,7 +295,7 @@ describe('modules/manager/nix-update/artifacts', () => {
   });
 
   it('returns null when localDir is unset', async () => {
-    GlobalConfig.set({} as RepoGlobalConfig);
+    GlobalConfig.set({});
     const result = await updateArtifacts({
       packageFileName: 'flake.nix',
       updatedDeps: [
