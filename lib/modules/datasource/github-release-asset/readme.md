@@ -34,14 +34,28 @@ repo/tag/asset fields.
 
 ## How it works
 
+This is modelled exactly like a Docker `:latest` pin — the value is frozen and
+the **digest** moves:
+
+- `getReleases` reports the pinned tag as the only version. Combined with
+  `exact` versioning (whose `isGreaterThan` is always `false`) no version update
+  can ever be proposed; this exists so the dependency resolves a current version
+  instead of being skipped as `invalid-value`.
+- `getDigest` resolves the asset's current digest, so the update travels
+  Renovate's **digest path**. That terminates naturally: once the new digest is
+  written back, `currentDigest === newDigest` and the update is dropped.
+
+Details:
+
 - **API endpoint**: `{apiBaseUrl}repos/{owner}/{repo}/releases/tags/{tag}`
 - **Default registryUrl**: `https://github.com`
-- **Versioning**: `exact` — digests are opaque strings, compared for equality
+- **Versioning**: `exact`
 
-The matching asset is located by name and its `digest` field is returned as the
-sole release. GitHub only records `digest` for assets uploaded after it started
-tracking them; when the field is absent the datasource returns `null` so nothing
-is proposed.
+The matching asset is located by name and its `digest` field is returned. GitHub
+only records `digest` for assets uploaded after it started tracking them; when
+the field is absent — or the release 404s, which is routine for rolling
+releases that CI deletes and recreates — the datasource returns `null` so
+nothing is proposed.
 
 ## Used by
 

@@ -15,6 +15,7 @@ import { _resetPrefetchCacheForTesting } from './prefetch.ts';
 
 vi.mock('../../../util/exec/env.ts');
 vi.mock('../../../util/fs/index.ts');
+vi.mock('../../datasource/index.ts');
 
 const adminConfig: RepoGlobalConfig & InternalGlobalConfigOptions = {
   localDir: '/tmp/repo',
@@ -454,6 +455,18 @@ describe('modules/manager/nix-update/artifacts', () => {
     const NEW = 'sha256-NEWNEWNEWNEWNEWNEWNEWNEWNEWNEWNEWNEWNEWNEW=';
     mockExecSequence([makeMismatchError(stderrWithGot(NEW))]);
 
+    // The unstable date comes from the datasource, not the upgrade: digest
+    // updates never carry a releaseTimestamp.
+    const { getPkgReleases } = await import('../../datasource/index.ts');
+    vi.mocked(getPkgReleases).mockResolvedValue({
+      releases: [
+        {
+          version: 'main',
+          releaseTimestamp: '2026-06-30T17:00:31.000Z' as Timestamp,
+        },
+      ],
+    });
+
     const fileContent = codeBlock`{
       version = "0-unstable-2025-11-17";
       src = fetchFromGitHub {
@@ -468,11 +481,12 @@ describe('modules/manager/nix-update/artifacts', () => {
       updatedDeps: [
         {
           depName: 'aerospace-swipe',
+          datasource: 'github-digest',
+          packageName: 'acsandmann/aerospace-swipe',
           currentValue: 'main',
           newValue: 'main',
           currentDigest: 'oldcommitsha1',
           newDigest: 'newcommitsha2',
-          releaseTimestamp: '2026-06-30T17:00:31.000Z' as Timestamp,
           managerData: {
             attrName: 'aerospace-swipe',
             system: 'aarch64-darwin',
@@ -498,6 +512,52 @@ describe('modules/manager/nix-update/artifacts', () => {
     expect(writtenContent).toContain(NEW);
     // ...and the nixpkgs unstable date follows the commit date.
     expect(writtenContent).toContain('version = "0-unstable-2026-06-30"');
+  });
+
+  it('reports a failed rev rewrite as an artifactError instead of throwing', async () => {
+    // These rewrites run outside the per-FOD loop; if they threw,
+    // getUpdatedPackageFiles() would fail for the whole branch instead of
+    // surfacing a per-package problem.
+    git.getRepoStatus.mockResolvedValue(
+      partial<StatusResult>({ modified: [], not_added: [] }),
+    );
+    fs.readLocalFile.mockResolvedValue('unchanged');
+    mockExecSequence([
+      makeMismatchError(
+        stderrWithGot('sha256-NEWNEWNEWNEWNEWNEWNEWNEWNEWNEWNEWNEWNEWNEW='),
+      ),
+    ]);
+
+    const result = await updateArtifacts({
+      packageFileName: 'packages/x/default.nix',
+      updatedDeps: [
+        {
+          depName: 'x',
+          currentValue: 'main',
+          newValue: 'main',
+          currentDigest: 'oldcommitsha1',
+          newDigest: 'newcommitsha2',
+          managerData: {
+            attrName: 'x',
+            system: 'x86_64-linux',
+            pname: 'x',
+            fods: [
+              makeFod(['src'], {
+                url: 'https://github.com/o/x.git',
+                rev: 'oldcommitsha1',
+                outputHashMode: 'recursive',
+              }),
+            ],
+          },
+        },
+      ],
+      // No `rev` binding anywhere, and the old sha is absent — both the fast
+      // path and the contextual scan fail, so rewriteRev throws.
+      newPackageFileContent: `{ other = "nothing to anchor on"; }`,
+      config,
+    });
+
+    expect(result?.[0].artifactError?.stderr).toMatch(/Could not locate rev/);
   });
 
   it('skips rewrite when file already has new hash (existing branch reuse)', async () => {

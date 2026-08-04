@@ -939,12 +939,33 @@ describe('modules/manager/nix-update/extract', () => {
       expect(sriToHexDigest('not-a-hash')).toBeNull();
       expect(sriToHexDigest('md5-abc')).toBeNull();
     });
+
+    it('rejects algorithms GitHub never reports', () => {
+      // Asset digests are always sha256; anything else could only ever produce
+      // a permanent mismatch, so refuse it rather than loop forever.
+      expect(sriToHexDigest('sha512-YWJj')).toBeNull();
+      expect(sriToHexDigest('sha1-YWJj')).toBeNull();
+    });
+
+    it('rejects a hash that does not decode to 32 bytes', () => {
+      // Buffer.from silently tolerates malformed base64, so length is the only
+      // reliable validation.
+      expect(sriToHexDigest('sha256-aaa=')).toBeNull();
+      expect(sriToHexDigest('sha256-!!!!')).toBeNull();
+    });
+
+    it('rejects nix base32 and legacy hex hashes', () => {
+      expect(sriToHexDigest('0'.repeat(52))).toBeNull();
+      expect(sriToHexDigest('a'.repeat(64))).toBeNull();
+    });
   });
 
   describe('--version=skip', () => {
     const srcUrl =
       'https://github.com/ghostty-org/ghostty/releases/download/tip/ghostty-macos-universal.zip';
     const sri = 'sha256-W3xQjkMsiMgiZchMLxWlQw39HKaL8WdbLhZsz9eCmCU=';
+    const hex =
+      'sha256:5b7c508e432c88c82265c84c2f15a5430dfd1ca68bf1675b2e166ccfd7829825';
 
     function skipPackage(overrides: Record<string, unknown> = {}) {
       return {
@@ -958,7 +979,11 @@ describe('modules/manager/nix-update/extract', () => {
           fods: [
             {
               attrPath: ['src'],
-              inputs: { outputHash: sri, url: srcUrl },
+              inputs: {
+                outputHash: sri,
+                outputHashMode: 'flat',
+                url: srcUrl,
+              },
             },
           ],
           ...overrides,
@@ -966,7 +991,7 @@ describe('modules/manager/nix-update/extract', () => {
       };
     }
 
-    it('tracks the content hash against the release-asset datasource', async () => {
+    async function extractSkip(overrides: Record<string, unknown> = {}) {
       fs.readLocalFile
         .mockResolvedValueOnce(
           'passthru.updateScript = nix-update-script {extraArgs = ["--version=skip"];};',
@@ -975,97 +1000,78 @@ describe('modules/manager/nix-update/extract', () => {
 
       const { exec } = await import('../../../util/exec/index.ts');
       vi.mocked(exec).mockResolvedValueOnce({
-        stdout: JSON.stringify(skipPackage()),
+        stdout: JSON.stringify(skipPackage(overrides)),
         stderr: '',
       });
 
-      const result = await extractAllPackageFiles({}, [
+      return await extractAllPackageFiles({}, [
         'packages/ghostty-tip/default.nix',
       ]);
+    }
 
-      // The version attribute ("tip") is deliberately not the tracked value —
-      // the artifact's content hash is, since that's the only thing that moves.
+    it('pins the tag and tracks the artifact digest', async () => {
+      const result = await extractSkip();
+
+      // Modelled like a Docker `:latest` pin — the tag is the frozen value and
+      // the digest is what moves. Tracking the digest as the *version* instead
+      // would never produce an update, because `exact` versioning hardwires
+      // isGreaterThan to false.
       expect(result?.[0].deps[0]).toMatchObject({
         depName: 'ghostty-tip',
         datasource: 'github-release-asset',
         packageName: srcUrl,
-        currentValue:
-          'sha256:5b7c508e432c88c82265c84c2f15a5430dfd1ca68bf1675b2e166ccfd7829825',
+        currentValue: 'tip',
+        currentDigest: hex,
         versioning: 'exact',
       });
     });
 
-    it('prefers an explicit passthru.renovate.datasource', async () => {
-      fs.readLocalFile
-        .mockResolvedValueOnce(
-          'passthru.updateScript = nix-update-script {extraArgs = ["--version=skip"];};',
-        )
-        .mockResolvedValueOnce('{ outputs = ...; }');
-
-      const { exec } = await import('../../../util/exec/index.ts');
-      vi.mocked(exec).mockResolvedValueOnce({
-        stdout: JSON.stringify(
-          skipPackage({
-            renovate: {
-              datasource: 'custom.ghostty',
-              packageName: null,
-              extractVersion: null,
+    it('skips a recursive (NAR) src hash', async () => {
+      // A recursive hash describes the unpacked tree, so it can never equal
+      // the digest GitHub reports for the artifact.
+      const result = await extractSkip({
+        fods: [
+          {
+            attrPath: ['src'],
+            inputs: {
+              outputHash: sri,
+              outputHashMode: 'recursive',
+              url: srcUrl,
             },
-          }),
-        ),
-        stderr: '',
+          },
+        ],
       });
 
-      const result = await extractAllPackageFiles({}, [
-        'packages/ghostty-tip/default.nix',
-      ]);
-
-      expect(result?.[0].deps[0]).toMatchObject({
-        datasource: 'custom.ghostty',
-        packageName: 'ghostty-tip',
-      });
+      expect(result).toBeNull();
     });
 
-    it('skips when the src is not content-addressable and no override is set', async () => {
-      fs.readLocalFile
-        .mockResolvedValueOnce(
-          'passthru.updateScript = nix-update-script {extraArgs = ["--version=skip"];};',
-        )
-        .mockResolvedValueOnce('{ outputs = ...; }');
-
-      const { exec } = await import('../../../util/exec/index.ts');
-      vi.mocked(exec).mockResolvedValueOnce({
-        stdout: JSON.stringify(
-          // Classifiable as github-tags, but not a release asset — so there is
-          // no way to observe the content changing.
-          skipPackage({
-            srcUrl: 'https://github.com/o/r/archive/refs/heads/main.tar.gz',
-          }),
-        ),
-        stderr: '',
+    it('skips when the src is not a GitHub release asset', async () => {
+      const result = await extractSkip({
+        srcUrl: 'https://github.com/o/r/archive/refs/heads/main.tar.gz',
       });
 
-      expect(
-        await extractAllPackageFiles({}, ['packages/ghostty-tip/default.nix']),
-      ).toBeNull();
+      expect(result).toBeNull();
     });
 
-    it('skips when the src hash is unusable', async () => {
-      fs.readLocalFile
-        .mockResolvedValueOnce(
-          'passthru.updateScript = nix-update-script {extraArgs = ["--version=skip"];};',
-        )
-        .mockResolvedValueOnce('{ outputs = ...; }');
-
-      const { exec } = await import('../../../util/exec/index.ts');
-      vi.mocked(exec).mockResolvedValueOnce({
-        stdout: JSON.stringify(skipPackage({ fods: [] })),
-        stderr: '',
+    it('skips when the src hash is not usable sha256', async () => {
+      const result = await extractSkip({
+        fods: [
+          {
+            attrPath: ['src'],
+            inputs: {
+              outputHash: 'sha512-YWJj',
+              outputHashMode: 'flat',
+              url: srcUrl,
+            },
+          },
+        ],
       });
 
-      expect(
-        await extractAllPackageFiles({}, ['packages/ghostty-tip/default.nix']),
-      ).toBeNull();
+      expect(result).toBeNull();
+    });
+
+    it('skips when there is no src FOD at all', async () => {
+      expect(await extractSkip({ fods: [] })).toBeNull();
     });
   });
 });

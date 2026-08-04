@@ -242,12 +242,21 @@ export function sriToHexDigest(sri: string | null): string | null {
   if (!sri) {
     return null;
   }
-  const m = /^(sha256|sha512|sha1)-([A-Za-z0-9+/=]+)$/.exec(sri);
+  // sha256 only: GitHub reports asset digests as sha256, so any other
+  // algorithm could never compare equal — better to skip the package than to
+  // emit a digest that guarantees a permanent mismatch.
+  const m = /^sha256-([A-Za-z0-9+/]+={0,2})$/.exec(sri);
   if (!m) {
     return null;
   }
-  const hex = Buffer.from(m[2], 'base64').toString('hex');
-  return hex ? `${m[1]}:${hex}` : null;
+  // Buffer.from is lenient with base64 — it silently drops invalid characters
+  // and tolerates bad padding — so validate the decoded length rather than
+  // trusting the parse to have rejected malformed input.
+  const bytes = Buffer.from(m[1], 'base64');
+  if (bytes.length !== 32) {
+    return null;
+  }
+  return `sha256:${bytes.toString('hex')}`;
 }
 
 export function datasourceFromSrc(
@@ -462,45 +471,45 @@ export async function extractAllPackageFiles(
 
     // `--version=skip` pins a rolling artifact: the version attribute never
     // changes (e.g. `version = "tip"`), only the bytes behind a fixed URL do.
-    // There is nothing version-shaped to compare, so we track the *content
-    // hash itself* as the dep's value. That keeps the dep self-consistent —
-    // the hash is also the thing updateArtifacts rewrites, so once a PR merges
-    // the file matches what the datasource reports and no further update is
-    // proposed.
+    // Modelled exactly like a Docker `:latest` pin — the value (the tag) is
+    // frozen and the *digest* moves — so the update flows through Renovate's
+    // digest path. Tracking it as a version instead cannot work: `exact`
+    // versioning hardwires `isGreaterThan` to false, so `filterVersions` would
+    // discard every candidate and no update would ever be proposed.
     if (info.updateScriptArgs.includes('--version=skip')) {
-      // An explicit passthru.renovate.datasource wins; otherwise a GitHub
-      // release asset resolves to the datasource that reports its content
-      // digest, so the common `tip`/`nightly` case needs no configuration.
-      let skipDs: { datasource: string; packageName: string } | null = null;
-      if (overrides?.datasource) {
-        skipDs = ds;
-      } else if (info.srcUrl && parseAssetUrl(info.srcUrl)) {
-        skipDs = {
-          datasource: GithubReleaseAssetDatasource.id,
-          packageName: info.srcUrl,
-        };
-      }
-      if (!skipDs) {
+      const assetUrl = info.srcUrl ? parseAssetUrl(info.srcUrl) : null;
+      if (!assetUrl) {
         logger.warn(
           { attrName, srcUrl: info.srcUrl },
-          'nix-update: --version=skip needs a content-addressable src — set passthru.renovate.datasource',
+          'nix-update: --version=skip is only supported for GitHub release assets — skipping',
         );
         continue;
       }
       const srcFod = info.fods.find((f) => f.attrPath.at(-1) === 'src');
-      const currentValue = sriToHexDigest(srcFod?.inputs.outputHash ?? null);
-      if (!currentValue) {
+      // Only a flat fetch hashes the file itself. A recursive (NAR) hash
+      // describes the *unpacked* tree, so it could never equal the digest
+      // GitHub reports for the artifact — silently looping forever.
+      if (srcFod?.inputs.outputHashMode !== 'flat') {
+        logger.warn(
+          { attrName, outputHashMode: srcFod?.inputs.outputHashMode },
+          'nix-update: --version=skip needs a flat src hash (e.g. fetchurl, not fetchzip) — skipping',
+        );
+        continue;
+      }
+      const currentDigest = sriToHexDigest(srcFod.inputs.outputHash);
+      if (!currentDigest) {
         logger.debug(
           { attrName },
-          'nix-update: --version=skip package has no usable src hash — skipping',
+          'nix-update: --version=skip package has no usable sha256 src hash — skipping',
         );
         continue;
       }
       pushDep(file, {
         depName: attrName,
-        datasource: skipDs.datasource,
-        packageName: skipDs.packageName,
-        currentValue,
+        datasource: GithubReleaseAssetDatasource.id,
+        packageName: info.srcUrl!,
+        currentValue: assetUrl.tag,
+        currentDigest,
         versioning: 'exact',
         managerData: {
           attrName,

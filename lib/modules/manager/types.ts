@@ -236,7 +236,6 @@ export interface Upgrade<
   newValue?: string;
   packageFile?: string;
   rangeStrategy?: RangeStrategy;
-  releaseTimestamp?: Timestamp;
   newVersion?: string;
   updateType?: UpdateType;
   version?: string;

@@ -6,10 +6,12 @@ import { readLocalFile, writeLocalFile } from '../../../util/fs/index.ts';
 import { getGitEnvironmentVariables } from '../../../util/git/auth.ts';
 import { getRepoStatus } from '../../../util/git/index.ts';
 import * as hostRules from '../../../util/host-rules.ts';
+import { getPkgReleases } from '../../datasource/index.ts';
 import type {
   ArtifactError,
   UpdateArtifact,
   UpdateArtifactsResult,
+  Upgrade,
 } from '../types.ts';
 import type { FodInfo } from './extract.ts';
 import { buildKnownSrcExpr, classifyFod } from './fetchers.ts';
@@ -98,46 +100,56 @@ export async function updateArtifacts({
   // hash in the DMG filename. Override the src FOD's url before classify so
   // the prefetch hits the right artifact, and rewrite the .nix file to keep
   // the literal url in sync.
-  const downloadUrl = dep.downloadUrl;
-  if (downloadUrl) {
-    for (const fod of bumpedFods) {
-      if (fod.attrPath.length === 1 && fod.attrPath[0] === 'src') {
-        const oldUrl = fod.inputs.url;
-        if (oldUrl && oldUrl !== downloadUrl) {
-          content = rewriteUrl(content, {
-            attrPath: fod.attrPath,
-            oldUrl,
-            newUrl: downloadUrl,
-          });
-          fod.inputs.url = downloadUrl;
+  const errors: ArtifactError[] = [];
+
+  // These rewrites run before the prefetch loop so a failure aborts before we
+  // spend nix-build time — but they must not throw out of updateArtifacts, or
+  // getUpdatedPackageFiles() fails for the whole branch instead of surfacing a
+  // per-package problem. Collect failures the same way the FOD loop does.
+  try {
+    const downloadUrl = dep.downloadUrl;
+    if (downloadUrl) {
+      for (const fod of bumpedFods) {
+        if (fod.attrPath.length === 1 && fod.attrPath[0] === 'src') {
+          const oldUrl = fod.inputs.url;
+          if (oldUrl && oldUrl !== downloadUrl) {
+            content = rewriteUrl(content, {
+              attrPath: fod.attrPath,
+              oldUrl,
+              newUrl: downloadUrl,
+            });
+            fod.inputs.url = downloadUrl;
+          }
+          break;
         }
-        break;
       }
     }
-  }
 
-  // Branch-tracked packages pin a literal commit in `rev`. Renovate's
-  // auto-replace is skipped for managers that define `updateDependency`, and
-  // ours intentionally does nothing when currentValue === newValue (both are
-  // the branch name), so this is the only place the new commit can reach the
-  // file. Do it before the prefetch loop so a failure here aborts before we
-  // spend nix-build time.
-  if (dep.currentDigest && newDigest && dep.currentDigest !== newDigest) {
-    const srcFod = bumpedFods.find((fod) => fod.attrPath.at(-1) === 'src');
-    if (srcFod) {
-      content = rewriteRev(content, {
-        attrPath: srcFod.attrPath,
-        oldRev: dep.currentDigest,
-        newRev: newDigest,
-      });
+    // Branch-tracked packages pin a literal commit in `rev`. Renovate's
+    // auto-replace is skipped for managers that define `updateDependency`, and
+    // ours intentionally does nothing when currentValue === newValue (both are
+    // the branch name), so this is the only place the new commit can reach the
+    // file.
+    if (dep.currentDigest && newDigest && dep.currentDigest !== newDigest) {
+      const srcFod = bumpedFods.find((fod) => fod.attrPath.at(-1) === 'src');
+      if (srcFod) {
+        content = rewriteRev(content, {
+          attrPath: srcFod.attrPath,
+          oldRev: dep.currentDigest,
+          newRev: newDigest,
+        });
+      }
+      content = await bumpUnstableDate(content, dep);
     }
-    // nixpkgs encodes the pinned commit's date in the version of branch-tracked
-    // packages (`<base>-unstable-YYYY-MM-DD`). github-digest derives its release
-    // timestamp from that same commit date, so it's the right source here.
-    const newDate = /^(\d{4}-\d{2}-\d{2})/.exec(dep.releaseTimestamp ?? '');
-    if (newDate) {
-      content = rewriteUnstableDate(content, newDate[1]);
-    }
+  } catch (err) {
+    logger.warn(
+      { err, attrName },
+      'nix-update: failed to rewrite package metadata',
+    );
+    errors.push({
+      fileName: packageFileName,
+      stderr: err instanceof Error ? err.message : String(err),
+    });
   }
 
   // Classify all FODs. Hard-fail surface area is the classifier — anything
@@ -147,7 +159,6 @@ export async function updateArtifacts({
   );
   // Run src first; vendor builders need src already in the runner's store.
   classified.sort((a, b) => Number(b.isSrc) - Number(a.isSrc));
-  const errors: ArtifactError[] = [];
   // Map src fods (by attrPath joined) → known new hash, for vendor srcExpr.
   const srcHashes = new Map<string, string>();
 
@@ -262,6 +273,40 @@ export async function updateArtifacts({
       },
     })),
   );
+}
+
+// nixpkgs encodes the pinned commit's date in the version of branch-tracked
+// packages (`<base>-unstable-YYYY-MM-DD`).
+//
+// The date can't come off the upgrade: branch-tracked packages only ever
+// produce a *digest* update, and Renovate builds those as a bare
+// `{ updateType, newValue, newDigest }` — `releaseTimestamp` is set in
+// `generateUpdate()`, which digest updates never reach. So resolve it through
+// the datasource layer instead, which is also where the commit date legitimately
+// lives (`github-digest` derives its release timestamp from it). The result is
+// already cached — the same lookup ran for this dep earlier in the run.
+//
+// Returns content unchanged whenever the date can't be established; a stale
+// date is cosmetic, a wrong one is not.
+async function bumpUnstableDate(
+  content: string,
+  dep: Upgrade,
+): Promise<string> {
+  const { datasource, packageName, currentValue } = dep;
+  if (!datasource || !packageName || !currentValue) {
+    return content;
+  }
+  const releases = await getPkgReleases({
+    datasource,
+    packageName,
+    currentValue,
+    versioning: dep.versioning,
+  });
+  const timestamp = releases?.releases.find(
+    (r) => r.version === currentValue,
+  )?.releaseTimestamp;
+  const newDate = /^(\d{4}-\d{2}-\d{2})/.exec(timestamp ?? '');
+  return newDate ? rewriteUnstableDate(content, newDate[1]) : content;
 }
 
 // Replace the OLD version (and/or digest) with the NEW one across the fetcher
