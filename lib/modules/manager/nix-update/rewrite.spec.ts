@@ -1,4 +1,4 @@
-import { rewriteHash, rewriteUrl } from './rewrite.ts';
+import { rewriteHash, rewriteRev, rewriteUrl } from './rewrite.ts';
 
 describe('modules/manager/nix-update/rewrite', () => {
   const oldHash = 'sha256-AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA=';
@@ -326,5 +326,96 @@ describe('modules/manager/nix-update/rewrite', () => {
     expect(() =>
       rewriteUrl(content, { attrPath: ['src'], oldUrl, newUrl }),
     ).toThrow(/Could not locate url/);
+  });
+});
+
+describe('modules/manager/nix-update/rewrite', () => {
+  const oldRev = 'fc3db8757558956e8fe1496cff3e6a9a1b1748ac';
+  const newRev = '976c3107f6ed9859149bdc130e3f8928f2ab6852';
+
+  it('fast-path: replaces the literal when oldRev is unique', () => {
+    const content = `
+      {
+        src = fetchFromGitHub {
+          owner = "acsandmann";
+          repo = "aerospace-swipe";
+          hash = "sha256-aaa=";
+          rev = "${oldRev}";
+        };
+      }
+    `;
+    const out = rewriteRev(content, { attrPath: ['src'], oldRev, newRev });
+    expect(out).toContain(`rev = "${newRev}"`);
+    expect(out).not.toContain(oldRev);
+  });
+
+  it('rewrites a rev bound in a let block and pulled in via `inherit rev`', () => {
+    // The prlsp shape: the binding sits outside the src block, so the
+    // contextual scan anchored on `src` would never see it — the fast path
+    // is what makes this work.
+    const content = `
+      let
+        rev = "${oldRev}";
+        src = fetchFromGitHub {
+          owner = "toziegler";
+          repo = "prlsp";
+          inherit rev;
+          hash = "sha256-aaa=";
+        };
+      in { }
+    `;
+    const out = rewriteRev(content, { attrPath: ['src'], oldRev, newRev });
+    expect(out).toContain(`rev = "${newRev}"`);
+    expect(out).not.toContain(oldRev);
+  });
+
+  it('contextual: rewrites rev inside the src block when the sha appears twice', () => {
+    const content = `
+      {
+        # pinned at ${oldRev}
+        src = fetchgit {
+          url = "https://example.com/x.git";
+          rev = "${oldRev}";
+          hash = "sha256-aaa=";
+        };
+      }
+    `;
+    const out = rewriteRev(content, { attrPath: ['src'], oldRev, newRev });
+    expect(out).toContain(`rev = "${newRev}"`);
+    // the comment mention is left alone
+    expect(out).toContain(`# pinned at ${oldRev}`);
+  });
+
+  it('contextual: falls back to the first rev binding for an interpolated rev', () => {
+    const content = `
+      {
+        src = fetchFromGitHub {
+          rev = "v\${version}";
+          hash = "sha256-aaa=";
+        };
+      }
+    `;
+    const out = rewriteRev(content, { attrPath: ['src'], oldRev, newRev });
+    expect(out).toContain(`rev = "${newRev}"`);
+  });
+
+  it('is a no-op when oldRev equals newRev', () => {
+    const content = `src = fetchgit { rev = "${oldRev}"; };`;
+    expect(
+      rewriteRev(content, { attrPath: ['src'], oldRev, newRev: oldRev }),
+    ).toBe(content);
+  });
+
+  it('throws on empty attrPath', () => {
+    expect(() => rewriteRev('x', { attrPath: [], oldRev, newRev })).toThrow(
+      /empty attrPath/,
+    );
+  });
+
+  it('throws when no matching rev binding can be found', () => {
+    const content = `{ other = "x"; }`;
+    expect(() =>
+      rewriteRev(content, { attrPath: ['src'], oldRev, newRev }),
+    ).toThrow(/Could not locate rev/);
   });
 });

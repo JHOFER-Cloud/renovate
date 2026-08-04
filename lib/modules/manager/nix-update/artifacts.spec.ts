@@ -434,6 +434,68 @@ describe('modules/manager/nix-update/artifacts', () => {
     expect(cmd).not.toContain('oldcommitsha1');
   });
 
+  it('writes the new commit into the file for branch-tracked packages', async () => {
+    git.getRepoStatus.mockResolvedValue(
+      partial<StatusResult>({ modified: [], not_added: [] }),
+    );
+    // Capture what artifacts writes back so we can assert on it.
+    let writtenContent: string | undefined;
+    const { writeLocalFile, readLocalFile } =
+      await import('../../../util/fs/index.ts');
+    vi.mocked(writeLocalFile).mockImplementation((_path, contents) => {
+      writtenContent = contents as string;
+      return Promise.resolve();
+    });
+    vi.mocked(readLocalFile).mockImplementation(() =>
+      Promise.resolve(writtenContent ?? ''),
+    );
+
+    const NEW = 'sha256-NEWNEWNEWNEWNEWNEWNEWNEWNEWNEWNEWNEWNEWNEW=';
+    mockExecSequence([makeMismatchError(stderrWithGot(NEW))]);
+
+    const fileContent = codeBlock`{
+      version = "0-unstable-2025-11-17";
+      src = fetchFromGitHub {
+        owner = "acsandmann"; repo = "aerospace-swipe";
+        rev = "oldcommitsha1";
+        hash = "sha256-OLDOLDOLDOLDOLDOLDOLDOLDOLDOLDOLDOLDOLDOLDO=";
+      };
+    }`;
+
+    await updateArtifacts({
+      packageFileName: 'packages/aerospace-swipe/default.nix',
+      updatedDeps: [
+        {
+          depName: 'aerospace-swipe',
+          currentValue: 'main',
+          newValue: 'main',
+          currentDigest: 'oldcommitsha1',
+          newDigest: 'newcommitsha2',
+          managerData: {
+            attrName: 'aerospace-swipe',
+            system: 'aarch64-darwin',
+            pname: 'aerospace-swipe',
+            fods: [
+              makeFod(['src'], {
+                url: 'https://github.com/acsandmann/aerospace-swipe/archive/oldcommitsha1.tar.gz',
+                rev: 'oldcommitsha1',
+                outputHashMode: 'recursive',
+              }),
+            ],
+          },
+        },
+      ],
+      newPackageFileContent: fileContent,
+      config,
+    });
+
+    // Both the commit and the hash must land in the file — pairing the newly
+    // computed hash with the old rev is a guaranteed build failure.
+    expect(writtenContent).toContain('rev = "newcommitsha2"');
+    expect(writtenContent).not.toContain('oldcommitsha1');
+    expect(writtenContent).toContain(NEW);
+  });
+
   it('skips rewrite when file already has new hash (existing branch reuse)', async () => {
     git.getRepoStatus.mockResolvedValue(
       partial<StatusResult>({ modified: [], not_added: [] }),

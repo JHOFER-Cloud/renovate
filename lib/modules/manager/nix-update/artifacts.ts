@@ -14,7 +14,7 @@ import type {
 import type { FodInfo } from './extract.ts';
 import { buildKnownSrcExpr, classifyFod } from './fetchers.ts';
 import { prefetch } from './prefetch.ts';
-import { rewriteHash, rewriteUrl } from './rewrite.ts';
+import { rewriteHash, rewriteRev, rewriteUrl } from './rewrite.ts';
 
 export async function updateArtifacts({
   packageFileName,
@@ -108,6 +108,23 @@ export async function updateArtifacts({
         }
         break;
       }
+    }
+  }
+
+  // Branch-tracked packages pin a literal commit in `rev`. Renovate's
+  // auto-replace is skipped for managers that define `updateDependency`, and
+  // ours intentionally does nothing when currentValue === newValue (both are
+  // the branch name), so this is the only place the new commit can reach the
+  // file. Do it before the prefetch loop so a failure here aborts before we
+  // spend nix-build time.
+  if (dep.currentDigest && newDigest && dep.currentDigest !== newDigest) {
+    const srcFod = bumpedFods.find((fod) => fod.attrPath.at(-1) === 'src');
+    if (srcFod) {
+      content = rewriteRev(content, {
+        attrPath: srcFod.attrPath,
+        oldRev: dep.currentDigest,
+        newRev: newDigest,
+      });
     }
   }
 
