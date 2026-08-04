@@ -114,13 +114,37 @@ src = fetchurl {
 
 This works alongside `passthru.renovate.datasource` — same opt-in surface; only the customDatasource transform changes.
 
+#### Rolling artifacts (`--version=skip`)
+
+Some packages pin a tag that never moves while the bytes behind it do — a `tip` or `nightly` release that is force-pushed on every upstream commit. `nix-update` models this as `--version=skip`: never touch the version, just re-fetch the hash.
+
+Renovate needs _something_ to change before it will open a PR, and here the only thing that changes is the artifact's content. So for these packages the manager tracks the **content hash itself** as the dependency's value: `currentValue` becomes the `src` hash, converted from nix's SRI encoding (`sha256-<base64>`) to the hex form content APIs report (`sha256:<hex>`). Because the hash is also what `updateArtifacts` rewrites, the dep is self-consistent — once the PR merges, the file's hash matches what the datasource reports and no further update is proposed.
+
+When the `src` is a GitHub release asset this needs **no configuration at all** — the manager selects the [`github-release-asset`](../../datasource/github-release-asset/index.md) datasource, which reports the asset's digest for a fixed tag:
+
+```nix
+stdenvNoCC.mkDerivation {
+  pname = "ghostty-tip";
+  version = "tip";
+
+  src = fetchurl {
+    url = "https://github.com/ghostty-org/ghostty/releases/download/tip/ghostty-macos-universal.zip";
+    hash = "sha256-...";
+  };
+
+  passthru.updateScript = nix-update-script { extraArgs = [ "--version=skip" ]; };
+}
+```
+
+For artifacts hosted elsewhere, set `passthru.renovate.datasource` to a customDatasource whose version is the artifact's `sha256:<hex>` digest. Either way the package's `version` attribute is never rewritten — only the hash moves.
+
 ### Limitations
 
 - Non-flake repos are not supported
 - Only packages with `passthru.updateScript = nix-update-script { ... }` are detected; other update scripts (e.g., `gitUpdater`) are ignored
 - For branch-tracked packages (`--version=branch`), the branch name defaults to `main` when not explicitly specified via `--version=branch:<name>`. Repos using `master` or other default branches should set the explicit form in their `updateScript`
 - For branch-tracked packages a nixpkgs-style `version = "<base>-unstable-YYYY-MM-DD"` date is bumped from the datasource's release timestamp (`github-digest` derives it from the commit date). Datasources that don't report a release timestamp leave the date untouched — the `rev` and hash still update, so the package builds either way
-- `--version=skip` (packages pinned to a rolling tag whose content changes without a version change, e.g. a `tip` release) is not supported. The dep is extracted but dropped at lookup because the version string isn't parseable, so the hash is never refreshed
+- `--version=skip` packages need a `passthru.renovate.datasource` that reports the artifact's content hash (see below); without one there is nothing to compare and the package is skipped with a warning
 - Custom out-of-nixpkgs fetchers (a `fetchMyThing` defined in your own flake) won't be recognised; the manager will emit an `artifactError` naming the FOD attribute path so you can either rename to a standard fetcher or open an issue
 - The flake's `nixpkgs` input is reused for runner-side hash computation. If your flake names it differently, the manager falls back to the host's `<nixpkgs>` channel, which may diverge from your pinned nixpkgs and produce different vendor hashes for some ecosystems
 - **Custom builder overrides** (e.g. a package that wraps `buildGoModule` to inject extra steps into the vendor build) are not faithfully reproduced. The manager calls plain `runnerPkgs.buildGoModule` / `runnerPkgs.rustPlatform.buildRustPackage` / etc., not the user's wrapper. If your `goModules`/`cargoDeps` build phase is non-standard, the computed hash may differ from what `nix build .#yourPkg` would produce. Open an issue if you hit this

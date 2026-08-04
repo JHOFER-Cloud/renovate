@@ -2,6 +2,10 @@ import { logger } from '../../../logger/index.ts';
 import { exec } from '../../../util/exec/index.ts';
 import type { ExecOptions } from '../../../util/exec/types.ts';
 import { readLocalFile } from '../../../util/fs/index.ts';
+import {
+  GithubReleaseAssetDatasource,
+  parseAssetUrl,
+} from '../../datasource/github-release-asset/index.ts';
 import type { ExtractConfig, PackageFile } from '../types.ts';
 
 // Nix expression passed to `nix eval .#packages --apply` to introspect all
@@ -228,6 +232,24 @@ export function deriveExtractVersion(args: string[]): string | undefined {
   return pattern.replace(/\((?!\?)/, '(?<version>');
 }
 
+// nix records fixed-output hashes in SRI form (`sha256-<base64>`), while
+// content APIs — and the Renovate customDatasources built on them — report the
+// same bytes as hex (`sha256:<hex>`). Convert so a `--version=skip` dep's
+// currentValue is directly comparable with what its datasource returns.
+// Without this the two encodings would never match and Renovate would keep
+// proposing the same update forever.
+export function sriToHexDigest(sri: string | null): string | null {
+  if (!sri) {
+    return null;
+  }
+  const m = /^(sha256|sha512|sha1)-([A-Za-z0-9+/=]+)$/.exec(sri);
+  if (!m) {
+    return null;
+  }
+  const hex = Buffer.from(m[2], 'base64').toString('hex');
+  return hex ? `${m[1]}:${hex}` : null;
+}
+
 export function datasourceFromSrc(
   srcUrl: string | null,
   pname: string | null,
@@ -437,6 +459,60 @@ export async function extractAllPackageFiles(
       a.startsWith('--version=branch'),
     );
     const file = packageFileFromPosition(info.position) ?? 'flake.nix';
+
+    // `--version=skip` pins a rolling artifact: the version attribute never
+    // changes (e.g. `version = "tip"`), only the bytes behind a fixed URL do.
+    // There is nothing version-shaped to compare, so we track the *content
+    // hash itself* as the dep's value. That keeps the dep self-consistent —
+    // the hash is also the thing updateArtifacts rewrites, so once a PR merges
+    // the file matches what the datasource reports and no further update is
+    // proposed.
+    if (info.updateScriptArgs.includes('--version=skip')) {
+      // An explicit passthru.renovate.datasource wins; otherwise a GitHub
+      // release asset resolves to the datasource that reports its content
+      // digest, so the common `tip`/`nightly` case needs no configuration.
+      let skipDs: { datasource: string; packageName: string } | null = null;
+      if (overrides?.datasource) {
+        skipDs = ds;
+      } else if (info.srcUrl && parseAssetUrl(info.srcUrl)) {
+        skipDs = {
+          datasource: GithubReleaseAssetDatasource.id,
+          packageName: info.srcUrl,
+        };
+      }
+      if (!skipDs) {
+        logger.warn(
+          { attrName, srcUrl: info.srcUrl },
+          'nix-update: --version=skip needs a content-addressable src — set passthru.renovate.datasource',
+        );
+        continue;
+      }
+      const srcFod = info.fods.find((f) => f.attrPath.at(-1) === 'src');
+      const currentValue = sriToHexDigest(srcFod?.inputs.outputHash ?? null);
+      if (!currentValue) {
+        logger.debug(
+          { attrName },
+          'nix-update: --version=skip package has no usable src hash — skipping',
+        );
+        continue;
+      }
+      pushDep(file, {
+        depName: attrName,
+        datasource: skipDs.datasource,
+        packageName: skipDs.packageName,
+        currentValue,
+        versioning: 'exact',
+        managerData: {
+          attrName,
+          system: info.system,
+          pname: info.pname,
+          updateScriptArgs: info.updateScriptArgs,
+          isBranchTracked: false,
+          fods: info.fods,
+        },
+      });
+      continue;
+    }
 
     if (isBranchTracked) {
       if (!info.srcRev) {
