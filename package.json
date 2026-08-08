@@ -330,11 +330,11 @@
     "graphql": "16.14.2",
     "husky": "9.1.7",
     "jest-extended": "7.0.0",
-    "lint-staged": "17.2.0",
+    "lint-staged": "17.3.0",
     "markdownlint-cli2": "0.23.2",
     "markdownlint-cli2-formatter-template": "0.0.4",
     "memfs": "4.64.0",
-    "nock": "14.0.16",
+    "nock": "14.0.17",
     "npm-run-all2": "9.0.3",
     "nyc": "18.0.0",
     "oxlint": "1.72.0",
@@ -351,7 +351,7 @@
     "vitest": "4.1.10",
     "vitest-mock-extended": "5.0.0"
   },
-  "packageManager": "pnpm@11.18.0",
+  "packageManager": "pnpm@11.19.0",
   "files": [
     "dist",
     "renovate-schema.json"
