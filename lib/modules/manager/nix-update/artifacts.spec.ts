@@ -33,6 +33,9 @@ function makeMismatchError(stderr: string): Error {
   return err;
 }
 
+// prefetch probes `builtins.storeDir` once per process before it builds.
+const STORE_DIR_PROBE = { stdout: '/nix/store\n', stderr: '' };
+
 function makeFod(
   attrPath: string[],
   inputs: Partial<FodInfo['inputs']>,
@@ -104,7 +107,10 @@ describe('modules/manager/nix-update/artifacts', () => {
     );
     fs.readLocalFile.mockResolvedValue('content with new hash');
 
-    mockExecSequence([makeMismatchError(stderrWithGot(NEW_HASH))]);
+    mockExecSequence([
+      STORE_DIR_PROBE,
+      makeMismatchError(stderrWithGot(NEW_HASH)),
+    ]);
 
     const fileContent = codeBlock`{
       src = fetchurl {
@@ -163,7 +169,10 @@ describe('modules/manager/nix-update/artifacts', () => {
       Promise.resolve(writtenContent ?? ''),
     );
 
-    mockExecSequence([makeMismatchError(stderrWithGot(NEW_HASH))]);
+    mockExecSequence([
+      STORE_DIR_PROBE,
+      makeMismatchError(stderrWithGot(NEW_HASH)),
+    ]);
 
     const oldUrl =
       'https://x-r2.raycast-releases.com/Raycast_Beta_0.61.0.0_aaa_arm64.dmg';
@@ -213,6 +222,7 @@ describe('modules/manager/nix-update/artifacts', () => {
     const NEW_SRC = 'sha256-SRCSRCSRCSRCSRCSRCSRCSRCSRCSRCSRCSRCSRCSRC=';
     const NEW_VENDOR = 'sha256-VENVENVENVENVENVENVENVENVENVENVENVENVENVEN=';
     const snapshots = mockExecSequence([
+      STORE_DIR_PROBE,
       makeMismatchError(stderrWithGot(NEW_SRC)),
       makeMismatchError(stderrWithGot(NEW_VENDOR)),
     ]);
@@ -253,15 +263,15 @@ describe('modules/manager/nix-update/artifacts', () => {
     });
 
     // first exec: src; second exec: vendor — both use runnerPkgs (no --eval-system)
-    expect(snapshots[0].cmd).toContain('runnerPkgs.fetchFromGitHub');
-    expect(snapshots[1].cmd).toContain('runnerPkgs.buildGoModule');
-    expect(snapshots[0].cmd).not.toContain('--eval-system');
+    expect(snapshots[1].cmd).toContain('runnerPkgs.fetchFromGitHub');
+    expect(snapshots[2].cmd).toContain('runnerPkgs.buildGoModule');
+    expect(snapshots[1].cmd).not.toContain('--eval-system');
     // vendor expression should reference the now-known src hash, not the placeholder
-    expect(snapshots[1].cmd).toContain(NEW_SRC);
+    expect(snapshots[2].cmd).toContain(NEW_SRC);
   });
 
   it('returns artifactError when prefetch fails (does not throw, does not abort)', async () => {
-    mockExecSequence([new Error('exec died')]);
+    mockExecSequence([STORE_DIR_PROBE, new Error('exec died')]);
 
     const result = await updateArtifacts({
       packageFileName: 'packages/foo/default.nix',
@@ -328,7 +338,10 @@ describe('modules/manager/nix-update/artifacts', () => {
         hash = "${NEW_HASH}";
       };
     }`;
-    mockExecSequence([makeMismatchError(stderrWithGot(NEW_HASH))]);
+    mockExecSequence([
+      STORE_DIR_PROBE,
+      makeMismatchError(stderrWithGot(NEW_HASH)),
+    ]);
 
     const result = await updateArtifacts({
       packageFileName: 'packages/foo/default.nix',
@@ -364,7 +377,10 @@ describe('modules/manager/nix-update/artifacts', () => {
     );
     fs.readLocalFile.mockResolvedValue('updated content');
     const NEW = 'sha256-NEWNEWNEWNEWNEWNEWNEWNEWNEWNEWNEWNEWNEWNEW=';
-    const snapshots = mockExecSequence([makeMismatchError(stderrWithGot(NEW))]);
+    const snapshots = mockExecSequence([
+      STORE_DIR_PROBE,
+      makeMismatchError(stderrWithGot(NEW)),
+    ]);
 
     await updateArtifacts({
       packageFileName: 'packages/k/default.nix',
@@ -391,7 +407,7 @@ describe('modules/manager/nix-update/artifacts', () => {
       config,
     });
 
-    const cmd = snapshots[0].cmd;
+    const cmd = snapshots[1].cmd;
     expect(cmd).toContain('rev = "v0.0.61"');
     expect(cmd).not.toContain('vv0.0.61');
   });
@@ -402,7 +418,10 @@ describe('modules/manager/nix-update/artifacts', () => {
     );
     fs.readLocalFile.mockResolvedValue('updated content');
     const NEW = 'sha256-NEWNEWNEWNEWNEWNEWNEWNEWNEWNEWNEWNEWNEWNEW=';
-    const snapshots = mockExecSequence([makeMismatchError(stderrWithGot(NEW))]);
+    const snapshots = mockExecSequence([
+      STORE_DIR_PROBE,
+      makeMismatchError(stderrWithGot(NEW)),
+    ]);
 
     await updateArtifacts({
       packageFileName: 'packages/x/default.nix',
@@ -433,7 +452,7 @@ describe('modules/manager/nix-update/artifacts', () => {
       config,
     });
 
-    const cmd = snapshots[0].cmd;
+    const cmd = snapshots[1].cmd;
     expect(cmd).toContain('rev = "newcommitsha2"');
     expect(cmd).not.toContain('oldcommitsha1');
   });
@@ -455,7 +474,7 @@ describe('modules/manager/nix-update/artifacts', () => {
     );
 
     const NEW = 'sha256-NEWNEWNEWNEWNEWNEWNEWNEWNEWNEWNEWNEWNEWNEW=';
-    mockExecSequence([makeMismatchError(stderrWithGot(NEW))]);
+    mockExecSequence([STORE_DIR_PROBE, makeMismatchError(stderrWithGot(NEW))]);
 
     // The unstable date comes from the datasource, not the upgrade: digest
     // updates never carry a releaseTimestamp.
@@ -536,7 +555,7 @@ describe('modules/manager/nix-update/artifacts', () => {
     );
 
     const NEW = 'sha256-NEWNEWNEWNEWNEWNEWNEWNEWNEWNEWNEWNEWNEWNEW=';
-    mockExecSequence([makeMismatchError(stderrWithGot(NEW))]);
+    mockExecSequence([STORE_DIR_PROBE, makeMismatchError(stderrWithGot(NEW))]);
 
     const url =
       'https://github.com/ghostty-org/ghostty/releases/download/tip/ghostty-macos-universal.zip';
@@ -599,7 +618,7 @@ describe('modules/manager/nix-update/artifacts', () => {
     );
 
     const NEW = 'sha256-NEWNEWNEWNEWNEWNEWNEWNEWNEWNEWNEWNEWNEWNEW=';
-    mockExecSequence([makeMismatchError(stderrWithGot(NEW))]);
+    mockExecSequence([STORE_DIR_PROBE, makeMismatchError(stderrWithGot(NEW))]);
 
     const result = await updateArtifacts({
       packageFileName: 'packages/aerospace-swipe/default.nix',
@@ -653,6 +672,7 @@ describe('modules/manager/nix-update/artifacts', () => {
     );
     fs.readLocalFile.mockResolvedValue('unchanged');
     mockExecSequence([
+      STORE_DIR_PROBE,
       makeMismatchError(
         stderrWithGot('sha256-NEWNEWNEWNEWNEWNEWNEWNEWNEWNEWNEWNEWNEWNEW='),
       ),
@@ -696,7 +716,7 @@ describe('modules/manager/nix-update/artifacts', () => {
       partial<StatusResult>({ modified: [], not_added: [] }),
     );
     const NEW = 'sha256-NEWNEWNEWNEWNEWNEWNEWNEWNEWNEWNEWNEWNEWNEW=';
-    mockExecSequence([makeMismatchError(stderrWithGot(NEW))]);
+    mockExecSequence([STORE_DIR_PROBE, makeMismatchError(stderrWithGot(NEW))]);
 
     // newPackageFileContent already has NEW hash (existing PR branch). Our
     // extract captured the OLD hash from main. rewriteHash's contextual
@@ -734,7 +754,8 @@ describe('modules/manager/nix-update/artifacts', () => {
   });
 
   it('reports vendor-FOD failure when package has no src', async () => {
-    mockExecSequence([]);
+    // Only the store-dir probe runs; classification fails before any build.
+    mockExecSequence([STORE_DIR_PROBE]);
     const result = await updateArtifacts({
       packageFileName: 'packages/foo/default.nix',
       updatedDeps: [
@@ -770,6 +791,7 @@ describe('modules/manager/nix-update/artifacts', () => {
     fs.readLocalFile.mockResolvedValue('updated content');
 
     const snapshots = mockExecSequence([
+      STORE_DIR_PROBE,
       makeMismatchError(stderrWithGot(NEW_HASH)),
     ]);
 
@@ -796,7 +818,7 @@ describe('modules/manager/nix-update/artifacts', () => {
       config,
     });
 
-    const opts = snapshots[0].options as {
+    const opts = snapshots[1].options as {
       env?: Record<string, string>;
     };
     expect(opts.env?.GITHUB_TOKEN).toBe('ghs_testtoken');
@@ -815,6 +837,7 @@ describe('modules/manager/nix-update/artifacts', () => {
     );
     fs.readLocalFile.mockResolvedValue('updated');
     const snapshots = mockExecSequence([
+      STORE_DIR_PROBE,
       makeMismatchError(stderrWithGot(NEW_HASH)),
     ]);
     await updateArtifacts({
@@ -834,13 +857,14 @@ describe('modules/manager/nix-update/artifacts', () => {
       newPackageFileContent: `{ hash = "sha256-OLDOLDOLDOLDOLDOLDOLDOLDOLDOLDOLDOLDOLDOLDO="; }`,
       config,
     });
-    const opts = snapshots[0].options as { env?: Record<string, string> };
+    const opts = snapshots[1].options as { env?: Record<string, string> };
     expect(opts.env?.GITLAB_TOKEN).toBe('glpat-testtoken');
     hostRules.clear();
   });
 
   it('collects multiple FOD errors into a single artifactError', async () => {
     mockExecSequence([
+      STORE_DIR_PROBE,
       makeMismatchError('garbage no got line here'),
       new Error('boom'),
     ]);
@@ -872,5 +896,41 @@ describe('modules/manager/nix-update/artifacts', () => {
     expect(result).toHaveLength(1);
     expect(result?.[0].artifactError?.stderr).toMatch(/fetchurl/);
     expect(result?.[0].artifactError?.stderr).toMatch(/goModules/);
+  });
+  it('reports one artifactError when the nix store cannot substitute', async () => {
+    const snapshots = mockExecSequence([
+      { stdout: '/tmp/containerbase/cache/nix/store\n', stderr: '' },
+    ]);
+
+    const result = await updateArtifacts({
+      packageFileName: 'packages/foo/default.nix',
+      updatedDeps: [
+        {
+          depName: 'foo',
+          newVersion: '1.0.1',
+          managerData: {
+            attrName: 'foo',
+            system: 'x86_64-linux',
+            pname: 'foo',
+            fods: [
+              makeFod(['src'], {
+                url: 'https://example.com/foo.tar.gz',
+                outputHashMode: 'flat',
+              }),
+              makeFod(['goModules'], {}),
+            ],
+          },
+        },
+      ],
+      newPackageFileContent: '...',
+      config,
+    });
+
+    // One error for the package, not one per FOD, and no build attempted.
+    expect(result).toHaveLength(1);
+    expect(result?.[0].artifactError?.stderr).toMatch(
+      /binary caches only serve/,
+    );
+    expect(snapshots).toHaveLength(1);
   });
 });

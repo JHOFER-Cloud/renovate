@@ -3,6 +3,7 @@ import { env } from '~test/util.ts';
 import { GlobalConfig } from '../../../config/global.ts';
 import {
   _resetPrefetchCacheForTesting,
+  assertSubstitutableStore,
   parseHashFromStderr,
   prefetch,
 } from './prefetch.ts';
@@ -73,13 +74,18 @@ describe('modules/manager/nix-update/prefetch', () => {
       ).rejects.toThrow(/Could not extract hash/);
     });
 
-    it('truncates very long stderr but keeps the tail (real error at the end)', async () => {
-      const longStderr = `${'x'.repeat(5000)}\nactual error: the thing that actually broke`;
+    it('truncates very long stderr but keeps both ends', async () => {
+      const longStderr = `warning: binary cache is unusable\n${'x'.repeat(5000)}\nactual error: the thing that actually broke`;
       await expect(parseHashFromStderr(longStderr, 'sha256')).rejects.toThrow(
         /more chars truncated/,
       );
       await expect(parseHashFromStderr(longStderr, 'sha256')).rejects.toThrow(
         /actual error: the thing that actually broke/,
+      );
+      // The head carries nix's setup diagnostics, which explain why the build
+      // ran from source at all.
+      await expect(parseHashFromStderr(longStderr, 'sha256')).rejects.toThrow(
+        /warning: binary cache is unusable/,
       );
     });
 
@@ -90,6 +96,34 @@ describe('modules/manager/nix-update/prefetch', () => {
       await expect(parseHashFromStderr(stderr, 'sha256')).rejects.toThrow(
         /unexpected output/,
       );
+    });
+  });
+
+  describe('assertSubstitutableStore', () => {
+    it('resolves for the canonical store dir', async () => {
+      mockExecSequence([{ stdout: '/nix/store\n', stderr: '' }]);
+      await expect(assertSubstitutableStore()).toResolve();
+    });
+
+    it('throws when the store dir cannot use binary caches', async () => {
+      mockExecSequence([
+        { stdout: '/tmp/containerbase/cache/nix/store\n', stderr: '' },
+      ]);
+      await expect(assertSubstitutableStore()).rejects.toThrow(
+        /binary caches only serve '\/nix\/store'/,
+      );
+    });
+
+    it('re-probes on every call — another manager can swap nix mid-run', async () => {
+      const snapshots = mockExecSequence([
+        { stdout: '/nix/store\n', stderr: '' },
+        { stdout: '/tmp/containerbase/cache/nix/store\n', stderr: '' },
+      ]);
+      await expect(assertSubstitutableStore()).toResolve();
+      await expect(assertSubstitutableStore()).rejects.toThrow(
+        /binary caches only serve/,
+      );
+      expect(snapshots).toHaveLength(2);
     });
   });
 

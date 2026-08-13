@@ -87,6 +87,34 @@ export function _resetPrefetchCacheForTesting(): void {
   prefetchCache.clear();
 }
 
+// Binary caches only serve paths under /nix/store — the prefix is part of what
+// they sign — so a nix whose store lives elsewhere substitutes nothing and has
+// to build the whole stdenv bootstrap from source.
+const CANONICAL_STORE_DIR = '/nix/store';
+
+// Deliberately not memoized: the resolved nix can change within a process when
+// another manager triggers a containerbase install.
+export async function assertSubstitutableStore(
+  nixConstraint?: string,
+): Promise<void> {
+  const res = await exec(
+    `nix --extra-experimental-features 'nix-command' eval --impure --raw --expr 'builtins.storeDir'`,
+    {
+      toolConstraints: [{ toolName: 'nix', constraint: nixConstraint }],
+      docker: {},
+    },
+  );
+  const storeDir = res.stdout.trim();
+  if (storeDir !== CANONICAL_STORE_DIR) {
+    throw new Error(
+      `nix store dir is '${storeDir}', but binary caches only serve '${CANONICAL_STORE_DIR}', ` +
+        `so every prefetch would build the full stdenv from source. This is what containerbase's ` +
+        `nix wrapper does when it is not patched (it exports NIX_STORE_DIR into its ` +
+        `cache dir) — the image must provide a nix whose store is ${CANONICAL_STORE_DIR}.`,
+    );
+  }
+}
+
 // Run `nix build --expr <expr>` and parse the hash from stderr.
 // On success, the FOD output is also realised in the runner's nix store
 // as a side effect (so subsequent vendor builds can reference it).
@@ -110,6 +138,7 @@ export async function prefetch(opts: PrefetchOptions): Promise<string> {
     );
     return cached;
   }
+
   // --no-link: don't pollute cwd with a result symlink.
   // --impure:  required because we use `builtins.getFlake "<localPath>"`
   //            (impure) and may fall back to `import <nixpkgs>`. Doesn't
@@ -178,7 +207,9 @@ function truncate(s: string, max: number): string {
   if (s.length <= max) {
     return s;
   }
-  // Keep the tail — nix prints the actual error/diagnostic at the end, after
-  // pages of "this derivation will be built" / "copying path" lines.
-  return `…(${s.length - max} more chars truncated)\n${s.slice(-max)}`;
+  // Keep both ends: nix prints setup diagnostics (e.g. an unusable binary
+  // cache) before the derivation list and the actual failure after it.
+  const head = Math.floor(max / 4);
+  const tail = max - head;
+  return `${s.slice(0, head)}\n…(${s.length - max} more chars truncated)\n${s.slice(-tail)}`;
 }

@@ -15,7 +15,7 @@ import type {
 } from '../types.ts';
 import type { FodInfo } from './extract.ts';
 import { buildKnownSrcExpr, classifyFod } from './fetchers.ts';
-import { prefetch } from './prefetch.ts';
+import { assertSubstitutableStore, prefetch } from './prefetch.ts';
 import {
   rewriteHash,
   rewriteRev,
@@ -173,6 +173,22 @@ export async function updateArtifacts({
         artifactError: {
           fileName: packageFileName,
           stderr: errors.map((e) => e.stderr).join('\n'),
+        },
+      },
+    ];
+  }
+
+  // Checked once per package rather than per FOD: it is an infrastructure
+  // fault, so repeating it for every hash would just multiply the noise.
+  try {
+    await assertSubstitutableStore(config.constraints?.nix);
+  } catch (err) {
+    logger.warn({ err, attrName }, 'nix-update: unusable nix store');
+    return [
+      {
+        artifactError: {
+          fileName: packageFileName,
+          stderr: err instanceof Error ? err.message : String(err),
         },
       },
     ];
