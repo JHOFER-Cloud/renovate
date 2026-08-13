@@ -988,6 +988,20 @@ In the above example any reference to the `@company` preset will be replaced wit
 !!! tip
   Combine `migratePresets` with `configMigration` if you'd like your config migrated by PR.
 
+## `nixTrustedPublicKeys`
+
+Public keys Nix trusts to sign paths served by a repository's [`nixSubstituters`](./configuration-options.md#nixsubstituters).
+
+Keys are administrator-owned on purpose: a repository that could supply its own key would be trusting whatever cache it names, and paths fetched from it become build inputs for every repository sharing the runner's Nix store.
+
+Without a matching key, nix still accepts **content-addressed** paths from a repository's cache — they are verified against their hash, not a signature. A key is what lets a cache serve **input-addressed** paths such as `stdenv` or `bash`, which become build inputs for every repository sharing the runner's store. That is why keys are administrator-owned. Unsigned input-addressed paths are refused:
+
+```text
+warning: ignoring substitute for '/nix/store/...' from 'https://example.cachix.org', as it's not signed by any of the keys in 'trusted-public-keys'
+```
+
+Renovate logs a warning when a repository configures substituters and no keys are set.
+
 ## `onboarding`
 
 Only set this to `false` if all three statements are true:

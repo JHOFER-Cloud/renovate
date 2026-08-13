@@ -43,6 +43,7 @@ export interface UpdateArtifactsConfig {
   constraints?: Partial<Record<ConstraintName, string>>;
   composerIgnorePlatformReqs?: string[];
   goGetDirs?: string[];
+  nixSubstituters?: string[];
   currentValue?: string;
   postUpdateOptions?: string[];
   ignorePlugins?: boolean;

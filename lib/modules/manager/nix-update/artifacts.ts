@@ -6,6 +6,7 @@ import { readLocalFile, writeLocalFile } from '../../../util/fs/index.ts';
 import { getGitEnvironmentVariables } from '../../../util/git/auth.ts';
 import { getRepoStatus } from '../../../util/git/index.ts';
 import * as hostRules from '../../../util/host-rules.ts';
+import { parseUrl } from '../../../util/url.ts';
 import { getPkgReleases } from '../../datasource/index.ts';
 import type {
   ArtifactError,
@@ -15,7 +16,7 @@ import type {
 } from '../types.ts';
 import type { FodInfo } from './extract.ts';
 import { buildKnownSrcExpr, classifyFod } from './fetchers.ts';
-import { prefetch } from './prefetch.ts';
+import { assertSubstitutableStore, prefetch } from './prefetch.ts';
 import {
   rewriteHash,
   rewriteRev,
@@ -67,6 +68,19 @@ export async function updateArtifacts({
 
   // Auth: pass GitHub/GitLab tokens through env so private fetchers work.
   const extraEnv = buildExtraEnv();
+
+  const substituters = usableSubstituters(config.nixSubstituters);
+  // Keys are admin-owned: a repo supplying its own would let a cache it
+  // controls serve signed, input-addressed paths (stdenv, bash) into a store
+  // every repo shares. Content-addressed paths need no signature — they are
+  // verified against their hash instead — so a keyless cache is not inert.
+  const trustedPublicKeys = GlobalConfig.get('nixTrustedPublicKeys') ?? [];
+  if (substituters.length && !trustedPublicKeys.length) {
+    logger.warn(
+      { substituters },
+      'nix-update: nixSubstituters configured but the bot has no nixTrustedPublicKeys, so nix will reject their signed paths',
+    );
+  }
 
   // Fingerprint flake.lock so the prefetch cache invalidates if Renovate's
   // double-eval rebases the working tree onto a flake.lock with a different
@@ -178,6 +192,22 @@ export async function updateArtifacts({
     ];
   }
 
+  // Checked once per package rather than per FOD: it is an infrastructure
+  // fault, so repeating it for every hash would just multiply the noise.
+  try {
+    await assertSubstitutableStore(config.constraints?.nix);
+  } catch (err) {
+    logger.warn({ err, attrName }, 'nix-update: unusable nix store');
+    return [
+      {
+        artifactError: {
+          fileName: packageFileName,
+          stderr: err instanceof Error ? err.message : String(err),
+        },
+      },
+    ];
+  }
+
   // Classify all FODs. Hard-fail surface area is the classifier — anything
   // unsupported throws here, before any nix-build runs.
   const classified = bumpedFods.map((fod) =>
@@ -202,6 +232,8 @@ export async function updateArtifacts({
         pkgSystem,
         algo: fod.algo,
         extraEnv,
+        substituters,
+        trustedPublicKeys,
         nixConstraint: config.constraints?.nix,
         flakeLockFingerprint,
       });
@@ -424,6 +456,37 @@ function pickSrcExprFor(
     throw new Error('vendor FOD: src hash unavailable');
   }
   return buildKnownSrcExpr(srcFod, knownHash, flakePath);
+}
+
+// Nix store URIs carry settings as query parameters — `?trusted=true` disables
+// signature checking outright — so repo-provided values are restricted to plain
+// https URLs. Paths fetched here land in a store shared with every other repo.
+function usableSubstituters(configured: string[] | undefined): string[] {
+  const ok: string[] = [];
+  const rejected: string[] = [];
+  for (const entry of configured ?? []) {
+    // Whitespace would split one entry into several substituters, and the
+    // normalised href is what we forward — the raw string can differ.
+    const url = /\s/.test(entry) ? null : parseUrl(entry);
+    if (
+      url?.protocol === 'https:' &&
+      !url.search &&
+      !url.hash &&
+      !url.username &&
+      !url.password
+    ) {
+      ok.push(url.href);
+    } else {
+      rejected.push(entry);
+    }
+  }
+  if (rejected.length) {
+    logger.warn(
+      { rejected },
+      'nix-update: ignoring substituters that are not plain https URLs',
+    );
+  }
+  return ok;
 }
 
 // Build the env we pass to every nix-build invocation. Token names follow

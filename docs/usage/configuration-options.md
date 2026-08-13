@@ -2995,6 +2995,25 @@ When in `silent` mode Renovate will:
 - _not_ prune or close any existing Issues
 - _not_ create any Config Migration PRs, even if you explicitly enabled Config Migration PRs in your Renovate config
 
+## `nixSubstituters`
+
+Binary caches the `nix-update` manager may use when it computes hashes for this repository.
+
+Only plain `https` URLs are accepted — entries with query parameters, credentials or other schemes are ignored with a warning, because a Nix store URI can carry settings such as `?trusted=true` that disable signature checking.
+
+!!! note
+  This needs action from the bot administrator.
+  Nix only accepts paths signed by a key in [`nixTrustedPublicKeys`](./self-hosted-configuration.md#nixtrustedpublickeys), which is administrator-only config.
+  Until your cache's public key is added there, nix ignores the cache and builds from source instead.
+
+```json
+{
+  "nixSubstituters": ["https://nixkit.cachix.org"]
+}
+```
+
+The substituters are passed to `nix build` for this repository only. Store paths fetched from them are still shared with every other repository on that runner, so what protects the others is nix's signature check on input-addressed paths — see [`nixTrustedPublicKeys`](./self-hosted-configuration.md#nixtrustedpublickeys).
+
 ## `npmToken`
 
 See [Private npm module support](./getting-started/private-packages.md) for details on how this is used.

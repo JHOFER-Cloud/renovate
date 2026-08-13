@@ -4,7 +4,29 @@ The `nix-update` manager creates per-package PRs for nixpkgs-style derivations t
 
 - The repository must be a Nix flake (a `flake.nix` must exist at the repo root)
 - The flake should expose `nixpkgs` as an input named `nixpkgs` (the manager re-uses it for runner-side hash computation)
-- `nix` must be available — when using the full Renovate image with `RENOVATE_BINARY_SOURCE=install`, this is handled automatically by containerbase
+- `nix` must be available, and its store dir must be `/nix/store`
+
+containerbase's nix tool wraps nix with an unconditional `export NIX_STORE_DIR=<cache>/nix/store`, and binary caches only serve paths under `/nix/store`:
+
+```text
+warning: binary cache 'https://cache.nixos.org' is for Nix stores with prefix '/nix/store', not '/tmp/containerbase/cache/nix/store'
+```
+
+Such a nix substitutes nothing, so every hash prefetch rebuilds the full stdenv from source and exceeds the exec timeout. The fix belongs in containerbase; this fork's image patches `tools/v2/nix.sh` to point the wrapper at the canonical store, so an installed nix and the image's nix are interchangeable. Setting `NIX_STORE_DIR` in the environment does not help — the unpatched wrapper overrides it.
+
+The manager probes `builtins.storeDir` once per package and reports an `artifactError` naming the store dir if this invariant is broken, rather than spending the exec timeout on a doomed source build.
+
+### Binary caches
+
+A repository can select binary caches for its own hash computation:
+
+```json title="renovate.json"
+{
+  "nixSubstituters": ["https://nixkit.cachix.org"]
+}
+```
+
+They are passed to `nix build` for that repository only, and must be plain `https` URLs — a Nix store URI can carry settings like `?trusted=true`, which would switch off signature checking. Signing keys are administrator-owned, in `nixTrustedPublicKeys`. Without a matching key nix still accepts _content-addressed_ paths from the cache — the FODs this manager builds — because those are verified against their hash rather than a signature. What a key unlocks is _input-addressed_ paths (stdenv, bash, curl), which is also why a repository cannot be allowed to supply one: those paths land in a store every repository shares. `cache.nixos.org` needs no configuration — it is nix's default.
 
 ### How it works
 

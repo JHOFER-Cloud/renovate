@@ -119,10 +119,21 @@ RUN NIX_VERSION=$(curl -sL https://api.github.com/repos/NixOS/nix/tags | grep -o
     && echo "experimental-features = nix-command flakes" >> /etc/nix/nix.conf \
     && echo "sandbox = false" >> /etc/nix/nix.conf \
     && echo "build-users-group =" >> /etc/nix/nix.conf \
-    && echo "extra-substituters = https://ojsef39.cachix.org" >> /etc/nix/nix.conf \
-    && echo "extra-trusted-public-keys = ojsef39.cachix.org-1:Pe8zOhPVMt4fa/2HYlquHkTnGX3EH7lC9xMyCA2zM3Y=" >> /etc/nix/nix.conf \
-    && echo "extra-trusted-substituters = https://ojsef39.cachix.org" >> /etc/nix/nix.conf \
     && chown -R 12021:12021 /nix
+
+# containerbase's nix tool wraps nix with an unconditional
+# `export NIX_STORE_DIR=<cache>/nix/store … NIX_CONF_DIR=<cache>/nix/conf`, and
+# binary caches only serve /nix/store — so a containerbase-installed nix
+# substitutes nothing and builds the whole stdenv from source. Point it at the
+# canonical store instead, so every manager gets the same usable nix whether it
+# runs this one or installs its own. Remove once containerbase stops
+# overriding the environment (upstream: tools/v2/nix.sh `link_tool`).
+# The grep guards the sed: if a base-image bump moves that line, the build
+# fails here instead of silently shipping the broken behaviour.
+RUN F=/usr/local/containerbase/tools/v2/nix.sh \
+    && grep -q 'NIX_STORE_DIR=$(get_cache_path)/nix/store' "$F" \
+    && sed -i 's|NIX_STORE_DIR=$(get_cache_path)/nix/store NIX_DATA_DIR=$(get_cache_path)/nix/data NIX_LOG_DIR=$(get_cache_path)/nix/log NIX_STATE_DIR=$(get_cache_path)/nix/state NIX_CONF_DIR=$(get_cache_path)/nix/conf|NIX_STORE_DIR=/nix/store NIX_DATA_DIR=/nix/share NIX_LOG_DIR=/nix/var/log/nix NIX_STATE_DIR=/nix/var/nix NIX_CONF_DIR=/etc/nix|' "$F" \
+    && grep -q 'NIX_STORE_DIR=/nix/store' "$F"
 
 # test
 RUN set -ex; \

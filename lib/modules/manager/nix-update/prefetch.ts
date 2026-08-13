@@ -24,6 +24,10 @@ export interface PrefetchOptions {
   extraEnv?: Record<string, string | undefined>;
   // nix tool constraint from manager config
   nixConstraint?: string;
+  // extra binary caches, already filtered against the admin allowlist, plus
+  // the admin's signing keys.
+  substituters?: string[];
+  trustedPublicKeys?: string[];
   // Optional cache fingerprint. Two prefetches with the same expr+system+algo
   // but a different fingerprint won't share a cache entry. Caller should pass
   // a hash of `flake.lock` contents — `runnerPkgs` is resolved from
@@ -87,6 +91,34 @@ export function _resetPrefetchCacheForTesting(): void {
   prefetchCache.clear();
 }
 
+// Binary caches only serve paths under /nix/store — the prefix is part of what
+// they sign — so a nix whose store lives elsewhere substitutes nothing and has
+// to build the whole stdenv bootstrap from source.
+const CANONICAL_STORE_DIR = '/nix/store';
+
+// Deliberately not memoized: the resolved nix can change within a process when
+// another manager triggers a containerbase install.
+export async function assertSubstitutableStore(
+  nixConstraint?: string,
+): Promise<void> {
+  const res = await exec(
+    `nix --extra-experimental-features 'nix-command' eval --impure --raw --expr 'builtins.storeDir'`,
+    {
+      toolConstraints: [{ toolName: 'nix', constraint: nixConstraint }],
+      docker: {},
+    },
+  );
+  const storeDir = res.stdout.trim();
+  if (storeDir !== CANONICAL_STORE_DIR) {
+    throw new Error(
+      `nix store dir is '${storeDir}', but binary caches only serve '${CANONICAL_STORE_DIR}', ` +
+        `so every prefetch would build the full stdenv from source. This is what containerbase's ` +
+        `nix wrapper does when it is not patched (it exports NIX_STORE_DIR into its ` +
+        `cache dir) — the image must provide a nix whose store is ${CANONICAL_STORE_DIR}.`,
+    );
+  }
+}
+
 // Run `nix build --expr <expr>` and parse the hash from stderr.
 // On success, the FOD output is also realised in the runner's nix store
 // as a side effect (so subsequent vendor builds can reference it).
@@ -96,6 +128,8 @@ export async function prefetch(opts: PrefetchOptions): Promise<string> {
     pkgSystem,
     algo,
     extraEnv,
+    substituters,
+    trustedPublicKeys,
     nixConstraint,
     flakeLockFingerprint,
   } = opts;
@@ -110,6 +144,7 @@ export async function prefetch(opts: PrefetchOptions): Promise<string> {
     );
     return cached;
   }
+
   // --no-link: don't pollute cwd with a result symlink.
   // --impure:  required because we use `builtins.getFlake "<localPath>"`
   //            (impure) and may fall back to `import <nixpkgs>`. Doesn't
@@ -126,10 +161,13 @@ export async function prefetch(opts: PrefetchOptions): Promise<string> {
   // correctly reports the runner's actual system, runnerPkgs is the
   // runner's pkgs, and the fetcher runs natively. The FOD hash is platform-
   // agnostic regardless.
+  // Substituters go on the CLI rather than into nix.conf so a repo's cache is
+  // used for that repo only.
   const cmd =
     `nix build --no-link ` +
     `--extra-experimental-features 'nix-command flakes' ` +
     `--impure ` +
+    `${substituterArgs(substituters, trustedPublicKeys)}` +
     `--expr ${shellQuote(oneLine)}`;
 
   const execOptions: ExecOptions = {
@@ -164,10 +202,46 @@ export async function prefetch(opts: PrefetchOptions): Promise<string> {
       throw err;
     }
 
+    warnOnUntrustedSubstitutes(stderr);
     const hash = await parseHashFromStderr(stderr, algo, nixConstraint);
     prefetchCache.set(cacheKey, hash);
     return hash;
   }
+}
+
+// nix only warns about this on stderr and then builds from source, which
+// otherwise looks like an unexplained slow run.
+const unsignedRegex = regEx(
+  /ignoring substitute for '[^']+' from '([^']+)', as it's not signed/g,
+);
+
+function warnOnUntrustedSubstitutes(stderr: string): void {
+  const substituters = new Set(
+    [...stderr.matchAll(unsignedRegex)].map((m) => m[1]),
+  );
+  if (substituters.size) {
+    logger.warn(
+      { substituters: [...substituters] },
+      'nix-update: substituters ignored, no matching key in nixTrustedPublicKeys',
+    );
+  }
+}
+
+// Keys are optional: nix accepts content-addressed paths (the FODs this
+// manager builds) unsigned, verifying them against their hash, and requires a
+// trusted signature only for input-addressed ones.
+function substituterArgs(
+  substituters: string[] | undefined,
+  trustedPublicKeys: string[] | undefined,
+): string {
+  if (!substituters?.length) {
+    return '';
+  }
+  let args = `--option extra-substituters ${shellQuote(substituters.join(' '))} `;
+  if (trustedPublicKeys?.length) {
+    args += `--option extra-trusted-public-keys ${shellQuote(trustedPublicKeys.join(' '))} `;
+  }
+  return args;
 }
 
 function shellQuote(s: string): string {
@@ -178,7 +252,9 @@ function truncate(s: string, max: number): string {
   if (s.length <= max) {
     return s;
   }
-  // Keep the tail — nix prints the actual error/diagnostic at the end, after
-  // pages of "this derivation will be built" / "copying path" lines.
-  return `…(${s.length - max} more chars truncated)\n${s.slice(-max)}`;
+  // Keep both ends: nix prints setup diagnostics (e.g. an unusable binary
+  // cache) before the derivation list and the actual failure after it.
+  const head = Math.floor(max / 4);
+  const tail = max - head;
+  return `${s.slice(0, head)}\n…(${s.length - max} more chars truncated)\n${s.slice(-tail)}`;
 }
