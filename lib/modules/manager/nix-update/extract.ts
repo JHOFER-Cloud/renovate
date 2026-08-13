@@ -39,6 +39,18 @@ builtins.foldl'
         if drv ? \${a} && builtins.isList drv.\${a} && builtins.length drv.\${a} > 0
         then discardCtx (builtins.head drv.\${a})
         else null;
+      maybeStrList = a:
+        if drv ? \${a} && builtins.isList drv.\${a}
+        then map discardCtx drv.\${a}
+        else null;
+      /* Older nixpkgs exposes fetcherVersion as the stringified env var
+         rather than through passthru; the assertions want an int. */
+      maybeInt = a:
+        let v = drv.\${a} or null; in
+        if builtins.isInt v then v
+        else if builtins.isString v && builtins.match "[0-9]+" v != null
+        then builtins.fromJSON v
+        else null;
     in {
       outputHash = discardCtx drv.outputHash;
       outputHashAlgo = drv.outputHashAlgo or "sha256";
@@ -49,11 +61,19 @@ builtins.foldl'
       leaveDotGit = maybeBool "leaveDotGit";
       deepClone = maybeBool "deepClone";
       forceFetchGit = maybeBool "forceFetchGit";
-      sparseCheckout =
-        if drv ? sparseCheckout && builtins.isList drv.sparseCheckout
-        then map discardCtx drv.sparseCheckout
-        else null;
+      sparseCheckout = maybeStrList "sparseCheckout";
       name = maybe "name";
+      /* fetchPnpmDeps args. fetcherVersion is mandatory in current nixpkgs,
+         and each of these changes the fetched store layout — so all of them
+         have to be mirrored into the runner-side rebuild. */
+      fetcherVersion = maybeInt "fetcherVersion";
+      pnpmVersion =
+        if drv ? pnpm && drv.pnpm ? version
+        then discardCtx drv.pnpm.version
+        else null;
+      pnpmWorkspaces = maybeStrList "pnpmWorkspaces";
+      pnpmInstallFlags = maybeStrList "pnpmInstallFlags";
+      prePnpmInstall = maybe "prePnpmInstall";
     };
   /* Well-known FOD attribute names. Order matters: src first, then vendor
      FODs. If a package has more than one of these, each becomes a separate
@@ -162,6 +182,13 @@ export interface FodInputs {
   forceFetchGit: boolean | null;
   sparseCheckout: string[] | null;
   name: string | null;
+  // fetchPnpmDeps args. Optional, not `| null`: package files extracted by an
+  // older Renovate can still be in the repository cache without them.
+  fetcherVersion?: number | null;
+  pnpmVersion?: string | null;
+  pnpmWorkspaces?: string[] | null;
+  pnpmInstallFlags?: string[] | null;
+  prePnpmInstall?: string | null;
 }
 
 export interface FodInfo {
