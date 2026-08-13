@@ -22,8 +22,6 @@ export interface PrefetchOptions {
   algo: HashAlgo;
   // env to pass to nix-build (e.g. GITHUB_TOKEN for private fetches)
   extraEnv?: Record<string, string | undefined>;
-  // nix tool constraint from manager config
-  nixConstraint?: string;
   // Optional cache fingerprint. Two prefetches with the same expr+system+algo
   // but a different fingerprint won't share a cache entry. Caller should pass
   // a hash of `flake.lock` contents — `runnerPkgs` is resolved from
@@ -37,7 +35,6 @@ export interface PrefetchOptions {
 export async function parseHashFromStderr(
   stderr: string,
   algo: HashAlgo,
-  nixConstraint?: string,
 ): Promise<string> {
   const sriMatch = sriRegex.exec(stderr);
   if (sriMatch) {
@@ -56,10 +53,7 @@ export async function parseHashFromStderr(
     // Convert base32 → SRI via `nix hash to-sri`.
     const raw = b32Match[1];
     const cmd = `nix --extra-experimental-features 'nix-command' hash to-sri --type ${algo} ${raw}`;
-    const result = await exec(cmd, {
-      toolConstraints: [{ toolName: 'nix', constraint: nixConstraint }],
-      docker: {},
-    });
+    const result = await exec(cmd, { docker: {} });
     const sri = result.stdout.trim();
     if (!sri.startsWith(`${algo}-`)) {
       throw new Error(`nix hash to-sri produced unexpected output: ${sri}`);
@@ -94,20 +88,17 @@ export function _resetPrefetchCacheForTesting(): void {
 const CANONICAL_STORE_DIR = '/nix/store';
 let storeDirProbe: Promise<string> | undefined;
 
-async function getStoreDir(nixConstraint?: string): Promise<string> {
+async function getStoreDir(): Promise<string> {
   storeDirProbe ??= exec(
     `nix --extra-experimental-features 'nix-command' eval --impure --raw --expr 'builtins.storeDir'`,
-    {
-      toolConstraints: [{ toolName: 'nix', constraint: nixConstraint }],
-      docker: {},
-    },
+    { docker: {} },
   ).then((res) => res.stdout.trim());
   return await storeDirProbe;
 }
 
 // Fail before spending exec-timeout minutes on a bootstrap that cannot finish.
-async function assertSubstitutableStore(nixConstraint?: string): Promise<void> {
-  const storeDir = await getStoreDir(nixConstraint);
+async function assertSubstitutableStore(): Promise<void> {
+  const storeDir = await getStoreDir();
   if (storeDir !== CANONICAL_STORE_DIR) {
     throw new Error(
       `nix store dir is '${storeDir}', but binary caches only serve '${CANONICAL_STORE_DIR}', ` +
@@ -122,14 +113,7 @@ async function assertSubstitutableStore(nixConstraint?: string): Promise<void> {
 // On success, the FOD output is also realised in the runner's nix store
 // as a side effect (so subsequent vendor builds can reference it).
 export async function prefetch(opts: PrefetchOptions): Promise<string> {
-  const {
-    expr,
-    pkgSystem,
-    algo,
-    extraEnv,
-    nixConstraint,
-    flakeLockFingerprint,
-  } = opts;
+  const { expr, pkgSystem, algo, extraEnv, flakeLockFingerprint } = opts;
 
   const oneLine = collapseExpr(expr);
   const cacheKey = `${flakeLockFingerprint ?? ''}|${pkgSystem}|${algo}|${oneLine}`;
@@ -142,7 +126,7 @@ export async function prefetch(opts: PrefetchOptions): Promise<string> {
     return cached;
   }
 
-  await assertSubstitutableStore(nixConstraint);
+  await assertSubstitutableStore();
 
   // --no-link: don't pollute cwd with a result symlink.
   // --impure:  required because we use `builtins.getFlake "<localPath>"`
@@ -167,7 +151,6 @@ export async function prefetch(opts: PrefetchOptions): Promise<string> {
     `--expr ${shellQuote(oneLine)}`;
 
   const execOptions: ExecOptions = {
-    toolConstraints: [{ toolName: 'nix', constraint: nixConstraint }],
     extraEnv: extraEnv ?? {},
     docker: {},
   };
@@ -198,7 +181,7 @@ export async function prefetch(opts: PrefetchOptions): Promise<string> {
       throw err;
     }
 
-    const hash = await parseHashFromStderr(stderr, algo, nixConstraint);
+    const hash = await parseHashFromStderr(stderr, algo);
     prefetchCache.set(cacheKey, hash);
     return hash;
   }

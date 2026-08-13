@@ -4,7 +4,15 @@ The `nix-update` manager creates per-package PRs for nixpkgs-style derivations t
 
 - The repository must be a Nix flake (a `flake.nix` must exist at the repo root)
 - The flake should expose `nixpkgs` as an input named `nixpkgs` (the manager re-uses it for runner-side hash computation)
-- `nix` must be available — when using the full Renovate image with `RENOVATE_BINARY_SOURCE=install`, this is handled automatically by containerbase
+- `nix` must be on `PATH`, and its store dir must be `/nix/store`
+
+The manager deliberately does **not** declare a `nix` tool constraint, so containerbase never installs nix for it — including under `RENOVATE_BINARY_SOURCE=install`. Containerbase's nix wrapper exports `NIX_STORE_DIR` into its own cache directory, and binary caches only serve paths under `/nix/store`:
+
+```text
+warning: binary cache 'https://cache.nixos.org' is for Nix stores with prefix '/nix/store', not '/tmp/containerbase/cache/nix/store'
+```
+
+Such a nix can substitute nothing, so every hash prefetch rebuilds the full stdenv bootstrap from source and exceeds the exec timeout. No CLI flag overrides the wrapper's export (`--store`, `--option store`, `NIX_STORE_DIR` in the pod env were all verified not to), so the image must provide the nix itself. The manager probes `builtins.storeDir` once per run and fails with an explicit error if the store is unusable.
 
 ### How it works
 

@@ -27,7 +27,6 @@ export async function updateArtifacts({
   packageFileName,
   updatedDeps,
   newPackageFileContent,
-  config,
 }: UpdateArtifact): Promise<UpdateArtifactsResult[] | null> {
   const dep = updatedDeps[0];
   const md = dep?.managerData as
@@ -202,7 +201,6 @@ export async function updateArtifacts({
         pkgSystem,
         algo: fod.algo,
         extraEnv,
-        nixConstraint: config.constraints?.nix,
         flakeLockFingerprint,
       });
 

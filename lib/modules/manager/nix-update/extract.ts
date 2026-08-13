@@ -401,8 +401,9 @@ export async function extractAllPackageFiles(
     `nix --extra-experimental-features 'nix-command flakes' ` +
     `eval --json .#packages --apply ${JSON.stringify(singleLineExpr)}`;
 
+  // No nix toolConstraint: a containerbase-installed nix would shadow PATH with
+  // a wrapper whose store dir defeats every binary cache (see prefetch.ts).
   const execOptions: ExecOptions = {
-    toolConstraints: [{ toolName: 'nix' }],
     docker: {},
   };
 
