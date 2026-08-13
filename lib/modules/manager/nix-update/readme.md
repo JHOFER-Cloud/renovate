@@ -16,6 +16,18 @@ Such a nix substitutes nothing, so every hash prefetch rebuilds the full stdenv 
 
 The manager probes `builtins.storeDir` once per package and reports an `artifactError` naming the store dir if this invariant is broken, rather than spending the exec timeout on a doomed source build.
 
+### Binary caches
+
+A repository can select binary caches for its own hash computation:
+
+```json title="renovate.json"
+{
+  "nixSubstituters": ["https://nixkit.cachix.org"]
+}
+```
+
+They are passed to `nix build` for that repository only, and must be plain `https` URLs — a Nix store URI can carry settings like `?trusted=true`, which would switch off signature checking. The bot administrator must add the cache's public key to `nixTrustedPublicKeys` first: repository config is untrusted, so a repository cannot make nix trust a cache by itself. Until the key is there, nix ignores the cache and builds from source, and the manager logs a warning. `cache.nixos.org` needs no configuration — it is nix's default.
+
 ### How it works
 
 This manager does NOT call out to the upstream `nix-update` CLI. Instead, it computes hashes directly via runner-side `nix-build`, which lets it update darwin-only packages on a linux runner (and vice versa).

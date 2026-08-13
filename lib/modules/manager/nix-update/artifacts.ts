@@ -6,6 +6,7 @@ import { readLocalFile, writeLocalFile } from '../../../util/fs/index.ts';
 import { getGitEnvironmentVariables } from '../../../util/git/auth.ts';
 import { getRepoStatus } from '../../../util/git/index.ts';
 import * as hostRules from '../../../util/host-rules.ts';
+import { parseUrl } from '../../../util/url.ts';
 import { getPkgReleases } from '../../datasource/index.ts';
 import type {
   ArtifactError,
@@ -67,6 +68,18 @@ export async function updateArtifacts({
 
   // Auth: pass GitHub/GitLab tokens through env so private fetchers work.
   const extraEnv = buildExtraEnv();
+
+  const substituters = usableSubstituters(config.nixSubstituters);
+  // Keys are admin-owned: a repo supplying its own would be trusting whatever
+  // cache it names. Without a matching key nix ignores everything the cache
+  // serves and silently builds from source, so say so up front.
+  const trustedPublicKeys = GlobalConfig.get('nixTrustedPublicKeys') ?? [];
+  if (substituters.length && !trustedPublicKeys.length) {
+    logger.warn(
+      { substituters },
+      'nix-update: nixSubstituters configured but the bot has no nixTrustedPublicKeys, so nix will ignore them',
+    );
+  }
 
   // Fingerprint flake.lock so the prefetch cache invalidates if Renovate's
   // double-eval rebases the working tree onto a flake.lock with a different
@@ -218,6 +231,8 @@ export async function updateArtifacts({
         pkgSystem,
         algo: fod.algo,
         extraEnv,
+        substituters,
+        trustedPublicKeys,
         nixConstraint: config.constraints?.nix,
         flakeLockFingerprint,
       });
@@ -440,6 +455,35 @@ function pickSrcExprFor(
     throw new Error('vendor FOD: src hash unavailable');
   }
   return buildKnownSrcExpr(srcFod, knownHash, flakePath);
+}
+
+// Nix store URIs carry settings as query parameters — `?trusted=true` disables
+// signature checking outright — so repo-provided values are restricted to plain
+// https URLs. Paths fetched here land in a store shared with every other repo.
+function usableSubstituters(configured: string[] | undefined): string[] {
+  const ok: string[] = [];
+  const rejected: string[] = [];
+  for (const entry of configured ?? []) {
+    const url = parseUrl(entry);
+    if (
+      url?.protocol === 'https:' &&
+      !url.search &&
+      !url.hash &&
+      !url.username &&
+      !url.password
+    ) {
+      ok.push(entry);
+    } else {
+      rejected.push(entry);
+    }
+  }
+  if (rejected.length) {
+    logger.warn(
+      { rejected },
+      'nix-update: ignoring substituters that are not plain https URLs',
+    );
+  }
+  return ok;
 }
 
 // Build the env we pass to every nix-build invocation. Token names follow

@@ -24,6 +24,10 @@ export interface PrefetchOptions {
   extraEnv?: Record<string, string | undefined>;
   // nix tool constraint from manager config
   nixConstraint?: string;
+  // extra binary caches, already filtered against the admin allowlist, plus
+  // the admin's signing keys.
+  substituters?: string[];
+  trustedPublicKeys?: string[];
   // Optional cache fingerprint. Two prefetches with the same expr+system+algo
   // but a different fingerprint won't share a cache entry. Caller should pass
   // a hash of `flake.lock` contents — `runnerPkgs` is resolved from
@@ -124,6 +128,8 @@ export async function prefetch(opts: PrefetchOptions): Promise<string> {
     pkgSystem,
     algo,
     extraEnv,
+    substituters,
+    trustedPublicKeys,
     nixConstraint,
     flakeLockFingerprint,
   } = opts;
@@ -155,10 +161,13 @@ export async function prefetch(opts: PrefetchOptions): Promise<string> {
   // correctly reports the runner's actual system, runnerPkgs is the
   // runner's pkgs, and the fetcher runs natively. The FOD hash is platform-
   // agnostic regardless.
+  // Substituters go on the CLI rather than into nix.conf so a repo's cache is
+  // used for that repo only.
   const cmd =
     `nix build --no-link ` +
     `--extra-experimental-features 'nix-command flakes' ` +
     `--impure ` +
+    `${substituterArgs(substituters, trustedPublicKeys)}` +
     `--expr ${shellQuote(oneLine)}`;
 
   const execOptions: ExecOptions = {
@@ -193,10 +202,43 @@ export async function prefetch(opts: PrefetchOptions): Promise<string> {
       throw err;
     }
 
+    warnOnUntrustedSubstitutes(stderr);
     const hash = await parseHashFromStderr(stderr, algo, nixConstraint);
     prefetchCache.set(cacheKey, hash);
     return hash;
   }
+}
+
+// nix only warns about this on stderr and then builds from source, which
+// otherwise looks like an unexplained slow run.
+const unsignedRegex = regEx(
+  /ignoring substitute for '[^']+' from '([^']+)', as it's not signed/,
+);
+
+function warnOnUntrustedSubstitutes(stderr: string): void {
+  const match = unsignedRegex.exec(stderr);
+  if (match) {
+    logger.warn(
+      { substituter: match[1] },
+      'nix-update: substituter ignored, no matching key in nixTrustedPublicKeys',
+    );
+  }
+}
+
+// A substituter without its signing key is useless — nix refuses unsigned
+// paths — so both are emitted together or not at all.
+function substituterArgs(
+  substituters: string[] | undefined,
+  trustedPublicKeys: string[] | undefined,
+): string {
+  if (!substituters?.length) {
+    return '';
+  }
+  let args = `--option extra-substituters ${shellQuote(substituters.join(' '))} `;
+  if (trustedPublicKeys?.length) {
+    args += `--option extra-trusted-public-keys ${shellQuote(trustedPublicKeys.join(' '))} `;
+  }
+  return args;
 }
 
 function shellQuote(s: string): string {

@@ -1,6 +1,7 @@
 import { mockExecSequence } from '~test/exec-util.ts';
 import { env } from '~test/util.ts';
 import { GlobalConfig } from '../../../config/global.ts';
+import { logger } from '../../../logger/index.ts';
 import {
   _resetPrefetchCacheForTesting,
   assertSubstitutableStore,
@@ -237,6 +238,25 @@ describe('modules/manager/nix-update/prefetch', () => {
       const ok = await prefetch(opts);
       expect(ok).toBe('sha256-CCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCC=');
       expect(snapshots).toHaveLength(2);
+    });
+
+    it('warns when nix ignored a substituter for want of a key', async () => {
+      const stderr = [
+        "warning: ignoring substitute for '/nix/store/xxx-foo' from 'https://nixkit.cachix.org', as it's not signed by any of the keys in 'trusted-public-keys'",
+        '  got: sha256-AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA=',
+      ].join('\n');
+      mockExecSequence([makeMismatchError(stderr)]);
+
+      await prefetch({
+        expr: 'x',
+        pkgSystem: 'x86_64-linux',
+        algo: 'sha256',
+      });
+
+      expect(logger.warn).toHaveBeenCalledWith(
+        { substituter: 'https://nixkit.cachix.org' },
+        'nix-update: substituter ignored, no matching key in nixTrustedPublicKeys',
+      );
     });
   });
 });

@@ -119,6 +119,16 @@ const options: Readonly<RenovateOptions>[] = [
     supportsTemplating: true,
   },
   {
+    name: 'nixTrustedPublicKeys',
+    description:
+      'Public keys Nix trusts to sign paths served by `nixSubstituters`.',
+    type: 'array',
+    subType: 'string',
+    default: [],
+    globalOnly: true,
+    mergeable: true,
+  },
+  {
     name: 'allowedCommands',
     description:
       'A list of regular expressions that decide which commands are allowed in post-upgrade tasks.',
@@ -711,6 +721,16 @@ const options: Readonly<RenovateOptions>[] = [
     subType: 'string',
     default: ['./...'],
     supportedManagers: ['gomod'],
+  },
+  {
+    name: 'nixSubstituters',
+    description:
+      'Binary caches to use when computing Nix hashes. Their signing keys must be trusted via `nixTrustedPublicKeys`.',
+    type: 'array',
+    subType: 'string',
+    default: [],
+    mergeable: true,
+    supportedManagers: ['nix-update'],
   },
   // Log options
   {
