@@ -106,7 +106,9 @@ RUN ln -sf /usr/local/renovate/node /bin/node
 RUN mkdir -p /tmp/renovate/cache/renovate/repository /runner/cache/renovate/repository \
     && chmod -R 777 /tmp/renovate /runner
 
-# Install Nix manually by copying binaries (avoiding installer validation)
+# Install Nix manually by copying binaries (avoiding installer validation).
+# Every nix-using manager runs this nix: a containerbase-installed one exports
+# NIX_STORE_DIR into its cache dir, and binary caches only serve /nix/store.
 RUN NIX_VERSION=$(curl -sL https://api.github.com/repos/NixOS/nix/tags | grep -o '"name": "[^"]*"' | head -1 | cut -d'"' -f4) \
     && mkdir -p /nix/store /nix/var/nix \
     && curl -L https://releases.nixos.org/nix/nix-${NIX_VERSION}/nix-${NIX_VERSION}-$(uname -m)-linux.tar.xz | tar xJ \

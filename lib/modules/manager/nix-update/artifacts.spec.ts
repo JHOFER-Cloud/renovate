@@ -754,7 +754,8 @@ describe('modules/manager/nix-update/artifacts', () => {
   });
 
   it('reports vendor-FOD failure when package has no src', async () => {
-    mockExecSequence([]);
+    // Only the store-dir probe runs; classification fails before any build.
+    mockExecSequence([STORE_DIR_PROBE]);
     const result = await updateArtifacts({
       packageFileName: 'packages/foo/default.nix',
       updatedDeps: [
@@ -895,5 +896,41 @@ describe('modules/manager/nix-update/artifacts', () => {
     expect(result).toHaveLength(1);
     expect(result?.[0].artifactError?.stderr).toMatch(/fetchurl/);
     expect(result?.[0].artifactError?.stderr).toMatch(/goModules/);
+  });
+  it('reports one artifactError when the nix store cannot substitute', async () => {
+    const snapshots = mockExecSequence([
+      { stdout: '/tmp/containerbase/cache/nix/store\n', stderr: '' },
+    ]);
+
+    const result = await updateArtifacts({
+      packageFileName: 'packages/foo/default.nix',
+      updatedDeps: [
+        {
+          depName: 'foo',
+          newVersion: '1.0.1',
+          managerData: {
+            attrName: 'foo',
+            system: 'x86_64-linux',
+            pname: 'foo',
+            fods: [
+              makeFod(['src'], {
+                url: 'https://example.com/foo.tar.gz',
+                outputHashMode: 'flat',
+              }),
+              makeFod(['goModules'], {}),
+            ],
+          },
+        },
+      ],
+      newPackageFileContent: '...',
+      config,
+    });
+
+    // One error for the package, not one per FOD, and no build attempted.
+    expect(result).toHaveLength(1);
+    expect(result?.[0].artifactError?.stderr).toMatch(
+      /binary caches only serve/,
+    );
+    expect(snapshots).toHaveLength(1);
   });
 });

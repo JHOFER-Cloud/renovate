@@ -12,7 +12,11 @@ The manager deliberately does **not** declare a `nix` tool constraint, so contai
 warning: binary cache 'https://cache.nixos.org' is for Nix stores with prefix '/nix/store', not '/tmp/containerbase/cache/nix/store'
 ```
 
-Such a nix can substitute nothing, so every hash prefetch rebuilds the full stdenv bootstrap from source and exceeds the exec timeout. No CLI flag overrides the wrapper's export (`--store`, `--option store`, `NIX_STORE_DIR` in the pod env were all verified not to), so the image must provide the nix itself. The manager probes `builtins.storeDir` once per run and fails with an explicit error if the store is unusable.
+Such a nix can substitute nothing, so every hash prefetch rebuilds the full stdenv bootstrap from source and exceeds the exec timeout. Setting `NIX_STORE_DIR` in the pod environment does not help — the wrapper exports its own value unconditionally. A chroot store (`--store 'local?store=/nix/store&root=…'`) does restore `builtins.storeDir`, but then the build fails with `path … is not in the Nix store`, so the image has to provide a usable nix instead.
+
+Dropping the constraint here alone would not be enough, because containerbase links its shims into `/usr/local/bin` — the same path the image installs nix into — so a `nix` constraint in _any_ manager replaces it mid-run. The `nix` and `devbox` managers therefore drop their constraints too, leaving exactly one nix per image. The manager probes `builtins.storeDir` once per package (not memoized, so a swapped nix is still caught) and reports an `artifactError` if the store is unusable.
+
+`binarySource=docker` is not supported: the manager installs no tool into the sidecar, so nix must exist in the image that runs Renovate.
 
 ### How it works
 

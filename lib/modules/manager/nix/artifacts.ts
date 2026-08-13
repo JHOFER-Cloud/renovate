@@ -89,12 +89,8 @@ export async function updateArtifacts({
       ...getGitEnvironmentVariables(),
       NIX_CACHE_HOME: await ensureCacheDir('nix'),
     },
-    toolConstraints: [
-      {
-        toolName: 'nix',
-        constraint: config.constraints?.nix,
-      },
-    ],
+    // No nix toolConstraint: containerbase's nix wrapper relocates the store
+    // dir, which makes every binary cache unusable. The image provides nix.
     docker: {},
   };
 

@@ -3,6 +3,7 @@ import { env } from '~test/util.ts';
 import { GlobalConfig } from '../../../config/global.ts';
 import {
   _resetPrefetchCacheForTesting,
+  assertSubstitutableStore,
   parseHashFromStderr,
   prefetch,
 } from './prefetch.ts';
@@ -27,9 +28,6 @@ describe('modules/manager/nix-update/prefetch', () => {
     err.stderr = stderr;
     return err;
   }
-
-  // prefetch probes `builtins.storeDir` once per process before it builds.
-  const storeDirProbe = { stdout: '/nix/store\n', stderr: '' };
 
   describe('parseHashFromStderr', () => {
     it('extracts SRI sha256 from "got:" line', async () => {
@@ -101,13 +99,41 @@ describe('modules/manager/nix-update/prefetch', () => {
     });
   });
 
+  describe('assertSubstitutableStore', () => {
+    it('resolves for the canonical store dir', async () => {
+      mockExecSequence([{ stdout: '/nix/store\n', stderr: '' }]);
+      await expect(assertSubstitutableStore()).toResolve();
+    });
+
+    it('throws when the store dir cannot use binary caches', async () => {
+      mockExecSequence([
+        { stdout: '/tmp/containerbase/cache/nix/store\n', stderr: '' },
+      ]);
+      await expect(assertSubstitutableStore()).rejects.toThrow(
+        /binary caches only serve '\/nix\/store'/,
+      );
+    });
+
+    it('re-probes on every call — another manager can swap nix mid-run', async () => {
+      const snapshots = mockExecSequence([
+        { stdout: '/nix/store\n', stderr: '' },
+        { stdout: '/tmp/containerbase/cache/nix/store\n', stderr: '' },
+      ]);
+      await expect(assertSubstitutableStore()).toResolve();
+      await expect(assertSubstitutableStore()).rejects.toThrow(
+        /binary caches only serve/,
+      );
+      expect(snapshots).toHaveLength(2);
+    });
+  });
+
   describe('prefetch', () => {
     it('parses hash from a hash-mismatch failure', async () => {
       const stderr = `
         error: hash mismatch in fixed-output derivation:
           got:    sha256-AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA=
       `;
-      mockExecSequence([storeDirProbe, makeMismatchError(stderr)]);
+      mockExecSequence([makeMismatchError(stderr)]);
       const out = await prefetch({
         expr: 'runnerPkgs.fetchurl { url = "x"; hash = ""; }',
         pkgSystem: 'x86_64-darwin',
@@ -117,7 +143,7 @@ describe('modules/manager/nix-update/prefetch', () => {
     });
 
     it('throws when nix-build unexpectedly succeeds', async () => {
-      mockExecSequence([storeDirProbe, { stdout: '', stderr: '' }]);
+      mockExecSequence([{ stdout: '', stderr: '' }]);
       await expect(
         prefetch({
           expr: 'runnerPkgs.fetchurl { url = "x"; hash = ""; }',
@@ -130,16 +156,13 @@ describe('modules/manager/nix-update/prefetch', () => {
     it('does not pass --eval-system so runnerPkgs resolves to the runner system', async () => {
       const stderr =
         '  got: sha256-AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA=';
-      const snapshots = mockExecSequence([
-        storeDirProbe,
-        makeMismatchError(stderr),
-      ]);
+      const snapshots = mockExecSequence([makeMismatchError(stderr)]);
       await prefetch({
         expr: 'runnerPkgs.fetchurl\n  { url = "x"; hash = ""; }',
         pkgSystem: 'x86_64-darwin',
         algo: 'sha256',
       });
-      const cmd = snapshots[1].cmd;
+      const cmd = snapshots[0].cmd;
       expect(cmd).toContain('nix build');
       expect(cmd).toContain('--no-link');
       expect(cmd).toContain('--impure');
@@ -154,7 +177,7 @@ describe('modules/manager/nix-update/prefetch', () => {
 
     it('rethrows when the inner error has no stderr', async () => {
       const err = new Error('exec died');
-      mockExecSequence([storeDirProbe, err]);
+      mockExecSequence([err]);
       await expect(
         prefetch({
           expr: 'x',
@@ -167,10 +190,7 @@ describe('modules/manager/nix-update/prefetch', () => {
     it('caches resolved hashes — second call with same expr does not exec again', async () => {
       const stderr =
         '  got: sha256-AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA=';
-      const snapshots = mockExecSequence([
-        storeDirProbe,
-        makeMismatchError(stderr),
-      ]);
+      const snapshots = mockExecSequence([makeMismatchError(stderr)]);
       const opts = {
         expr: 'runnerPkgs.fetchurl { url = "x"; hash = ""; }',
         pkgSystem: 'x86_64-darwin' as const,
@@ -179,15 +199,14 @@ describe('modules/manager/nix-update/prefetch', () => {
       const a = await prefetch(opts);
       const b = await prefetch(opts);
       expect(a).toBe(b);
-      // Store-dir probe + ONE build, despite two prefetch invocations.
-      expect(snapshots).toHaveLength(2);
+      // Only ONE exec call despite two prefetch invocations.
+      expect(snapshots).toHaveLength(1);
     });
 
     it('different flakeLockFingerprint invalidates cache', async () => {
       const stderr =
         '  got: sha256-DDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDD=';
       const snapshots = mockExecSequence([
-        storeDirProbe,
         makeMismatchError(stderr),
         makeMismatchError(stderr),
       ]);
@@ -198,15 +217,14 @@ describe('modules/manager/nix-update/prefetch', () => {
       };
       await prefetch({ ...baseOpts, flakeLockFingerprint: 'lock-rev-A' });
       await prefetch({ ...baseOpts, flakeLockFingerprint: 'lock-rev-B' });
-      // Two different fingerprints → no cache reuse → two builds.
-      expect(snapshots).toHaveLength(3);
+      // Two different fingerprints → no cache reuse → two execs.
+      expect(snapshots).toHaveLength(2);
     });
 
     it('does not cache failures — retries on next call', async () => {
       const stderr =
         '  got: sha256-CCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCC=';
       const snapshots = mockExecSequence([
-        storeDirProbe,
         new Error('first attempt died'),
         makeMismatchError(stderr),
       ]);
@@ -218,41 +236,7 @@ describe('modules/manager/nix-update/prefetch', () => {
       await expect(prefetch(opts)).rejects.toThrow(/first attempt died/);
       const ok = await prefetch(opts);
       expect(ok).toBe('sha256-CCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCC=');
-      expect(snapshots).toHaveLength(3);
-    });
-
-    it('fails fast when the store dir cannot use binary caches', async () => {
-      const snapshots = mockExecSequence([
-        { stdout: '/tmp/containerbase/cache/nix/store\n', stderr: '' },
-      ]);
-      await expect(
-        prefetch({
-          expr: 'runnerPkgs.fetchurl { url = "x"; hash = ""; }',
-          pkgSystem: 'x86_64-darwin',
-          algo: 'sha256',
-        }),
-      ).rejects.toThrow(/binary caches only serve '\/nix\/store'/);
-      // Probe only — the doomed source build is never started.
-      expect(snapshots).toHaveLength(1);
-    });
-
-    it('probes the store dir once per process', async () => {
-      const stderr =
-        '  got: sha256-EEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEE=';
-      const snapshots = mockExecSequence([
-        storeDirProbe,
-        makeMismatchError(stderr),
-        makeMismatchError(stderr),
-      ]);
-      const baseOpts = {
-        pkgSystem: 'x86_64-linux' as const,
-        algo: 'sha256' as const,
-      };
-      await prefetch({ ...baseOpts, expr: 'a' });
-      await prefetch({ ...baseOpts, expr: 'b' });
-      expect(snapshots).toHaveLength(3);
-      expect(snapshots[0].cmd).toContain('builtins.storeDir');
-      expect(snapshots[1].cmd).toContain('nix build');
+      expect(snapshots).toHaveLength(2);
     });
   });
 });
