@@ -70,14 +70,15 @@ export async function updateArtifacts({
   const extraEnv = buildExtraEnv();
 
   const substituters = usableSubstituters(config.nixSubstituters);
-  // Keys are admin-owned: a repo supplying its own would be trusting whatever
-  // cache it names. Without a matching key nix ignores everything the cache
-  // serves and silently builds from source, so say so up front.
+  // Keys are admin-owned: a repo supplying its own would let a cache it
+  // controls serve signed, input-addressed paths (stdenv, bash) into a store
+  // every repo shares. Content-addressed paths need no signature — they are
+  // verified against their hash instead — so a keyless cache is not inert.
   const trustedPublicKeys = GlobalConfig.get('nixTrustedPublicKeys') ?? [];
   if (substituters.length && !trustedPublicKeys.length) {
     logger.warn(
       { substituters },
-      'nix-update: nixSubstituters configured but the bot has no nixTrustedPublicKeys, so nix will ignore them',
+      'nix-update: nixSubstituters configured but the bot has no nixTrustedPublicKeys, so nix will reject their signed paths',
     );
   }
 
@@ -464,7 +465,9 @@ function usableSubstituters(configured: string[] | undefined): string[] {
   const ok: string[] = [];
   const rejected: string[] = [];
   for (const entry of configured ?? []) {
-    const url = parseUrl(entry);
+    // Whitespace would split one entry into several substituters, and the
+    // normalised href is what we forward — the raw string can differ.
+    const url = /\s/.test(entry) ? null : parseUrl(entry);
     if (
       url?.protocol === 'https:' &&
       !url.search &&
@@ -472,7 +475,7 @@ function usableSubstituters(configured: string[] | undefined): string[] {
       !url.username &&
       !url.password
     ) {
-      ok.push(entry);
+      ok.push(url.href);
     } else {
       rejected.push(entry);
     }

@@ -26,7 +26,7 @@ A repository can select binary caches for its own hash computation:
 }
 ```
 
-They are passed to `nix build` for that repository only, and must be plain `https` URLs — a Nix store URI can carry settings like `?trusted=true`, which would switch off signature checking. The bot administrator must add the cache's public key to `nixTrustedPublicKeys` first: repository config is untrusted, so a repository cannot make nix trust a cache by itself. Until the key is there, nix ignores the cache and builds from source, and the manager logs a warning. `cache.nixos.org` needs no configuration — it is nix's default.
+They are passed to `nix build` for that repository only, and must be plain `https` URLs — a Nix store URI can carry settings like `?trusted=true`, which would switch off signature checking. Signing keys are administrator-owned, in `nixTrustedPublicKeys`. Without a matching key nix still accepts _content-addressed_ paths from the cache — the FODs this manager builds — because those are verified against their hash rather than a signature. What a key unlocks is _input-addressed_ paths (stdenv, bash, curl), which is also why a repository cannot be allowed to supply one: those paths land in a store every repository shares. `cache.nixos.org` needs no configuration — it is nix's default.
 
 ### How it works
 

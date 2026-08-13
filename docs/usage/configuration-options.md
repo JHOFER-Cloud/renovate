@@ -3012,7 +3012,7 @@ Only plain `https` URLs are accepted — entries with query parameters, credenti
 }
 ```
 
-The substituters are passed to `nix build` for this repository only, so caches configured by one repository are never used for another.
+The substituters are passed to `nix build` for this repository only. Store paths fetched from them are still shared with every other repository on that runner, so what protects the others is nix's signature check on input-addressed paths — see [`nixTrustedPublicKeys`](./self-hosted-configuration.md#nixtrustedpublickeys).
 
 ## `npmToken`
 

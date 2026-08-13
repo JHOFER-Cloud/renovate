@@ -980,7 +980,7 @@ describe('modules/manager/nix-update/artifacts', () => {
 
     const cmd = snapshots[1].cmd;
     expect(cmd).toContain(
-      "--option extra-substituters 'https://nixkit.cachix.org'",
+      "--option extra-substituters 'https://nixkit.cachix.org/'",
     );
     expect(cmd).toContain(
       "--option extra-trusted-public-keys 'nixkit.cachix.org-1:abc='",
@@ -1003,11 +1003,11 @@ describe('modules/manager/nix-update/artifacts', () => {
     });
 
     expect(logger.warn).toHaveBeenCalledWith(
-      { substituters: ['https://nixkit.cachix.org'] },
-      'nix-update: nixSubstituters configured but the bot has no nixTrustedPublicKeys, so nix will ignore them',
+      { substituters: ['https://nixkit.cachix.org/'] },
+      'nix-update: nixSubstituters configured but the bot has no nixTrustedPublicKeys, so nix will reject their signed paths',
     );
-    // Still passed to nix: the cache may serve content-addressed paths, which
-    // need no signature.
+    // Still passed to nix: content-addressed paths need no signature, so a
+    // keyless cache is not useless — only its signed paths are refused.
     expect(snapshots[1].cmd).toContain('--option extra-substituters');
     expect(snapshots[1].cmd).not.toContain('extra-trusted-public-keys');
   });
@@ -1033,6 +1033,9 @@ describe('modules/manager/nix-update/artifacts', () => {
     ['file:///tmp/repo/evil-cache'],
     ['https://user:pw@nixkit.cachix.org'],
     ['not-a-url'],
+    // one entry, three substituters: nix splits the option on whitespace
+    ['https://ok.cachix.org/ file:///tmp/evil http://attacker.example.net'],
+    ['http://plaintext.example.com'],
   ])('refuses substituter %s', async (substituter) => {
     GlobalConfig.set({
       ...adminConfig,
@@ -1083,6 +1086,32 @@ describe('modules/manager/nix-update/artifacts', () => {
 
     expect(snapshots[1].cmd).toContain(
       "--option extra-substituters 'https://attic.xuyh0120.win/lantian'",
+    );
+  });
+
+  it('forwards the normalised url, not the raw entry', async () => {
+    GlobalConfig.set({
+      ...adminConfig,
+      nixTrustedPublicKeys: ['nixkit.cachix.org-1:abc='],
+    });
+    git.getRepoStatus.mockResolvedValue(
+      partial<StatusResult>({ modified: [], not_added: [] }),
+    );
+    fs.readLocalFile.mockResolvedValue('updated content');
+    const snapshots = mockExecSequence([
+      STORE_DIR_PROBE,
+      makeMismatchError(stderrWithGot(NEW_HASH)),
+    ]);
+
+    await updateArtifacts({
+      ...srcOnlyUpgrade(),
+      // nix cannot open a store whose scheme it does not recognise, and the
+      // parsed protocol is lower-cased while the raw string is not.
+      config: { ...config, nixSubstituters: ['HTTPS://NIXKIT.CACHIX.ORG/'] },
+    });
+
+    expect(snapshots[1].cmd).toContain(
+      "--option extra-substituters 'https://nixkit.cachix.org/'",
     );
   });
 });

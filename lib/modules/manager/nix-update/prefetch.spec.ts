@@ -254,8 +254,8 @@ describe('modules/manager/nix-update/prefetch', () => {
       });
 
       expect(logger.warn).toHaveBeenCalledWith(
-        { substituter: 'https://nixkit.cachix.org' },
-        'nix-update: substituter ignored, no matching key in nixTrustedPublicKeys',
+        { substituters: ['https://nixkit.cachix.org'] },
+        'nix-update: substituters ignored, no matching key in nixTrustedPublicKeys',
       );
     });
   });

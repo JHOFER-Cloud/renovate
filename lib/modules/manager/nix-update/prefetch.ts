@@ -212,21 +212,24 @@ export async function prefetch(opts: PrefetchOptions): Promise<string> {
 // nix only warns about this on stderr and then builds from source, which
 // otherwise looks like an unexplained slow run.
 const unsignedRegex = regEx(
-  /ignoring substitute for '[^']+' from '([^']+)', as it's not signed/,
+  /ignoring substitute for '[^']+' from '([^']+)', as it's not signed/g,
 );
 
 function warnOnUntrustedSubstitutes(stderr: string): void {
-  const match = unsignedRegex.exec(stderr);
-  if (match) {
+  const substituters = new Set(
+    [...stderr.matchAll(unsignedRegex)].map((m) => m[1]),
+  );
+  if (substituters.size) {
     logger.warn(
-      { substituter: match[1] },
-      'nix-update: substituter ignored, no matching key in nixTrustedPublicKeys',
+      { substituters: [...substituters] },
+      'nix-update: substituters ignored, no matching key in nixTrustedPublicKeys',
     );
   }
 }
 
-// A substituter without its signing key is useless — nix refuses unsigned
-// paths — so both are emitted together or not at all.
+// Keys are optional: nix accepts content-addressed paths (the FODs this
+// manager builds) unsigned, verifying them against their hash, and requires a
+// trusted signature only for input-addressed ones.
 function substituterArgs(
   substituters: string[] | undefined,
   trustedPublicKeys: string[] | undefined,

@@ -994,7 +994,7 @@ Public keys Nix trusts to sign paths served by a repository's [`nixSubstituters`
 
 Keys are administrator-owned on purpose: a repository that could supply its own key would be trusting whatever cache it names, and paths fetched from it become build inputs for every repository sharing the runner's Nix store.
 
-This means **a repository cannot enable a cache on its own**. Until you add its key here, nix ignores everything that cache serves and falls back to building from source:
+Without a matching key, nix still accepts **content-addressed** paths from a repository's cache — they are verified against their hash, not a signature. A key is what lets a cache serve **input-addressed** paths such as `stdenv` or `bash`, which become build inputs for every repository sharing the runner's store. That is why keys are administrator-owned. Unsigned input-addressed paths are refused:
 
 ```text
 warning: ignoring substitute for '/nix/store/...' from 'https://example.cachix.org', as it's not signed by any of the keys in 'trusted-public-keys'
