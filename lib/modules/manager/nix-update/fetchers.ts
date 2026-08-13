@@ -85,7 +85,8 @@ export function classifyFod(
           buildExpr: (flakePath, srcExpr) =>
             exprForNpmDeps(flakePath, { ...v, srcExpr }, algo),
         };
-      case 'pnpmDeps':
+      case 'pnpmDeps': {
+        const pnpmArgs = pnpmVendorArgs(fod);
         return {
           attrPath: fod.attrPath,
           currentHash,
@@ -93,8 +94,9 @@ export function classifyFod(
           isSrc: false,
           fetcherName: 'pnpmDeps',
           buildExpr: (flakePath, srcExpr) =>
-            exprForPnpmDeps(flakePath, { ...v, srcExpr }, algo),
+            exprForPnpmDeps(flakePath, { ...v, ...pnpmArgs, srcExpr }, algo),
         };
+      }
       case 'yarnOfflineCache':
       case 'offlineCache':
         return {
@@ -204,6 +206,24 @@ export function buildKnownSrcExpr(
 }
 
 // ---------- internals ----------
+
+// The fetchPnpmDeps args extract.ts read off the package's own derivation.
+// Everything here changes the fetched store layout, so anything we drop shows
+// up as a wrong hash rather than as an error.
+function pnpmVendorArgs(fod: FodInfo): Partial<VendorInputs> {
+  const inp = fod.inputs;
+  return {
+    ...(typeof inp.fetcherVersion === 'number' && {
+      fetcherVersion: inp.fetcherVersion,
+    }),
+    ...(inp.pnpmVersion && { pnpmVersion: inp.pnpmVersion }),
+    ...(inp.pnpmWorkspaces?.length && { pnpmWorkspaces: inp.pnpmWorkspaces }),
+    ...(inp.pnpmInstallFlags?.length && {
+      pnpmInstallFlags: inp.pnpmInstallFlags,
+    }),
+    ...(inp.prePnpmInstall && { prePnpmInstall: inp.prePnpmInstall }),
+  };
+}
 
 const githubArchiveRegex = regEx(
   /^https?:\/\/github\.com\/[^/]+\/[^/]+\/archive\/[^/]+\.(?:tar\.gz|zip)$/,

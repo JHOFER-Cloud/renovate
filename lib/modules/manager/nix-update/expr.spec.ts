@@ -129,6 +129,12 @@ describe('modules/manager/nix-update/expr', () => {
       expect(e).toContain('fetchNpmDeps');
       expect(e).toContain('name = "foo-1.0-npm-deps"');
     });
+    it('pnpm: uses fetchPnpmDeps, not the deprecated pnpm.fetchDeps', () => {
+      const e = exprForPnpmDeps(FLAKE, VEND, 'sha256');
+      expect(e).toContain('runnerPkgs.fetchPnpmDeps');
+      // pnpm.fetchDeps force-overrides the pnpm argument with its own version.
+      expect(e).not.toContain('pnpm.fetchDeps');
+    });
     it('pnpm: includes fetcherVersion when set', () => {
       const e = exprForPnpmDeps(
         FLAKE,
@@ -140,6 +146,48 @@ describe('modules/manager/nix-update/expr', () => {
     it('pnpm: omits fetcherVersion when not set', () => {
       const e = exprForPnpmDeps(FLAKE, VEND, 'sha256');
       expect(e).not.toContain('fetcherVersion');
+    });
+    it('pnpm: pins the package’s pnpm major', () => {
+      const e = exprForPnpmDeps(
+        FLAKE,
+        { ...VEND, pnpmVersion: '11.20.0' },
+        'sha256',
+      );
+      expect(e).toContain('pnpm = runnerPkgs.pnpm_11;');
+      // A fallback to the default pnpm would silently produce a wrong hash.
+      expect(e).not.toContain('or runnerPkgs.pnpm');
+    });
+    it('pnpm: omits the pnpm pin when the version is unusable', () => {
+      const e = exprForPnpmDeps(
+        FLAKE,
+        { ...VEND, pnpmVersion: 'unstable' },
+        'sha256',
+      );
+      expect(e).not.toContain('runnerPkgs.pnpm_');
+    });
+    it('pnpm: forwards workspaces, install flags and prePnpmInstall', () => {
+      const e = exprForPnpmDeps(
+        FLAKE,
+        {
+          ...VEND,
+          pnpmWorkspaces: ['a', 'b'],
+          pnpmInstallFlags: ['--foo'],
+          prePnpmInstall: 'pnpm config set x y',
+        },
+        'sha256',
+      );
+      expect(e).toContain('pnpmWorkspaces = [ "a" "b" ];');
+      expect(e).toContain('pnpmInstallFlags = [ "--foo" ];');
+      expect(e).toContain('prePnpmInstall = "pnpm config set x y";');
+    });
+    it('pnpm: omits empty lists rather than passing them explicitly', () => {
+      const e = exprForPnpmDeps(
+        FLAKE,
+        { ...VEND, pnpmWorkspaces: [], pnpmInstallFlags: [] },
+        'sha256',
+      );
+      expect(e).not.toContain('pnpmWorkspaces');
+      expect(e).not.toContain('pnpmInstallFlags');
     });
     it('yarn: fetchYarnDeps with yarnLock path', () => {
       const e = exprForYarnDeps(FLAKE, VEND, 'sha256');

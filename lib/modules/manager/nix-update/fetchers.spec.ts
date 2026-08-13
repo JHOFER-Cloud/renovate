@@ -167,7 +167,30 @@ describe('modules/manager/nix-update/fetchers', () => {
       const c = classifyFod(fod, 'foo', '1');
       expect(c.fetcherName).toBe('pnpmDeps');
       const expr = c.buildExpr(FLAKE, '<src>');
-      expect(expr).toContain('runnerPkgs.pnpm.fetchDeps');
+      expect(expr).toContain('runnerPkgs.fetchPnpmDeps');
+    });
+
+    it('pnpmDeps forwards the fetchPnpmDeps args read off the derivation', () => {
+      const fod = makeFod(['pnpmDeps'], {
+        fetcherVersion: 4,
+        pnpmVersion: '11.20.0',
+        pnpmWorkspaces: ['pkg-a'],
+        pnpmInstallFlags: ['--no-optional'],
+        prePnpmInstall: 'pnpm config set foo bar',
+      });
+      const expr = classifyFod(fod, 'foo', '1').buildExpr(FLAKE, '<src>');
+      expect(expr).toContain('fetcherVersion = 4;');
+      expect(expr).toContain('pnpm = runnerPkgs.pnpm_11;');
+      expect(expr).toContain('pnpmWorkspaces = [ "pkg-a" ];');
+      expect(expr).toContain('pnpmInstallFlags = [ "--no-optional" ];');
+      expect(expr).toContain('prePnpmInstall = "pnpm config set foo bar";');
+    });
+
+    it('pnpmDeps tolerates a cache entry extracted before these were read', () => {
+      const fod = makeFod(['pnpmDeps'], {});
+      const expr = classifyFod(fod, 'foo', '1').buildExpr(FLAKE, '<src>');
+      expect(expr).not.toContain('fetcherVersion');
+      expect(expr).not.toContain('runnerPkgs.pnpm_');
     });
 
     it('classifies yarnOfflineCache', () => {

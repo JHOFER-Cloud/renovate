@@ -27,9 +27,6 @@ export interface FetcherInputs {
   format?: string;
   extension?: string;
 
-  // pnpm
-  fetcherVersion?: number;
-
   // For vendor FODs that need an externally-built src
   srcExpr?: string; // raw nix expression, e.g. a runner-side src fetcher call
 
@@ -185,8 +182,12 @@ export interface VendorInputs {
   version: string;
   // raw nix expression for src — usually a runner-side fetcher call with a known hash
   srcExpr: string;
-  // optional, fetcher-specific
+  // fetchPnpmDeps args, read off the package's own pnpmDeps derivation
   fetcherVersion?: number;
+  pnpmVersion?: string;
+  pnpmWorkspaces?: string[];
+  pnpmInstallFlags?: string[];
+  prePnpmInstall?: string;
 }
 
 // (runnerPkgs.buildGoModule { ... vendorHash = ""; }).goModules
@@ -234,22 +235,39 @@ export function exprForNpmDeps(
     }`;
 }
 
-// pnpm: pnpm.fetchDeps. fetcherVersion controls store layout (>= 8 vs older).
+// pnpm: fetchPnpmDeps. `pnpm.fetchDeps` is deprecated and, more importantly,
+// force-overrides the `pnpm` argument with its own version — so a package
+// pinning pnpm_11 could not be reproduced through it.
 export function exprForPnpmDeps(
   flakePath: string,
   v: VendorInputs,
   algo: HashAlgo,
 ): string {
-  const fv =
-    v.fetcherVersion === undefined
-      ? ''
-      : `fetcherVersion = ${nixVal(v.fetcherVersion)};`;
+  const attrs: string[] = [];
+  // No `or runnerPkgs.pnpm` fallback: a different pnpm major writes a
+  // different store layout, so guessing here would mean a silently wrong hash.
+  const major = /^(\d+)\./.exec(v.pnpmVersion ?? '')?.[1];
+  if (major) {
+    attrs.push(`pnpm = runnerPkgs.pnpm_${major};`);
+  }
+  if (v.fetcherVersion !== undefined) {
+    attrs.push(`fetcherVersion = ${nixVal(v.fetcherVersion)};`);
+  }
+  if (v.pnpmWorkspaces?.length) {
+    attrs.push(`pnpmWorkspaces = ${nixVal(v.pnpmWorkspaces)};`);
+  }
+  if (v.pnpmInstallFlags?.length) {
+    attrs.push(`pnpmInstallFlags = ${nixVal(v.pnpmInstallFlags)};`);
+  }
+  if (v.prePnpmInstall) {
+    attrs.push(`prePnpmInstall = ${nixVal(v.prePnpmInstall)};`);
+  }
   return `${preamble(flakePath)}
-    runnerPkgs.pnpm.fetchDeps {
+    runnerPkgs.fetchPnpmDeps {
       pname = ${nixVal(v.pname)};
       version = ${nixVal(v.version)};
       src = ${v.srcExpr};
-      ${fv}
+      ${attrs.join(' ')}
       ${hashPlaceholderAttr(algo)}
     }`;
 }
