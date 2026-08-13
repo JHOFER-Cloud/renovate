@@ -6,6 +6,7 @@ import { readLocalFile, writeLocalFile } from '../../../util/fs/index.ts';
 import { getGitEnvironmentVariables } from '../../../util/git/auth.ts';
 import { getRepoStatus } from '../../../util/git/index.ts';
 import * as hostRules from '../../../util/host-rules.ts';
+import { matchRegexOrGlobList } from '../../../util/string-match.ts';
 import { getPkgReleases } from '../../datasource/index.ts';
 import type {
   ArtifactError,
@@ -27,6 +28,7 @@ export async function updateArtifacts({
   packageFileName,
   updatedDeps,
   newPackageFileContent,
+  config,
 }: UpdateArtifact): Promise<UpdateArtifactsResult[] | null> {
   const dep = updatedDeps[0];
   const md = dep?.managerData as
@@ -66,6 +68,13 @@ export async function updateArtifacts({
 
   // Auth: pass GitHub/GitLab tokens through env so private fetchers work.
   const extraEnv = buildExtraEnv();
+
+  const substituters = allowedSubstituters(config.nixSubstituters);
+  // Keys are admin-owned: a repo that could supply its own would trust any
+  // cache it can reach on an allowlisted host.
+  const trustedPublicKeys = substituters.length
+    ? (GlobalConfig.get('nixTrustedPublicKeys') ?? [])
+    : [];
 
   // Fingerprint flake.lock so the prefetch cache invalidates if Renovate's
   // double-eval rebases the working tree onto a flake.lock with a different
@@ -217,6 +226,8 @@ export async function updateArtifacts({
         pkgSystem,
         algo: fod.algo,
         extraEnv,
+        substituters,
+        trustedPublicKeys,
         flakeLockFingerprint,
       });
 
@@ -438,6 +449,28 @@ function pickSrcExprFor(
     throw new Error('vendor FOD: src hash unavailable');
   }
   return buildKnownSrcExpr(srcFod, knownHash, flakePath);
+}
+
+// Repo config is untrusted, and a substituter it names serves store paths to
+// every repo sharing this runner's store, so admins allowlist them globally.
+function allowedSubstituters(configured: string[] | undefined): string[] {
+  if (!configured?.length) {
+    return [];
+  }
+  const allowed = GlobalConfig.get('allowedNixSubstituters') ?? [];
+  // nix splits these on whitespace, so one allowlisted entry containing a
+  // space would smuggle in a second, unchecked substituter.
+  const ok = configured.filter(
+    (s) => !/\s/.test(s) && matchRegexOrGlobList(s, allowed),
+  );
+  const rejected = configured.filter((s) => !ok.includes(s));
+  if (rejected.length) {
+    logger.warn(
+      { rejected },
+      'nix-update: ignoring substituters missing from allowedNixSubstituters',
+    );
+  }
+  return ok;
 }
 
 // Build the env we pass to every nix-build invocation. Token names follow

@@ -147,6 +147,26 @@ module.exports = {
 };
 ```
 
+## `allowedNixSubstituters`
+
+Bot administrators can allow repositories to select Nix binary caches for hash computation.
+Only substituters matching this list are accepted from the [`nixSubstituters`](./configuration-options.md#nixsubstituters) repository config; entries containing whitespace are always rejected.
+
+```js title="config.js"
+module.exports = {
+  allowedNixSubstituters: ['https://nixkit.cachix.org'],
+  nixTrustedPublicKeys: ['nixkit.cachix.org-1:Pe8zOhPVMt4fa/2HYlqu...'],
+};
+```
+
+!!! warning
+  Prefer exact cache URLs over host wildcards.
+  A pattern such as `https://*.cachix.org` allows every cache on a service where anyone can register a name, so any repository could point the bot at a cache it controls.
+  Paths fetched from a substituter become build inputs for every repository sharing the runner's Nix store.
+
+`allowedNixSubstituters` values can be exact matches, glob patterns, or regex patterns.
+For more details on the syntax and supported patterns, see Renovate's [String Pattern Matching documentation](./string-pattern-matching.md).
+
 ## `allowedUnsafeExecutions`
 
 This should be configured to a list of commands which are allowed to be run automatically as part of a dependency upgrade.
@@ -987,6 +1007,13 @@ In the above example any reference to the `@company` preset will be replaced wit
 
 !!! tip
   Combine `migratePresets` with `configMigration` if you'd like your config migrated by PR.
+
+## `nixTrustedPublicKeys`
+
+Public keys Nix trusts to sign paths served by `allowedNixSubstituters`.
+Nix rejects unsigned paths, so a substituter without its key has no effect.
+
+Keys are administrator-owned on purpose: a repository that could supply its own key would be trusting any cache it can reach on an allowlisted host.
 
 ## `onboarding`
 

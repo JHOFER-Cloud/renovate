@@ -22,6 +22,10 @@ export interface PrefetchOptions {
   algo: HashAlgo;
   // env to pass to nix-build (e.g. GITHUB_TOKEN for private fetches)
   extraEnv?: Record<string, string | undefined>;
+  // extra binary caches, already filtered against the admin allowlist, plus
+  // the admin's signing keys.
+  substituters?: string[];
+  trustedPublicKeys?: string[];
   // Optional cache fingerprint. Two prefetches with the same expr+system+algo
   // but a different fingerprint won't share a cache entry. Caller should pass
   // a hash of `flake.lock` contents — `runnerPkgs` is resolved from
@@ -108,7 +112,15 @@ export async function assertSubstitutableStore(): Promise<void> {
 // On success, the FOD output is also realised in the runner's nix store
 // as a side effect (so subsequent vendor builds can reference it).
 export async function prefetch(opts: PrefetchOptions): Promise<string> {
-  const { expr, pkgSystem, algo, extraEnv, flakeLockFingerprint } = opts;
+  const {
+    expr,
+    pkgSystem,
+    algo,
+    extraEnv,
+    substituters,
+    trustedPublicKeys,
+    flakeLockFingerprint,
+  } = opts;
 
   const oneLine = collapseExpr(expr);
   const cacheKey = `${flakeLockFingerprint ?? ''}|${pkgSystem}|${algo}|${oneLine}`;
@@ -137,10 +149,13 @@ export async function prefetch(opts: PrefetchOptions): Promise<string> {
   // correctly reports the runner's actual system, runnerPkgs is the
   // runner's pkgs, and the fetcher runs natively. The FOD hash is platform-
   // agnostic regardless.
+  // Substituters go on the CLI rather than into nix.conf so a repo's cache is
+  // used for that repo only.
   const cmd =
     `nix build --no-link ` +
     `--extra-experimental-features 'nix-command flakes' ` +
     `--impure ` +
+    `${substituterArgs(substituters, trustedPublicKeys)}` +
     `--expr ${shellQuote(oneLine)}`;
 
   const execOptions: ExecOptions = {
@@ -178,6 +193,22 @@ export async function prefetch(opts: PrefetchOptions): Promise<string> {
     prefetchCache.set(cacheKey, hash);
     return hash;
   }
+}
+
+// A substituter without its signing key is useless — nix refuses unsigned
+// paths — so both are emitted together or not at all.
+function substituterArgs(
+  substituters: string[] | undefined,
+  trustedPublicKeys: string[] | undefined,
+): string {
+  if (!substituters?.length) {
+    return '';
+  }
+  let args = `--option extra-substituters ${shellQuote(substituters.join(' '))} `;
+  if (trustedPublicKeys?.length) {
+    args += `--option extra-trusted-public-keys ${shellQuote(trustedPublicKeys.join(' '))} `;
+  }
+  return args;
 }
 
 function shellQuote(s: string): string {

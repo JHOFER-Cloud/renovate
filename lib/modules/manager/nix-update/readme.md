@@ -18,6 +18,18 @@ Dropping the constraint here alone would not be enough, because containerbase li
 
 `binarySource=docker` is not supported: the manager installs no tool into the sidecar, so nix must exist in the image that runs Renovate.
 
+### Binary caches
+
+A repository can select binary caches for its own hash computation:
+
+```json title="renovate.json"
+{
+  "nixSubstituters": ["https://nixkit.cachix.org"]
+}
+```
+
+They are passed to `nix build` for that repository only. Repository config is untrusted and fetched paths become build inputs for every repository sharing the runner's store, so each entry must match the administrator's `allowedNixSubstituters` allowlist (entries containing whitespace are always rejected, since nix splits the option on whitespace). The matching signing keys come from the administrator's `nixTrustedPublicKeys`. `cache.nixos.org` needs no configuration — it is nix's default.
+
 ### How it works
 
 This manager does NOT call out to the upstream `nix-update` CLI. Instead, it computes hashes directly via runner-side `nix-build`, which lets it update darwin-only packages on a linux runner (and vice versa).

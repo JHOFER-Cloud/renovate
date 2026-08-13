@@ -2995,6 +2995,20 @@ When in `silent` mode Renovate will:
 - _not_ prune or close any existing Issues
 - _not_ create any Config Migration PRs, even if you explicitly enabled Config Migration PRs in your Renovate config
 
+## `nixSubstituters`
+
+Binary caches the `nix-update` manager may use when it computes hashes for this repository.
+Each entry must match the bot administrator's [`allowedNixSubstituters`](./self-hosted-configuration.md#allowednixsubstituters) list, otherwise it is dropped with a warning.
+
+```json
+{
+  "nixSubstituters": ["https://nixkit.cachix.org"]
+}
+```
+
+The substituters are passed to `nix build` for this repository only, so caches configured by one repository are never used for another.
+The signing keys Nix trusts are set by the bot administrator via [`nixTrustedPublicKeys`](./self-hosted-configuration.md#nixtrustedpublickeys), not here.
+
 ## `npmToken`
 
 See [Private npm module support](./getting-started/private-packages.md) for details on how this is used.

@@ -7,6 +7,7 @@ import type {
   InternalGlobalConfigOptions,
   RepoGlobalConfig,
 } from '../../../config/types.ts';
+import { logger } from '../../../logger/index.ts';
 import type { Timestamp } from '../../../util/timestamp.ts';
 import type { UpdateArtifactsConfig } from '../types.ts';
 import { updateArtifacts } from './artifacts.ts';
@@ -62,6 +63,31 @@ function makeFod(
 const NEW_HASH = 'sha256-AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA=';
 function stderrWithGot(h: string): string {
   return `error: hash mismatch\n  got: ${h}`;
+}
+
+// A minimal single-src upgrade, for tests that only care about the nix command.
+function srcOnlyUpgrade() {
+  return {
+    packageFileName: 'packages/foo/default.nix',
+    updatedDeps: [
+      {
+        depName: 'foo',
+        newVersion: '1.0.1',
+        managerData: {
+          attrName: 'foo',
+          system: 'x86_64-linux',
+          pname: 'foo',
+          fods: [
+            makeFod(['src'], {
+              url: 'https://example.com/foo.tar.gz',
+              outputHashMode: 'flat',
+            }),
+          ],
+        },
+      },
+    ],
+    newPackageFileContent: '...',
+  };
 }
 
 describe('modules/manager/nix-update/artifacts', () => {
@@ -932,5 +958,109 @@ describe('modules/manager/nix-update/artifacts', () => {
       /binary caches only serve/,
     );
     expect(snapshots).toHaveLength(1);
+  });
+  it('passes allowlisted substituters with the admin signing keys', async () => {
+    GlobalConfig.set({
+      ...adminConfig,
+      allowedNixSubstituters: ['https://nixkit.cachix.org'],
+      nixTrustedPublicKeys: ['nixkit.cachix.org-1:abc='],
+    });
+    git.getRepoStatus.mockResolvedValue(
+      partial<StatusResult>({ modified: [], not_added: [] }),
+    );
+    fs.readLocalFile.mockResolvedValue('updated content');
+    const snapshots = mockExecSequence([
+      STORE_DIR_PROBE,
+      makeMismatchError(stderrWithGot(NEW_HASH)),
+    ]);
+
+    await updateArtifacts({
+      ...srcOnlyUpgrade(),
+      config: { ...config, nixSubstituters: ['https://nixkit.cachix.org'] },
+    });
+
+    const cmd = snapshots[1].cmd;
+    expect(cmd).toContain(
+      "--option extra-substituters 'https://nixkit.cachix.org'",
+    );
+    expect(cmd).toContain(
+      "--option extra-trusted-public-keys 'nixkit.cachix.org-1:abc='",
+    );
+  });
+
+  it('drops substituters missing from the admin allowlist', async () => {
+    GlobalConfig.set({
+      ...adminConfig,
+      allowedNixSubstituters: ['https://nixkit.cachix.org'],
+      nixTrustedPublicKeys: ['nixkit.cachix.org-1:abc='],
+    });
+    git.getRepoStatus.mockResolvedValue(
+      partial<StatusResult>({ modified: [], not_added: [] }),
+    );
+    fs.readLocalFile.mockResolvedValue('updated content');
+    const snapshots = mockExecSequence([
+      STORE_DIR_PROBE,
+      makeMismatchError(stderrWithGot(NEW_HASH)),
+    ]);
+
+    await updateArtifacts({
+      ...srcOnlyUpgrade(),
+      config: { ...config, nixSubstituters: ['https://evil.example.com'] },
+    });
+
+    const cmd = snapshots[1].cmd;
+    expect(cmd).not.toContain('extra-substituters');
+    // No allowed cache survives, so the admin keys are not passed either.
+    expect(cmd).not.toContain('extra-trusted-public-keys');
+    expect(logger.warn).toHaveBeenCalledWith(
+      { rejected: ['https://evil.example.com'] },
+      'nix-update: ignoring substituters missing from allowedNixSubstituters',
+    );
+  });
+
+  it('rejects an allowlisted entry that smuggles a second substituter', async () => {
+    GlobalConfig.set({
+      ...adminConfig,
+      // Unanchored regex: matches anywhere in the string.
+      allowedNixSubstituters: ['/nixkit\\.cachix\\.org/'],
+      nixTrustedPublicKeys: ['nixkit.cachix.org-1:abc='],
+    });
+    git.getRepoStatus.mockResolvedValue(
+      partial<StatusResult>({ modified: [], not_added: [] }),
+    );
+    fs.readLocalFile.mockResolvedValue('updated content');
+    const snapshots = mockExecSequence([
+      STORE_DIR_PROBE,
+      makeMismatchError(stderrWithGot(NEW_HASH)),
+    ]);
+
+    await updateArtifacts({
+      ...srcOnlyUpgrade(),
+      config: {
+        ...config,
+        // nix splits this option on whitespace.
+        nixSubstituters: ['https://nixkit.cachix.org https://evil.example.com'],
+      },
+    });
+
+    expect(snapshots[1].cmd).not.toContain('extra-substituters');
+  });
+
+  it('passes nothing when the allowlist is empty', async () => {
+    git.getRepoStatus.mockResolvedValue(
+      partial<StatusResult>({ modified: [], not_added: [] }),
+    );
+    fs.readLocalFile.mockResolvedValue('updated content');
+    const snapshots = mockExecSequence([
+      STORE_DIR_PROBE,
+      makeMismatchError(stderrWithGot(NEW_HASH)),
+    ]);
+
+    await updateArtifacts({
+      ...srcOnlyUpgrade(),
+      config: { ...config, nixSubstituters: ['https://nixkit.cachix.org'] },
+    });
+
+    expect(snapshots[1].cmd).not.toContain('extra-substituters');
   });
 });
