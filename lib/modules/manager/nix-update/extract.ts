@@ -28,6 +28,15 @@ builtins.foldl'
     && (v.type or "") == "derivation"
     && v ? outputHash
     && v.outputHash != "";
+  /* Resolve the FOD behind a fetcher attribute, or null if there isn't one.
+     Most attrs are the FOD themselves. fetchCargoVendor is two-stage: the
+     cargoDeps attribute is a plain post-processing derivation wrapping the
+     fixed-output vendor-staging derivation, which is what cargoHash pins. */
+  fodOf = v:
+    if isFod v then v
+    else if builtins.isAttrs v && v ? vendorStaging && isFod v.vendorStaging
+    then v.vendorStaging
+    else null;
   discardCtx = builtins.unsafeDiscardStringContext;
   /* Read the relevant fetcher inputs off a FOD derivation.
      All attrs are best-effort — null when missing. */
@@ -86,8 +95,11 @@ builtins.foldl'
   ];
   collectFods = pkg:
     builtins.filter (x: x != null) (map (n:
-      if pkg ? \${n} && isFod pkg.\${n}
-      then { attrPath = [n]; inputs = fodInputs pkg.\${n}; }
+      let fod = if pkg ? \${n} then fodOf pkg.\${n} else null;
+      in if fod != null
+      /* attrPath stays the package-level name: it is what classifyFod
+         dispatches on and what the hash rewrite anchors to in the .nix file. */
+      then { attrPath = [n]; inputs = fodInputs fod; }
       else null
     ) fodAttrs);
   entries = builtins.listToAttrs (builtins.concatMap (n:
