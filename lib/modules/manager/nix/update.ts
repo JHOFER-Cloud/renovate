@@ -51,7 +51,7 @@ export function updateDependency({
     // Only update the version in the path if it's a version update
     if (currentValue && newValue && currentValue !== newValue) {
       // Replace version in the path, handling optional .tar.gz suffix
-      const versionPattern = new RegExp(
+      const versionPattern = regEx(
         `(/f/[^/]+/[^/]+/)${escapeRegExp(currentValue)}(\\.tar\\.gz)?$`,
       );
       if (versionPattern.test(oldUrl)) {
@@ -87,7 +87,7 @@ export function updateDependency({
       const refParam = parsedUrl.searchParams.get('ref');
 
       if (refParam) {
-        const refMatch = /^refs\/(tags|heads)\/(.+)$/.exec(refParam);
+        const refMatch = regEx(/^refs\/(tags|heads)\/(.+)$/).exec(refParam);
         if (refMatch) {
           const updatedRef = `refs/${refMatch[1]}/${refMatch[2].replace(currentValue, newValue)}`;
           parsedUrl.searchParams.set('ref', updatedRef);
@@ -119,7 +119,7 @@ export function updateDependency({
       if (queryStart !== -1) {
         newUrl =
           newUrl.substring(0, queryStart) +
-          newUrl.substring(queryStart).replace(/%2F/g, '/');
+          newUrl.substring(queryStart).replace(regEx(/%2F/g), '/');
       }
     }
   }

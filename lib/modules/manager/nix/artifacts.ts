@@ -1,4 +1,4 @@
-import { isNonEmptyStringAndNotWhitespace } from '@sindresorhus/is';
+import { isNonEmptyStringAndNotWhitespace, isTruthy } from '@sindresorhus/is';
 import { quote } from 'shlex';
 import { logger } from '../../../logger/index.ts';
 import { findGithubToken } from '../../../util/check-token.ts';
@@ -57,7 +57,7 @@ export async function updateArtifacts({
     }
     const ruleUrl = parseUrl(rule.matchHost);
     if (ruleUrl) {
-      const pathParts = ruleUrl.pathname.split('/').filter(Boolean);
+      const pathParts = ruleUrl.pathname.split('/').filter(isTruthy);
       if (ruleUrl.hostname === 'github.com' && pathParts.length === 1) {
         const orgToken = findGithubToken(rule);
         if (orgToken) {
@@ -86,7 +86,7 @@ export async function updateArtifacts({
   const execOptions: ExecOptions = {
     cwdFile: packageFileName,
     extraEnv: {
-      ...getGitEnvironmentVariables(),
+      ...getGitEnvironmentVariables({}),
       NIX_CACHE_HOME: await ensureCacheDir('nix'),
     },
     toolConstraints: [

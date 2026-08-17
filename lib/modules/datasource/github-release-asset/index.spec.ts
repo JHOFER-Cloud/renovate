@@ -1,7 +1,9 @@
 import * as httpMock from '~test/http-mock.ts';
+import { partial } from '~test/util.ts';
 import { getConfig } from '../../../config/defaults.ts';
 import { Result } from '../../../util/result.ts';
 import * as lookup from '../../../workers/repository/process/lookup/index.ts';
+import type { LookupUpdateConfig } from '../../../workers/repository/process/lookup/types.ts';
 import { getPkgReleases, supportsDigests } from '../index.ts';
 import { GithubReleaseAssetDatasource, parseAssetUrl } from './index.ts';
 
@@ -142,15 +144,15 @@ describe('modules/datasource/github-release-asset/index', () => {
     // The unit tests above cannot show that Renovate actually acts on the
     // digest. These two do: one proves an update is produced, the other proves
     // it stops once the file catches up.
-    function lookupConfig(currentDigest: string) {
+    function lookupConfig(currentDigest: string): LookupUpdateConfig {
       return {
-        ...getConfig(),
+        ...partial<LookupUpdateConfig>(getConfig() as never),
         datasource,
         packageName,
         currentValue: 'tip',
         currentDigest,
         versioning: 'exact',
-      } as never;
+      };
     }
 
     it('is routed down the digest path', () => {

@@ -7,6 +7,7 @@ import type { PackageFile } from '../../modules/manager/types.ts';
 import type { Pr } from '../../modules/platform/index.ts';
 import { platform } from '../../modules/platform/index.ts';
 import { getInheritedOrGlobal } from '../../util/common.ts';
+import { regEx } from '../../util/regex.ts';
 import { sanitize } from '../../util/sanitize.ts';
 import { getDepWarnings } from './errors-warnings.ts';
 
@@ -194,8 +195,8 @@ export async function raiseDependencyLookupWarningsIssue(
       .split('\n')
       .join(' ')
       .trim()
-      .replace(/#(\d)/g, '&#35;$1')
-      .replace(/@/g, '&#64;');
+      .replace(regEx(/#(\d)/g), '&#35;$1')
+      .replace(regEx(/@/g), '&#64;');
     body += `- ${line}\n`;
   }
   body += `\nFiles affected: ${warningFiles.map((f) => `\`${f}\``).join(', ')}\n`;

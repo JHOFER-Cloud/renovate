@@ -6,6 +6,7 @@ import { readLocalFile, writeLocalFile } from '../../../util/fs/index.ts';
 import { getGitEnvironmentVariables } from '../../../util/git/auth.ts';
 import { getRepoStatus } from '../../../util/git/index.ts';
 import * as hostRules from '../../../util/host-rules.ts';
+import { regEx } from '../../../util/regex.ts';
 import { parseUrl } from '../../../util/url.ts';
 import { getPkgReleases } from '../../datasource/index.ts';
 import type {
@@ -375,7 +376,7 @@ async function bumpUnstableDate(
     );
     return content;
   }
-  const newDate = /^(\d{4}-\d{2}-\d{2})/.exec(timestamp ?? '');
+  const newDate = regEx(/^(\d{4}-\d{2}-\d{2})/).exec(timestamp ?? '');
   return newDate ? rewriteUnstableDate(content, newDate[1]) : content;
 }
 
@@ -412,7 +413,7 @@ function bumpFodToNewVersion(
   function stripV(s: string): string {
     return s.length > 1 &&
       (s.startsWith('v') || s.startsWith('V')) &&
-      /\d/.test(s[1])
+      regEx(/\d/).test(s[1])
       ? s.slice(1)
       : s;
   }
@@ -467,7 +468,7 @@ function usableSubstituters(configured: string[] | undefined): string[] {
   for (const entry of configured ?? []) {
     // Whitespace would split one entry into several substituters, and the
     // normalised href is what we forward — the raw string can differ.
-    const url = /\s/.test(entry) ? null : parseUrl(entry);
+    const url = regEx(/\s/).test(entry) ? null : parseUrl(entry);
     if (
       url?.protocol === 'https:' &&
       !url.search &&
@@ -493,7 +494,7 @@ function usableSubstituters(configured: string[] | undefined): string[] {
 // what nix's built-in fetchers honor: GITHUB_TOKEN, GITLAB_TOKEN, etc.
 function buildExtraEnv(): Record<string, string | undefined> {
   const env: Record<string, string | undefined> = {
-    ...getGitEnvironmentVariables(),
+    ...getGitEnvironmentVariables({}),
   };
   const ghToken = findGithubToken(
     hostRules.find({

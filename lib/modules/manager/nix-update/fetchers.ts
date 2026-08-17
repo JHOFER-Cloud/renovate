@@ -200,7 +200,7 @@ export function buildKnownSrcExpr(
     normalizeAlgo(fod.inputs.outputHashAlgo),
   );
   return placeholder.replace(
-    /hash = "sha(?:256|512|1)-[A-Za-z0-9+/=]+"/,
+    regEx(/hash = "sha(?:256|512|1)-[A-Za-z0-9+/=]+"/),
     `hash = "${knownHash}"`,
   );
 }
