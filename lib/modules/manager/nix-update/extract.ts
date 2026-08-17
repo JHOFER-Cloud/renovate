@@ -1,7 +1,9 @@
+import { isObject } from '@sindresorhus/is';
 import { logger } from '../../../logger/index.ts';
 import { exec } from '../../../util/exec/index.ts';
 import type { ExecOptions } from '../../../util/exec/types.ts';
 import { readLocalFile } from '../../../util/fs/index.ts';
+import { regEx } from '../../../util/regex.ts';
 import {
   GithubReleaseAssetDatasource,
   parseAssetUrl,
@@ -244,9 +246,9 @@ export function packageFileFromPosition(
     return null;
   }
   // Strip trailing :line[:col] — accept either form.
-  const path = pos.replace(/(?::\d+)+$/, '');
+  const path = pos.replace(regEx(/(?::\d+)+$/), '');
   // Strip nix store prefix /nix/store/<32+hex>-<name>/
-  const storeMatch = /^\/nix\/store\/[^/]+\/(.+)$/.exec(path);
+  const storeMatch = regEx(/^\/nix\/store\/[^/]+\/(.+)$/).exec(path);
   return storeMatch ? storeMatch[1] : path;
 }
 
@@ -268,6 +270,7 @@ export function deriveExtractVersion(args: string[]): string | undefined {
   }
   // Replace the first unnamed `(` with a named `(?<version>`. Leaves
   // non-capturing `(?:...)` and lookarounds alone.
+  // oxlint-disable-next-line renovate/require-regex-util -- must stay a native RegExp: RE2 has no negative lookahead, so regEx() would throw on this pattern
   return pattern.replace(/\((?!\?)/, '(?<version>');
 }
 
@@ -284,7 +287,7 @@ export function sriToHexDigest(sri: string | null): string | null {
   // sha256 only: GitHub reports asset digests as sha256, so any other
   // algorithm could never compare equal — better to skip the package than to
   // emit a digest that guarantees a permanent mismatch.
-  const m = /^sha256-([A-Za-z0-9+/]+={0,2})$/.exec(sri);
+  const m = regEx(/^sha256-([A-Za-z0-9+/]+={0,2})$/).exec(sri);
   if (!m) {
     return null;
   }
@@ -308,16 +311,16 @@ export function datasourceFromSrc(
   }
 
   // Strip .git suffix once, before any matching
-  const cleanUrl = srcUrl.replace(/\.git$/, '');
+  const cleanUrl = srcUrl.replace(regEx(/\.git$/), '');
 
   const isBranchTracked = updateScriptArgs.some((a) =>
     a.startsWith('--version=branch'),
   );
 
   // GitHub
-  const ghMatch = /^https?:\/\/github\.com\/([^/]+\/[^/]+?)(?:\/|$)/.exec(
-    cleanUrl,
-  );
+  const ghMatch = regEx(
+    /^https?:\/\/github\.com\/([^/]+\/[^/]+?)(?:\/|$)/,
+  ).exec(cleanUrl);
   if (ghMatch) {
     return isBranchTracked
       ? { datasource: 'github-digest', packageName: ghMatch[1] }
@@ -325,40 +328,41 @@ export function datasourceFromSrc(
   }
 
   // GitLab
-  const glMatch = /^https?:\/\/gitlab\.com\/([^/]+\/[^/]+?)(?:\/|$)/.exec(
-    cleanUrl,
-  );
+  const glMatch = regEx(
+    /^https?:\/\/gitlab\.com\/([^/]+\/[^/]+?)(?:\/|$)/,
+  ).exec(cleanUrl);
   if (glMatch) {
     return { datasource: 'gitlab-tags', packageName: glMatch[1] };
   }
 
   // Bitbucket
-  const bbMatch = /^https?:\/\/bitbucket\.org\/([^/]+\/[^/]+?)(?:\/|$)/.exec(
-    cleanUrl,
-  );
+  const bbMatch = regEx(
+    /^https?:\/\/bitbucket\.org\/([^/]+\/[^/]+?)(?:\/|$)/,
+  ).exec(cleanUrl);
   if (bbMatch) {
     return { datasource: 'bitbucket-tags', packageName: bbMatch[1] };
   }
 
   // Codeberg (runs Forgejo)
-  const codebergMatch =
-    /^https?:\/\/codeberg\.org\/([^/]+\/[^/]+?)(?:\/|$)/.exec(cleanUrl);
+  const codebergMatch = regEx(
+    /^https?:\/\/codeberg\.org\/([^/]+\/[^/]+?)(?:\/|$)/,
+  ).exec(cleanUrl);
   if (codebergMatch) {
     return { datasource: 'forgejo-tags', packageName: codebergMatch[1] };
   }
 
   // Gitea.com
-  const giteaMatch = /^https?:\/\/gitea\.com\/([^/]+\/[^/]+?)(?:\/|$)/.exec(
-    cleanUrl,
-  );
+  const giteaMatch = regEx(
+    /^https?:\/\/gitea\.com\/([^/]+\/[^/]+?)(?:\/|$)/,
+  ).exec(cleanUrl);
   if (giteaMatch) {
     return { datasource: 'gitea-tags', packageName: giteaMatch[1] };
   }
 
   // SourceHut
-  const srhtMatch = /^https?:\/\/git\.sr\.ht\/(~[^/]+\/[^/]+?)(?:\/|$)/.exec(
-    cleanUrl,
-  );
+  const srhtMatch = regEx(
+    /^https?:\/\/git\.sr\.ht\/(~[^/]+\/[^/]+?)(?:\/|$)/,
+  ).exec(cleanUrl);
   if (srhtMatch) {
     return {
       datasource: 'git-tags',
@@ -367,7 +371,7 @@ export function datasourceFromSrc(
   }
 
   // Savannah (GNU + non-GNU)
-  if (/savannah\.(gnu|nongnu)\.org/.test(cleanUrl)) {
+  if (regEx(/savannah\.(gnu|nongnu)\.org/).test(cleanUrl)) {
     const base = cleanUrl.split('/archive/')[0].split('/download/')[0];
     return { datasource: 'git-tags', packageName: base };
   }
@@ -379,9 +383,9 @@ export function datasourceFromSrc(
 
   // PyPI (mirror://pypi scheme or direct pythonhosted.org/pypi.io)
   if (
-    /(?:^mirror:\/\/pypi\/)|(?:files\.pythonhosted\.org)|(?:pypi\.io)/.test(
-      cleanUrl,
-    )
+    regEx(
+      /(?:^mirror:\/\/pypi\/)|(?:files\.pythonhosted\.org)|(?:pypi\.io)/,
+    ).test(cleanUrl)
   ) {
     return { datasource: 'pypi', packageName: pname ?? '' };
   }
@@ -392,7 +396,7 @@ export function datasourceFromSrc(
   }
 
   // Generic git fallback — extract base repo URL (https://host/owner/repo)
-  const genericMatch = /^(https?:\/\/[^/]+\/[^/]+\/[^/]+?)(?:\/|$)/.exec(
+  const genericMatch = regEx(/^(https?:\/\/[^/]+\/[^/]+\/[^/]+?)(?:\/|$)/).exec(
     cleanUrl,
   );
   if (genericMatch) {
@@ -412,7 +416,8 @@ export async function extractAllPackageFiles(
   );
   const hasNixUpdateScript = contents.some(
     (content) =>
-      content && /passthru\.updateScript\s*=\s*nix-update-script/.test(content),
+      content &&
+      regEx(/passthru\.updateScript\s*=\s*nix-update-script/).test(content),
   );
 
   if (!hasNixUpdateScript) {
@@ -435,7 +440,7 @@ export async function extractAllPackageFiles(
   // on the runner regardless.
   // Collapse to a single line before JSON.stringify — shell passes the
   // --apply value as-is, so literal \n from JSON escaping would break nix.
-  const singleLineExpr = evalExpr.replace(/\n\s*/g, ' ').trim();
+  const singleLineExpr = evalExpr.replace(regEx(/\n\s*/g), ' ').trim();
   const cmd =
     `nix --extra-experimental-features 'nix-command flakes' ` +
     `eval --json .#packages --apply ${JSON.stringify(singleLineExpr)}`;
@@ -449,12 +454,8 @@ export async function extractAllPackageFiles(
   try {
     const result = await exec(cmd, execOptions);
     const parsed: unknown = JSON.parse(result.stdout);
-    /* v8 ignore next 8 -- defensive; nix eval always returns an attrset for the expression we run */
-    if (
-      typeof parsed !== 'object' ||
-      parsed === null ||
-      Array.isArray(parsed)
-    ) {
+    /* v8 ignore next 7 -- defensive; nix eval always returns an attrset for the expression we run */
+    if (!isObject(parsed) || Array.isArray(parsed)) {
       logger.debug(
         { stdout: result.stdout },
         'nix-update: nix eval returned non-object',
@@ -576,7 +577,7 @@ export async function extractAllPackageFiles(
       // 'main' (GitHub's modern default) when only --version=branch is given.
       const branchName =
         info.updateScriptArgs
-          .map((a) => /^--version=branch:(.+)$/.exec(a)?.[1])
+          .map((a) => regEx(/^--version=branch:(.+)$/).exec(a)?.[1])
           .find(Boolean) ?? 'main';
       pushDep(file, {
         depName: attrName,

@@ -140,7 +140,10 @@ export async function extractPackageFile(
       datasource: GitRefsDatasource.id,
     };
 
-    dep.currentValue = flakeOriginal.ref?.replace(/^refs\/(heads|tags)\//, '');
+    dep.currentValue = flakeOriginal.ref?.replace(
+      regEx(/^refs\/(heads|tags)\//),
+      '',
+    );
     dep.currentDigest = flakeLocked.rev;
 
     switch (flakeLocked.type) {
@@ -177,14 +180,17 @@ export async function extractPackageFile(
           if (match?.groups) {
             dep.datasource = FlakeHubDatasource.id;
             dep.packageName = `${match.groups.owner}/${match.groups.repo}`;
-            dep.currentValue = match.groups.version.replace(/\.tar\.gz$/, '');
+            dep.currentValue = match.groups.version.replace(
+              regEx(/\.tar\.gz$/),
+              '',
+            );
 
             // Detect if this is a range constraint or a pinned version
             // Range constraints: "0.1", "0", "*", "%2A" (1-2 version parts)
             // Pinned versions: "0.2511.5835", "3.13.1" (3+ version parts)
             const versionParts = dep.currentValue
               .split('.')
-              .filter((p) => /^\d+$/.test(p));
+              .filter((p) => regEx(/^\d+$/).test(p));
             const isRangeConstraint =
               versionParts.length <= 2 ||
               dep.currentValue === '*' ||
@@ -229,7 +235,10 @@ export async function extractPackageFile(
     if (flakeLocked.type !== 'tarball') {
       // safety net: a malformed URL must never abort the whole repository run
       try {
-        dep.sourceUrl = getHttpUrl(dep.packageName!).replace(/\.git$/, '');
+        dep.sourceUrl = getHttpUrl(dep.packageName!).replace(
+          regEx(/\.git$/),
+          '',
+        );
       } catch (err) {
         logger.debug(
           { flakeLockFile, packageName: dep.packageName, err },

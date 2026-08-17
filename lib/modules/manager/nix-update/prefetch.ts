@@ -1,3 +1,4 @@
+import { isObject, isString } from '@sindresorhus/is';
 import { logger } from '../../../logger/index.ts';
 import { exec } from '../../../util/exec/index.ts';
 import type { ExecOptions } from '../../../util/exec/types.ts';
@@ -188,12 +189,8 @@ export async function prefetch(opts: PrefetchOptions): Promise<string> {
     );
   } catch (err) {
     // Expected case: nix-build fails with hash mismatch. Recover.
-    const errObj =
-      typeof err === 'object' && err !== null
-        ? (err as { stderr?: unknown })
-        : null;
-    const errStderr =
-      errObj && typeof errObj.stderr === 'string' ? errObj.stderr : '';
+    const errObj = isObject(err) ? (err as { stderr?: unknown }) : null;
+    const errStderr = errObj && isString(errObj.stderr) ? errObj.stderr : '';
     stderr = errStderr || stderr;
 
     if (!stderr) {
@@ -245,7 +242,7 @@ function substituterArgs(
 }
 
 function shellQuote(s: string): string {
-  return `'${s.replace(/'/g, `'\\''`)}'`;
+  return `'${s.replace(regEx(/'/g), `'\\''`)}'`;
 }
 
 function truncate(s: string, max: number): string {

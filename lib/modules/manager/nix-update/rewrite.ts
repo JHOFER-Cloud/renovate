@@ -9,14 +9,15 @@ const hashLiteralRegex = regEx(
 
 // Match any of the hash attribute names on either side of the `=`.
 // Keeps the leading whitespace + name + `=` so we re-emit it in the replacement.
-const hashAttrLine =
-  /(^|\s)(hash|sha256|sha512|sha1|outputHash)\s*=\s*"([^"]*)"/g;
+const hashAttrLine = regEx(
+  /(^|\s)(hash|sha256|sha512|sha1|outputHash)\s*=\s*"([^"]*)"/g,
+);
 
 // Match `url = "<value>"` inside a fetcher block. Used by rewriteUrl below.
-const urlAttrLine = /(^|\s)(url)\s*=\s*"([^"]*)"/g;
+const urlAttrLine = regEx(/(^|\s)(url)\s*=\s*"([^"]*)"/g);
 
 // Match `rev = "<value>"` inside a fetcher block. Used by rewriteRev below.
-const revAttrLine = /(^|\s)(rev)\s*=\s*"([^"]*)"/g;
+const revAttrLine = regEx(/(^|\s)(rev)\s*=\s*"([^"]*)"/g);
 
 export interface RewriteContext {
   // Path of attributes from the package root down to the FOD.
@@ -70,7 +71,7 @@ export function rewriteHash(content: string, ctx: RewriteContext): string {
 
   // Last resort: replace the first hash literal in the whole file.
   // Only safe when there's exactly one such literal.
-  const literals = [...content.matchAll(new RegExp(hashLiteralRegex, 'g'))];
+  const literals = [...content.matchAll(regEx(hashLiteralRegex, 'g'))];
   if (literals.length === 1) {
     logger.debug(
       { attrPath, oldHash },
@@ -83,7 +84,7 @@ export function rewriteHash(content: string, ctx: RewriteContext): string {
   // (no quotes). Use the attrPath's leaf as the anchor so we don't have to
   // enumerate every vendorHash/cargoHash/mvnHash etc.
   if (oldHash === null || oldHash === '' || oldHash === 'lib.fakeHash') {
-    const fakeHashAttr = new RegExp(
+    const fakeHashAttr = regEx(
       `(^|\\s)(${escapeRegExp(anchor)})\\s*=\\s*lib\\.fakeHash;`,
       'g',
     );
@@ -217,8 +218,9 @@ export function rewriteRev(content: string, ctx: RevRewriteContext): string {
 
 // Match the date in a nixpkgs-style unstable version, e.g.
 // `version = "0-unstable-2025-11-17"` or `version = "1.2.0-unstable-2026-06-30"`.
-const unstableVersionLine =
-  /(\bversion\s*=\s*"[^"]*-unstable-)(\d{4}-\d{2}-\d{2})(")/;
+const unstableVersionLine = regEx(
+  /(\bversion\s*=\s*"[^"]*-unstable-)(\d{4}-\d{2}-\d{2})(")/,
+);
 
 // Bump the date in a `-unstable-YYYY-MM-DD` version string.
 //
@@ -251,7 +253,7 @@ function locateAttrRange(content: string, attrName: string): AttrRange | null {
   // Match the attr binding. Anchored: must be at start or after whitespace/{
   // so we don't match inside identifiers (e.g. `goModules` should not match
   // an attr called `someGoModules`).
-  const bindingRegex = new RegExp(
+  const bindingRegex = regEx(
     `(?:^|[\\s{(])${escapeRegExp(attrName)}\\s*=\\s*`,
     'g',
   );

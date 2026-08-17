@@ -2,6 +2,9 @@
 // All output is one logical expression; we collapse newlines to spaces
 // at the end so shell quoting stays sane.
 
+import { isNullOrUndefined, isPlainObject, isString } from '@sindresorhus/is';
+import { regEx } from '../../../util/regex.ts';
+
 export type HashAlgo = 'sha256' | 'sha512' | 'sha1';
 
 export interface FetcherInputs {
@@ -40,7 +43,7 @@ const HASH_PLACEHOLDER = 'sha256-AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA=';
 // Strings: escape `${` so nix doesn't interpolate.
 // Bools, numbers, lists: JSON happens to coincide with nix syntax for these.
 export function nixVal(v: unknown): string {
-  if (v === null || v === undefined) {
+  if (isNullOrUndefined(v)) {
     return 'null';
   }
   if (typeof v === 'boolean') {
@@ -49,13 +52,15 @@ export function nixVal(v: unknown): string {
   if (typeof v === 'number') {
     return JSON.stringify(v);
   }
-  if (typeof v === 'string') {
-    return JSON.stringify(v).replace(/\$\{/g, '\\${');
+  if (isString(v)) {
+    return JSON.stringify(v).replace(regEx(/\$\{/g), '\\${');
   }
   if (Array.isArray(v)) {
     return `[ ${v.map(nixVal).join(' ')} ]`;
   }
-  if (typeof v === 'object') {
+  // isPlainObject, not isObject: isObject() counts functions as objects, but
+  // functions must fall through to the throw below.
+  if (isPlainObject(v)) {
     const entries = Object.entries(v as Record<string, unknown>)
       .filter(([, val]) => val !== undefined)
       .map(([k, val]) => `${k} = ${nixVal(val)};`);
@@ -246,7 +251,7 @@ export function exprForPnpmDeps(
   const attrs: string[] = [];
   // No `or runnerPkgs.pnpm` fallback: a different pnpm major writes a
   // different store layout, so guessing here would mean a silently wrong hash.
-  const major = /^(\d+)\./.exec(v.pnpmVersion ?? '')?.[1];
+  const major = regEx(/^(\d+)\./).exec(v.pnpmVersion ?? '')?.[1];
   if (major) {
     attrs.push(`pnpm = runnerPkgs.pnpm_${major};`);
   }
@@ -363,5 +368,5 @@ export function exprForZigDeps(
 // Collapse the multi-line nix expression to a single line so it survives
 // shell quoting cleanly. nix is whitespace-insensitive between tokens.
 export function collapseExpr(expr: string): string {
-  return expr.replace(/\s+/g, ' ').trim();
+  return expr.replace(regEx(/\s+/g), ' ').trim();
 }

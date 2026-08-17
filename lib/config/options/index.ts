@@ -691,7 +691,7 @@ const options: Readonly<RenovateOptions>[] = [
     description:
       'Change this value to override the default Renovate sidecar image.',
     type: 'string',
-    default: 'ghcr.io/renovatebot/base-image:13.82.11',
+    default: 'ghcr.io/renovatebot/base-image:13.86.6',
     globalOnly: true,
     deprecationMsg:
       'The usage of `binarySource=docker` is deprecated, and will be removed in the future',
@@ -1281,7 +1281,6 @@ const options: Readonly<RenovateOptions>[] = [
     type: 'array',
     subType: 'string',
     stage: 'package',
-    cli: false,
     patternMatch: true,
   },
   {
@@ -1318,7 +1317,8 @@ const options: Readonly<RenovateOptions>[] = [
   {
     name: 'gitIgnoredAuthors',
     description:
-      'Git authors which are ignored by Renovate. Must conform to [RFC5322](https://datatracker.ietf.org/doc/html/rfc5322).',
+      'Git author emails ignored by Renovate. Entries can be exact [RFC5322](https://datatracker.ietf.org/doc/html/rfc5322) strings, glob patterns, or regex patterns using Renovate regex syntax.',
+    patternMatch: true,
     type: 'array',
     subType: 'string',
     stage: 'repository',
@@ -2822,6 +2822,7 @@ const options: Readonly<RenovateOptions>[] = [
       'gomodMassage',
       'gomodTidy',
       'gomodTidy1.17',
+      'gomodTidyAll',
       'gomodTidyE',
       'gomodUpdateImportPaths',
       'gomodSkipVendor',
@@ -2844,12 +2845,13 @@ const options: Readonly<RenovateOptions>[] = [
     description:
       'Configuration object to define language or manager version constraints.',
     type: 'object',
-    default: {},
+    default: { ghActionsLock: 'v0.1.6' },
     mergeable: true,
     cli: false,
     supportedManagers: [
       'bundler',
       'composer',
+      'github-actions',
       'gomod',
       'mise',
       'npm',
