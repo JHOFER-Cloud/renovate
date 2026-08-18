@@ -1198,7 +1198,7 @@ async function validateGlobalConfig(
     } else if (type === 'array') {
       if (isArray(val) && key !== 'repositories') {
         for (const [subIndex, subval] of val.entries()) {
-          if (isObject(subval)) {
+          if (isObject(subval) && !isArray(subval)) {
             const subValidation = await validateConfig(
               'global',
               subval,
