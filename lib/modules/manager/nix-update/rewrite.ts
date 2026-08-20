@@ -1,5 +1,5 @@
 import { logger } from '../../../logger/index.ts';
-import { escapeRegExp, regEx } from '../../../util/regex.ts';
+import { regEx } from '../../../util/regex.ts';
 
 // SRI/legacy hash literal pattern. SRI: sha256-<base64>=, sha512-..., sha1-...
 // Legacy nix base32 is 52 chars [a-z0-9]; older files may also have hex sha256 (64 hex chars).
@@ -85,7 +85,7 @@ export function rewriteHash(content: string, ctx: RewriteContext): string {
   // enumerate every vendorHash/cargoHash/mvnHash etc.
   if (oldHash === null || oldHash === '' || oldHash === 'lib.fakeHash') {
     const fakeHashAttr = regEx(
-      `(^|\\s)(${escapeRegExp(anchor)})\\s*=\\s*lib\\.fakeHash;`,
+      `(^|\\s)(${RegExp.escape(anchor)})\\s*=\\s*lib\\.fakeHash;`,
       'g',
     );
     const matches = [...content.matchAll(fakeHashAttr)];
@@ -254,7 +254,7 @@ function locateAttrRange(content: string, attrName: string): AttrRange | null {
   // so we don't match inside identifiers (e.g. `goModules` should not match
   // an attr called `someGoModules`).
   const bindingRegex = regEx(
-    `(?:^|[\\s{(])${escapeRegExp(attrName)}\\s*=\\s*`,
+    `(?:^|[\\s{(])${RegExp.escape(attrName)}\\s*=\\s*`,
     'g',
   );
   const m = bindingRegex.exec(content);

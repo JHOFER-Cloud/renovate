@@ -1,4 +1,4 @@
-import { escapeRegExp, regEx } from '../../../util/regex.ts';
+import { regEx } from '../../../util/regex.ts';
 import type { UpdateDependencyConfig } from '../types.ts';
 
 // Bump the package's `version = "<currentValue>"` line to the new value.
@@ -24,7 +24,7 @@ export function updateDependency({
   // Match `version = "<currentValue>"` (any whitespace), case-sensitive.
   // We anchor on `\bversion\s*=\s*` so unrelated `*Version` attrs aren't hit.
   const versionLine = regEx(
-    `(\\bversion\\s*=\\s*)"${escapeRegExp(currentValue)}"`,
+    `(\\bversion\\s*=\\s*)"${RegExp.escape(currentValue)}"`,
   );
   if (!versionLine.test(fileContent)) {
     // File doesn't contain the expected `version = "<currentValue>"` —

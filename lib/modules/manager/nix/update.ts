@@ -1,5 +1,5 @@
 import { logger } from '../../../logger/index.ts';
-import { escapeRegExp, regEx } from '../../../util/regex.ts';
+import { regEx } from '../../../util/regex.ts';
 import { parseUrl } from '../../../util/url.ts';
 import type { UpdateDependencyConfig } from '../types.ts';
 
@@ -18,11 +18,11 @@ export function updateDependency({
   // Find the input line for this dependency
   // Support both direct assignment (`depName.url = "..."`) and attribute set syntax (`depName = { url = "..."; }`)
   const directPattern = regEx(
-    `^\\s*${escapeRegExp(depName)}\\.url\\s*=\\s*"([^"]+)"`,
+    `^\\s*${RegExp.escape(depName)}\\.url\\s*=\\s*"([^"]+)"`,
     'gm',
   );
   const attrSetPattern = regEx(
-    `^\\s*${escapeRegExp(depName)}\\s*=\\s*\\{[^}]*?url\\s*=\\s*"([^"]+)"`,
+    `^\\s*${RegExp.escape(depName)}\\s*=\\s*\\{[^}]*?url\\s*=\\s*"([^"]+)"`,
     'gms',
   );
   const match =
@@ -52,7 +52,7 @@ export function updateDependency({
     if (currentValue && newValue && currentValue !== newValue) {
       // Replace version in the path, handling optional .tar.gz suffix
       const versionPattern = regEx(
-        `(/f/[^/]+/[^/]+/)${escapeRegExp(currentValue)}(\\.tar\\.gz)?$`,
+        `(/f/[^/]+/[^/]+/)${RegExp.escape(currentValue)}(\\.tar\\.gz)?$`,
       );
       if (versionPattern.test(oldUrl)) {
         newUrl = oldUrl.replace(versionPattern, `$1${newValue}$2`);
