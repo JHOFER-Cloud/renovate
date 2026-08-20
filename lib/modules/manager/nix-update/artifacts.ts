@@ -165,6 +165,11 @@ export async function updateArtifacts({
               oldUrl,
               newUrl: downloadUrl,
             });
+            fod.inputs.name = retargetFetcherName(
+              fod.inputs.name,
+              oldUrl,
+              downloadUrl,
+            );
             fod.inputs.url = downloadUrl;
           }
           break;
@@ -442,6 +447,35 @@ function bumpFodToNewVersion(
     name = swap(name, oldDigest, newDigest);
   }
   return { ...fod, inputs: { ...fod.inputs, url, rev, name } };
+}
+
+// `fetchurl` defaults its derivation name to `baseNameOf url`, so the name
+// captured at extract time is usually the *old* URL's basename — and
+// `bumpFodToNewVersion` swapped the version into both. A downloadUrl replaces
+// the URL wholesale, which leaves that derived name stale. It is not merely
+// cosmetic: a fixed-output path is `<outputHash>-<name>`, so prefetching under
+// the stale name realises the artifact somewhere real evaluation never looks,
+// costing the substituter hit — and the build log then names a file that was
+// never fetched, which is exactly how a prefetch failure reads as the wrong URL.
+//
+// Re-derive only when the name demonstrably came from the URL. An explicit
+// `name = "..."` in the package belongs to the package, not the URL, and its
+// basename won't match — leave those untouched.
+function retargetFetcherName(
+  name: string | null,
+  oldUrl: string,
+  newUrl: string,
+): string | null {
+  if (!name || name !== urlBaseName(oldUrl)) {
+    return name;
+  }
+  return urlBaseName(newUrl);
+}
+
+// Mirrors nix's `baseNameOf`: everything after the last slash, query string
+// included — nix does no URL parsing here, and neither does fetchurl.
+function urlBaseName(url: string): string {
+  return url.slice(url.lastIndexOf('/') + 1);
 }
 
 function pickSrcExprFor(

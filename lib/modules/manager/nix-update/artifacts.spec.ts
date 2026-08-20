@@ -239,6 +239,108 @@ describe('modules/manager/nix-update/artifacts', () => {
     expect(result).not.toBeNull();
   });
 
+  it('retargets a url-derived fetcher name onto the downloadUrl', async () => {
+    git.getRepoStatus.mockResolvedValue(
+      partial<StatusResult>({ modified: [], not_added: [] }),
+    );
+    fs.readLocalFile.mockResolvedValue('updated content');
+
+    const snapshots = mockExecSequence([
+      STORE_DIR_PROBE,
+      makeMismatchError(stderrWithGot(NEW_HASH)),
+    ]);
+
+    const oldUrl =
+      'https://x-r2.raycast-releases.com/Raycast_Beta_0.61.0.0_aaa_arm64.dmg';
+    const newUrl = 'https://x-r2.raycast-releases.com/Raycast_2.0.3.0_bbb.dmg';
+
+    await updateArtifacts({
+      packageFileName: 'packages/raycast-beta/default.nix',
+      updatedDeps: [
+        {
+          depName: 'raycast-beta',
+          currentValue: '0.61.0.0',
+          newVersion: '2.0.3.0',
+          downloadUrl: newUrl,
+          managerData: {
+            attrName: 'raycast-beta',
+            system: 'aarch64-darwin',
+            pname: 'raycast-beta',
+            fods: [
+              makeFod(['src'], {
+                url: oldUrl,
+                // What fetchurl derives when the package sets no `name`.
+                name: 'Raycast_Beta_0.61.0.0_aaa_arm64.dmg',
+                outputHashMode: 'flat',
+              }),
+            ],
+          },
+        },
+      ],
+      newPackageFileContent: codeBlock`{
+        src = fetchurl {
+          url = "${oldUrl}";
+          hash = "sha256-OLDOLDOLDOLDOLDOLDOLDOLDOLDOLDOLDOLDOLDOLDO=";
+        };
+      }`,
+      config,
+    });
+
+    // Without retargeting this would be the version-swapped old basename,
+    // putting the FOD at a store path real evaluation never produces.
+    expect(snapshots[1].cmd).toContain('name = "Raycast_2.0.3.0_bbb.dmg"');
+    expect(snapshots[1].cmd).not.toContain('Raycast_Beta_2.0.3.0');
+  });
+
+  it('keeps an explicit fetcher name when downloadUrl replaces the url', async () => {
+    git.getRepoStatus.mockResolvedValue(
+      partial<StatusResult>({ modified: [], not_added: [] }),
+    );
+    fs.readLocalFile.mockResolvedValue('updated content');
+
+    const snapshots = mockExecSequence([
+      STORE_DIR_PROBE,
+      makeMismatchError(stderrWithGot(NEW_HASH)),
+    ]);
+
+    const oldUrl = 'https://example.com/dl/foo-1.0.0.dmg';
+    const newUrl = 'https://example.com/dl/foo-2.0.0-deadbeef.dmg';
+
+    await updateArtifacts({
+      packageFileName: 'packages/foo/default.nix',
+      updatedDeps: [
+        {
+          depName: 'foo',
+          currentValue: '1.0.0',
+          newVersion: '2.0.0',
+          downloadUrl: newUrl,
+          managerData: {
+            attrName: 'foo',
+            system: 'aarch64-darwin',
+            pname: 'foo',
+            fods: [
+              makeFod(['src'], {
+                url: oldUrl,
+                // Set by the package, not derived from the url.
+                name: 'foo-source.dmg',
+                outputHashMode: 'flat',
+              }),
+            ],
+          },
+        },
+      ],
+      newPackageFileContent: codeBlock`{
+        src = fetchurl {
+          url = "${oldUrl}";
+          hash = "sha256-OLDOLDOLDOLDOLDOLDOLDOLDOLDOLDOLDOLDOLDOLDO=";
+        };
+      }`,
+      config,
+    });
+
+    expect(snapshots[1].cmd).toContain('name = "foo-source.dmg"');
+  });
+
   it('runs src first then vendor FOD', async () => {
     git.getRepoStatus.mockResolvedValue(
       partial<StatusResult>({ modified: [], not_added: [] }),
