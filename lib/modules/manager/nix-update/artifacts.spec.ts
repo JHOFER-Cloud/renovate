@@ -332,6 +332,52 @@ describe('modules/manager/nix-update/artifacts', () => {
     ]);
   });
 
+  it('reverts the version bump when prefetch fails', async () => {
+    // The pre-update file is handed back alongside the error so the bump
+    // Renovate already staged does not reach the commit on its own.
+    fs.readLocalFile.mockResolvedValue('version = "1.0.0";');
+    mockExecSequence([STORE_DIR_PROBE, new Error('exec died')]);
+
+    const result = await updateArtifacts({
+      packageFileName: 'packages/foo/default.nix',
+      updatedDeps: [
+        {
+          depName: 'foo',
+          newVersion: '1.0.1',
+          managerData: {
+            attrName: 'foo',
+            system: 'x86_64-darwin',
+            pname: 'foo',
+            fods: [
+              makeFod(['src'], {
+                url: 'https://example.com/foo.tar.gz',
+                outputHashMode: 'flat',
+              }),
+            ],
+          },
+        },
+      ],
+      newPackageFileContent: 'version = "1.0.1";',
+      config,
+    });
+
+    expect(result).toEqual([
+      {
+        file: {
+          type: 'addition',
+          path: 'packages/foo/default.nix',
+          contents: 'version = "1.0.0";',
+        },
+      },
+      {
+        artifactError: {
+          fileName: 'packages/foo/default.nix',
+          stderr: expect.stringContaining('exec died'),
+        },
+      },
+    ]);
+  });
+
   it('returns null when localDir is unset', async () => {
     GlobalConfig.set({});
     const result = await updateArtifacts({
@@ -734,7 +780,13 @@ describe('modules/manager/nix-update/artifacts', () => {
       config,
     });
 
-    expect(result?.[0].artifactError?.stderr).toMatch(/Could not locate rev/);
+    // Revert first, then the error.
+    expect(result?.[0].file).toEqual({
+      type: 'addition',
+      path: 'packages/x/default.nix',
+      contents: 'unchanged',
+    });
+    expect(result?.[1].artifactError?.stderr).toMatch(/Could not locate rev/);
   });
 
   it('skips rewrite when file already has new hash (existing branch reuse)', async () => {
