@@ -62,6 +62,36 @@ export async function updateArtifacts({
     return null;
   }
 
+  // Captured before we touch the file: what the package file looked like
+  // going into this update (base branch, or the existing PR branch on reuse).
+  // `abandon` below hands it back to revert a half-finished update.
+  const originalContent = await readLocalFile(packageFileName, 'utf8');
+
+  // The version bump lands in the commit whether or not this function
+  // succeeds — Renovate already has it in `updatedPackageFiles`. Bailing out
+  // with only an artifactError therefore ships a package whose `version` moved
+  // while its `src` url/hash did not: a derivation that builds green and
+  // fetches the *old* artifact. Returning the pre-update content as an
+  // artifact file undoes that — artifacts are written after package files in
+  // `commitFilesToBranch`, so the bump is overwritten and the branch ends up
+  // with no diff, to be retried on the next run.
+  function abandon(stderr: string): UpdateArtifactsResult[] {
+    const results: UpdateArtifactsResult[] = [];
+    if (originalContent && originalContent !== newPackageFileContent) {
+      results.push({
+        file: {
+          type: 'addition',
+          path: packageFileName,
+          contents: originalContent,
+        },
+      });
+    }
+    results.push({
+      artifactError: { fileName: packageFileName, stderr },
+    });
+    return results;
+  }
+
   // Write the version-bumped content first (renovate's auto-replace already
   // produced this — we just need it on disk so any same-package eval reads
   // the new version).
@@ -135,6 +165,11 @@ export async function updateArtifacts({
               oldUrl,
               newUrl: downloadUrl,
             });
+            fod.inputs.name = retargetFetcherName(
+              fod.inputs.name,
+              oldUrl,
+              downloadUrl,
+            );
             fod.inputs.url = downloadUrl;
           }
           break;
@@ -183,14 +218,7 @@ export async function updateArtifacts({
   // nix-build produced would be discarded by the early return at the end
   // anyway. Vendor prefetches cost minutes of runner time.
   if (errors.length) {
-    return [
-      {
-        artifactError: {
-          fileName: packageFileName,
-          stderr: errors.map((e) => e.stderr).join('\n'),
-        },
-      },
-    ];
+    return abandon(errors.map((e) => e.stderr).join('\n'));
   }
 
   // Checked once per package rather than per FOD: it is an infrastructure
@@ -199,14 +227,7 @@ export async function updateArtifacts({
     await assertSubstitutableStore(config.constraints?.nix);
   } catch (err) {
     logger.warn({ err, attrName }, 'nix-update: unusable nix store');
-    return [
-      {
-        artifactError: {
-          fileName: packageFileName,
-          stderr: err instanceof Error ? err.message : String(err),
-        },
-      },
-    ];
+    return abandon(err instanceof Error ? err.message : String(err));
   }
 
   // Classify all FODs. Hard-fail surface area is the classifier — anything
@@ -292,14 +313,7 @@ export async function updateArtifacts({
 
   if (errors.length) {
     // One artifactError summarises all per-FOD failures for this package.
-    return [
-      {
-        artifactError: {
-          fileName: packageFileName,
-          stderr: errors.map((e) => e.stderr).join('\n'),
-        },
-      },
-    ];
+    return abandon(errors.map((e) => e.stderr).join('\n'));
   }
 
   // Success: write the rewritten file (if changed), pick up any side-effect
@@ -433,6 +447,35 @@ function bumpFodToNewVersion(
     name = swap(name, oldDigest, newDigest);
   }
   return { ...fod, inputs: { ...fod.inputs, url, rev, name } };
+}
+
+// `fetchurl` defaults its derivation name to `baseNameOf url`, so the name
+// captured at extract time is usually the *old* URL's basename — and
+// `bumpFodToNewVersion` swapped the version into both. A downloadUrl replaces
+// the URL wholesale, which leaves that derived name stale. It is not merely
+// cosmetic: a fixed-output path is `<outputHash>-<name>`, so prefetching under
+// the stale name realises the artifact somewhere real evaluation never looks,
+// costing the substituter hit — and the build log then names a file that was
+// never fetched, which is exactly how a prefetch failure reads as the wrong URL.
+//
+// Re-derive only when the name demonstrably came from the URL. An explicit
+// `name = "..."` in the package belongs to the package, not the URL, and its
+// basename won't match — leave those untouched.
+function retargetFetcherName(
+  name: string | null,
+  oldUrl: string,
+  newUrl: string,
+): string | null {
+  if (!name || name !== urlBaseName(oldUrl)) {
+    return name;
+  }
+  return urlBaseName(newUrl);
+}
+
+// Mirrors nix's `baseNameOf`: everything after the last slash, query string
+// included — nix does no URL parsing here, and neither does fetchurl.
+function urlBaseName(url: string): string {
+  return url.slice(url.lastIndexOf('/') + 1);
 }
 
 function pickSrcExprFor(
