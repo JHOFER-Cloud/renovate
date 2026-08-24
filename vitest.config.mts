@@ -134,6 +134,7 @@ export default defineConfig(() =>
           '.worktrees/**/*',
           '.claude/worktrees/**/*',
           '.pnpm-store/**/*',
+          '.direnv/**/*',
         ],
       },
     }),

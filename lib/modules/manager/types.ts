@@ -43,6 +43,7 @@ export interface UpdateArtifactsConfig {
   constraints?: Partial<Record<ConstraintName, string>>;
   composerIgnorePlatformReqs?: string[];
   goGetDirs?: string[];
+  nixSubstituters?: string[];
   currentValue?: string;
   postUpdateOptions?: string[];
   ignorePlugins?: boolean;
@@ -233,6 +234,7 @@ export interface Upgrade<
   isLockfileUpdate?: boolean;
   currentRawValue?: any;
   depGroup?: string;
+  downloadUrl?: string;
   lockFiles?: string[];
   manager?: string;
   name?: string;

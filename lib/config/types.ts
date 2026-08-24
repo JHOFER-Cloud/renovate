@@ -223,6 +223,9 @@ export interface GlobalOnlyConfigLegacy {
   repositories?: RenovateRepository[];
   useCloudMetadataServices?: boolean;
   deleteConfigFile?: boolean;
+  githubAppId?: string;
+  githubAppKey?: string;
+  githubAppCrossOrgTrustGroups?: string[][];
   deleteAdditionalConfigFile?: boolean;
 }
 
@@ -235,6 +238,7 @@ export interface GlobalOnlyConfigLegacy {
  */
 export interface RepoGlobalConfig extends GlobalInheritableConfig {
   allowedCommands?: string[];
+  nixTrustedPublicKeys?: string[];
   allowCustomCrateRegistries?: boolean;
   allowPlugins?: boolean;
   allowScripts?: boolean;

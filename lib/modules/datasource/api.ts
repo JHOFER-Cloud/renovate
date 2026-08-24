@@ -26,6 +26,7 @@ import { DockerDatasource } from './docker/index.ts';
 import { DotnetVersionDatasource } from './dotnet-version/index.ts';
 import { ElmPackageDatasource } from './elm-package/index.ts';
 import { EndoflifeDateDatasource } from './endoflife-date/index.ts';
+import { FlakeHubDatasource } from './flakehub/index.ts';
 import { FlutterVersionDatasource } from './flutter-version/index.ts';
 import { ForgejoReleasesDatasource } from './forgejo-releases/index.ts';
 import { ForgejoTagsDatasource } from './forgejo-tags/index.ts';
@@ -36,6 +37,7 @@ import { GitTagsDatasource } from './git-tags/index.ts';
 import { GiteaReleasesDatasource } from './gitea-releases/index.ts';
 import { GiteaTagsDatasource } from './gitea-tags/index.ts';
 import { GithubDigestDatasource } from './github-digest/index.ts';
+import { GithubReleaseAssetDatasource } from './github-release-asset/index.ts';
 import { GithubReleaseAttachmentsDatasource } from './github-release-attachments/index.ts';
 import { GithubReleasesDatasource } from './github-releases/index.ts';
 import { GithubRunnersDatasource } from './github-runners/index.ts';
@@ -112,6 +114,7 @@ api.set(DockerDatasource.id, new DockerDatasource());
 api.set(DotnetVersionDatasource.id, new DotnetVersionDatasource());
 api.set(ElmPackageDatasource.id, new ElmPackageDatasource());
 api.set(EndoflifeDateDatasource.id, new EndoflifeDateDatasource());
+api.set(FlakeHubDatasource.id, new FlakeHubDatasource());
 api.set(FlutterVersionDatasource.id, new FlutterVersionDatasource());
 api.set(ForgejoReleasesDatasource.id, new ForgejoReleasesDatasource());
 api.set(ForgejoTagsDatasource.id, new ForgejoTagsDatasource());
@@ -122,6 +125,7 @@ api.set(GitTagsDatasource.id, new GitTagsDatasource());
 api.set(GiteaReleasesDatasource.id, new GiteaReleasesDatasource());
 api.set(GiteaTagsDatasource.id, new GiteaTagsDatasource());
 api.set(GithubDigestDatasource.id, new GithubDigestDatasource());
+api.set(GithubReleaseAssetDatasource.id, new GithubReleaseAssetDatasource());
 api.set(
   GithubReleaseAttachmentsDatasource.id,
   new GithubReleaseAttachmentsDatasource(),
