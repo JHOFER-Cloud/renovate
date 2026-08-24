@@ -45,7 +45,7 @@ export class FlakeHubDatasource extends Datasource {
     registryUrl,
     currentValue,
   }: GetReleasesConfig): Promise<ReleaseResult | null> {
-    /* v8 ignore next 3 -- should never happen */
+    /* v8 ignore next -- should never happen */
     if (!registryUrl) {
       return null;
     }
@@ -69,7 +69,7 @@ export class FlakeHubDatasource extends Datasource {
         sourceUrl ??= result.repo_url;
       }
 
-      /* v8 ignore next 3 -- getJson either throws or returns a valid body, so releasesMap is never empty */
+      /* v8 ignore next -- getJson either throws or returns a valid body, so releasesMap is never empty */
       if (releasesMap.size === 0) {
         return null;
       }
