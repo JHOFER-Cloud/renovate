@@ -495,7 +495,7 @@ function pickSrcExprFor(
     // when src wasn't recomputed this run (shouldn't normally — src always
     // runs first).
     srcFod.inputs.outputHash;
-  /* v8 ignore next 3 -- defensive; src always has outputHash by construction */
+  /* v8 ignore next -- defensive; src always has outputHash by construction */
   if (!knownHash) {
     throw new Error('vendor FOD: src hash unavailable');
   }

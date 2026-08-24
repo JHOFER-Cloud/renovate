@@ -152,7 +152,7 @@ export function updateDependency({
     replacedMatch +
     fileContent.substring(match.index + matchedString.length);
 
-  /* v8 ignore next 4 -- should never happen */
+  /* v8 ignore next -- should never happen */
   if (updatedContent === fileContent) {
     logger.debug({ depName }, 'Failed to update file content');
     return null;

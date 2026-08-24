@@ -454,7 +454,7 @@ export async function extractAllPackageFiles(
   try {
     const result = await exec(cmd, execOptions);
     const parsed: unknown = JSON.parse(result.stdout);
-    /* v8 ignore next 7 -- defensive; nix eval always returns an attrset for the expression we run */
+    /* v8 ignore next -- defensive; nix eval always returns an attrset for the expression we run */
     if (!isObject(parsed) || Array.isArray(parsed)) {
       logger.debug(
         { stdout: result.stdout },
