@@ -2,7 +2,12 @@
 // All output is one logical expression; we collapse newlines to spaces
 // at the end so shell quoting stays sane.
 
-import { isNullOrUndefined, isPlainObject, isString } from '@sindresorhus/is';
+import {
+  isBoolean,
+  isNullOrUndefined,
+  isPlainObject,
+  isString,
+} from '@sindresorhus/is';
 import { regEx } from '../../../util/regex.ts';
 
 export type HashAlgo = 'sha256' | 'sha512' | 'sha1';
@@ -46,7 +51,7 @@ export function nixVal(v: unknown): string {
   if (isNullOrUndefined(v)) {
     return 'null';
   }
-  if (typeof v === 'boolean') {
+  if (isBoolean(v)) {
     return v ? 'true' : 'false';
   }
   if (typeof v === 'number') {
