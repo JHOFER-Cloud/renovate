@@ -232,11 +232,14 @@ export async function updateArtifacts({
 
   // Classify all FODs. Hard-fail surface area is the classifier — anything
   // unsupported throws here, before any nix-build runs.
-  const classified = bumpedFods.map((fod) =>
+  const classifiedFods = bumpedFods.map((fod) =>
     classifyFod(fod, pname, newVersion),
   );
   // Run src first; vendor builders need src already in the runner's store.
-  classified.sort((a, b) => Number(b.isSrc) - Number(a.isSrc));
+  const classified = [
+    ...classifiedFods.filter((fod) => fod.isSrc),
+    ...classifiedFods.filter((fod) => !fod.isSrc),
+  ];
   // Map src fods (by attrPath joined) → known new hash, for vendor srcExpr.
   const srcHashes = new Map<string, string>();
 
