@@ -144,6 +144,12 @@ describe('modules/manager/nix-update/fetchers', () => {
       expect(expr).toContain('.goModules');
     });
 
+    it('forwards the goModules go toolchain to the rebuild', () => {
+      const fod = makeFod(['goModules'], { goVersion: '1.27.0' });
+      const expr = classifyFod(fod, 'foo', '1.0').buildExpr(FLAKE, '<srcExpr>');
+      expect(expr).toContain('runnerPkgs.go_1_27');
+    });
+
     it('classifies cargoDeps', () => {
       const fod = makeFod(['cargoDeps'], {});
       const c = classifyFod(fod, 'foo', '1');

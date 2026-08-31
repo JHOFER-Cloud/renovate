@@ -63,7 +63,11 @@ export function classifyFod(
           isSrc: false,
           fetcherName: 'goModules',
           buildExpr: (flakePath, srcExpr) =>
-            exprForGoModules(flakePath, { ...v, srcExpr }, algo),
+            exprForGoModules(
+              flakePath,
+              { ...v, srcExpr, goVersion: fod.inputs.goVersion },
+              algo,
+            ),
         };
       case 'cargoDeps':
         return {

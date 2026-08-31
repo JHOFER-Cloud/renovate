@@ -85,6 +85,25 @@ builtins.foldl'
       pnpmWorkspaces = maybeStrList "pnpmWorkspaces";
       pnpmInstallFlags = maybeStrList "pnpmInstallFlags";
       prePnpmInstall = maybe "prePnpmInstall";
+      /* The go toolchain this FOD was built with, read off the goModules
+         derivation's nativeBuildInputs. A package pinning a newer go
+         (buildGo127Module) cannot vendor under the default buildGoModule:
+         nixpkgs sets GOTOOLCHAIN=local, so go refuses to fetch a newer
+         toolchain and the build dies with "go.mod requires go >= ..."
+         before nix ever reports a hash. */
+      goVersion =
+        let
+          nbi =
+            if drv ? nativeBuildInputs && builtins.isList drv.nativeBuildInputs
+            then drv.nativeBuildInputs
+            else [];
+          gos = builtins.filter
+            (d: builtins.isAttrs d && (d.pname or "") == "go" && d ? version)
+            nbi;
+        in
+          if gos == []
+          then null
+          else discardCtx (builtins.head gos).version;
     };
   /* Well-known FOD attribute names. Order matters: src first, then vendor
      FODs. If a package has more than one of these, each becomes a separate
@@ -203,6 +222,10 @@ export interface FodInputs {
   pnpmWorkspaces?: string[] | null;
   pnpmInstallFlags?: string[] | null;
   prePnpmInstall?: string | null;
+  // go toolchain the goModules FOD was built with, e.g. "1.27.0". Optional for
+  // the same reason as the pnpm args: older extracts in the repository cache
+  // predate it.
+  goVersion?: string | null;
 }
 
 export interface FodInfo {

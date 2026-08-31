@@ -119,6 +119,28 @@ describe('modules/manager/nix-update/expr', () => {
       expect(e).toContain('vendorHash');
       expect(e).toContain('.goModules');
     });
+    it('go: pins the package’s go toolchain when known', () => {
+      const e = exprForGoModules(
+        FLAKE,
+        { ...VEND, goVersion: '1.27.0' },
+        'sha256',
+      );
+      // Vendoring under the default (older) go fails outright — GOTOOLCHAIN=local
+      // means go won't upgrade itself to satisfy go.mod.
+      expect(e).toContain('runnerPkgs ? go_1_27');
+      expect(e).toContain(
+        'runnerPkgs.buildGoModule.override { go = runnerPkgs.go_1_27; }',
+      );
+    });
+    it('go: falls back to the default builder when the go version is unknown', () => {
+      expect(exprForGoModules(FLAKE, VEND, 'sha256')).not.toContain('override');
+      expect(
+        exprForGoModules(FLAKE, { ...VEND, goVersion: 'unstable' }, 'sha256'),
+      ).not.toContain('override');
+      expect(
+        exprForGoModules(FLAKE, { ...VEND, goVersion: null }, 'sha256'),
+      ).not.toContain('override');
+    });
     it('cargo: rustPlatform.buildRustPackage with cargoHash', () => {
       const e = exprForCargoDeps(FLAKE, VEND, 'sha256');
       expect(e).toContain('rustPlatform.buildRustPackage');

@@ -192,12 +192,36 @@ export interface VendorInputs {
   version: string;
   // raw nix expression for src — usually a runner-side fetcher call with a known hash
   srcExpr: string;
+  // go toolchain the package's goModules derivation uses, read off that
+  // derivation by extract.ts
+  goVersion?: string | null;
   // fetchPnpmDeps args, read off the package's own pnpmDeps derivation
   fetcherVersion?: number;
   pnpmVersion?: string;
   pnpmWorkspaces?: string[];
   pnpmInstallFlags?: string[];
   prePnpmInstall?: string;
+}
+
+// nixpkgs' plain `buildGoModule` tracks the default go, but a package can pin
+// a newer toolchain (`buildGo127Module`). Vendoring under an older go doesn't
+// produce a different hash — it fails outright, because nixpkgs sets
+// GOTOOLCHAIN=local and go then refuses to upgrade itself past the `go`
+// directive in go.mod. So mirror the package's own go here.
+function goBuilder(goVersion: string | null | undefined): string {
+  const m = regEx(/^(\d+)\.(\d+)/).exec(goVersion ?? '');
+  if (!m) {
+    return 'runnerPkgs.buildGoModule';
+  }
+  // Fall back to the default builder when the attr is absent: nixpkgs drops
+  // go attrs once they go EOL, and an unknown one would be an eval error
+  // rather than the (possibly still working) default.
+  const attr = `go_${m[1]}_${m[2]}`;
+  return (
+    `(if runnerPkgs ? ${attr} ` +
+    `then runnerPkgs.buildGoModule.override { go = runnerPkgs.${attr}; } ` +
+    `else runnerPkgs.buildGoModule)`
+  );
 }
 
 // (runnerPkgs.buildGoModule { ... vendorHash = ""; }).goModules
@@ -207,7 +231,7 @@ export function exprForGoModules(
   algo: HashAlgo,
 ): string {
   return `${preamble(flakePath)}
-    (runnerPkgs.buildGoModule {
+    (${goBuilder(v.goVersion)} {
       pname = ${nixVal(v.pname)};
       version = ${nixVal(v.version)};
       src = ${v.srcExpr};
