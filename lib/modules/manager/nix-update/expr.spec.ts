@@ -16,6 +16,10 @@ import {
 
 const FLAKE = '/tmp/repo';
 const VEND = { pname: 'foo', version: '1.0', srcExpr: '<src>' };
+const GO_127 = [
+  { pname: 'go', version: '1.27.0' },
+  { pname: 'git-minimal', version: '2.55.0' },
+];
 
 describe('modules/manager/nix-update/expr', () => {
   describe('nixVal', () => {
@@ -120,25 +124,39 @@ describe('modules/manager/nix-update/expr', () => {
       expect(e).toContain('.goModules');
     });
     it('go: pins the package’s go toolchain when known', () => {
-      const e = exprForGoModules(
-        FLAKE,
-        { ...VEND, goVersion: '1.27.0' },
-        'sha256',
-      );
+      const e = exprForGoModules(FLAKE, { ...VEND, tools: GO_127 }, 'sha256');
       // Vendoring under the default (older) go fails outright — GOTOOLCHAIN=local
       // means go won't upgrade itself to satisfy go.mod.
       expect(e).toContain('runnerPkgs ? go_1_27');
-      expect(e).toContain(
-        'runnerPkgs.buildGoModule.override { go = runnerPkgs.go_1_27; }',
-      );
+      expect(e).toContain('runnerPkgs.buildGoModule.override { inherit go; }');
+    });
+    it('go: only pins on an exact version match, never a same-major guess', () => {
+      const e = exprForGoModules(FLAKE, { ...VEND, tools: GO_127 }, 'sha256');
+      expect(e).toContain('(runnerPkgs.go_1_27.version or "") == "1.27.0"');
     });
     it('go: falls back to the default builder when the go version is unknown', () => {
       expect(exprForGoModules(FLAKE, VEND, 'sha256')).not.toContain('override');
       expect(
-        exprForGoModules(FLAKE, { ...VEND, goVersion: 'unstable' }, 'sha256'),
+        exprForGoModules(
+          FLAKE,
+          { ...VEND, tools: [{ pname: 'go', version: 'unstable' }] },
+          'sha256',
+        ),
       ).not.toContain('override');
       expect(
-        exprForGoModules(FLAKE, { ...VEND, goVersion: null }, 'sha256'),
+        exprForGoModules(
+          FLAKE,
+          { ...VEND, tools: [{ pname: 'go', version: null }] },
+          'sha256',
+        ),
+      ).not.toContain('override');
+      // a FOD with no go in it at all (every non-go ecosystem)
+      expect(
+        exprForGoModules(
+          FLAKE,
+          { ...VEND, tools: [{ pname: 'git-minimal', version: '2.55.0' }] },
+          'sha256',
+        ),
       ).not.toContain('override');
     });
     it('cargo: rustPlatform.buildRustPackage with cargoHash', () => {
@@ -221,19 +239,107 @@ describe('modules/manager/nix-update/expr', () => {
       expect(e).toContain('php.buildComposerProject');
       expect(e).toContain('.composerVendor');
     });
+    it('composer: v2 builder for composerVendor, v1 for composerRepository', () => {
+      // The two generations expose the FOD under different names; calling the
+      // wrong builder means reading an attribute that isn't there.
+      const v2 = exprForComposerVendor(FLAKE, VEND, 'sha256', 'composerVendor');
+      expect(v2).toContain('buildComposerProject2');
+      expect(v2).toContain('.composerVendor');
+      const v1 = exprForComposerVendor(
+        FLAKE,
+        VEND,
+        'sha256',
+        'composerRepository',
+      );
+      expect(v1).toContain('.buildComposerProject ');
+      expect(v1).not.toContain('buildComposerProject2');
+      expect(v1).toContain('.composerRepository');
+    });
+    it('composer: pins the php minor the package built against', () => {
+      const e = exprForComposerVendor(
+        FLAKE,
+        // the FOD's php is a wrapper, so pname is php-with-extensions
+        {
+          ...VEND,
+          tools: [{ pname: 'php-with-extensions', version: '8.3.33' }],
+        },
+        'sha256',
+      );
+      expect(e).toContain('runnerPkgs.php83');
+    });
     it('maven: maven.buildMavenPackage with mvnHash', () => {
       const e = exprForMavenDeps(FLAKE, VEND, 'sha256');
       expect(e).toContain('maven.buildMavenPackage');
       expect(e).toContain('mvnHash');
+    });
+    it('maven: pins mvnJdk on an exact pname+version match', () => {
+      const e = exprForMavenDeps(
+        FLAKE,
+        {
+          ...VEND,
+          tools: [
+            { pname: 'maven', version: '3.9.16' },
+            { pname: 'temurin-bin', version: '21.0.11' },
+          ],
+        },
+        'sha256',
+      );
+      expect(e).toContain('mvnJdk');
+      // jdk21 and temurin-bin-21 share a version but are different
+      // derivations, so pname has to be part of the guard.
+      expect(e).toContain('(runnerPkgs.jdk21.pname or "") == "temurin-bin"');
+      expect(e).toContain('runnerPkgs.temurin-bin-21');
+    });
+    it('maven: recognises a zulu JDK too', () => {
+      const e = exprForMavenDeps(
+        FLAKE,
+        { ...VEND, tools: [{ pname: 'zulu-ca-jdk', version: '17.0.19' }] },
+        'sha256',
+      );
+      expect(e).toContain('(runnerPkgs.jdk17.pname or "") == "zulu-ca-jdk"');
+    });
+    it('maven: passes no mvnJdk at all when the JDK is unrecognised', () => {
+      const e = exprForMavenDeps(FLAKE, VEND, 'sha256');
+      expect(e).toContain('if jdk == null then {}');
     });
     it('mix: beamPackages.fetchMixDeps with -deps suffix', () => {
       const e = exprForMixFodDeps(FLAKE, VEND, 'sha256');
       expect(e).toContain('beamPackages.fetchMixDeps');
       expect(e).toContain('foo-deps');
     });
-    it('zig: callPackage with build-support path', () => {
+    it('mix: pins elixir from within the beam set, not the deprecated alias', () => {
+      const e = exprForMixFodDeps(
+        FLAKE,
+        { ...VEND, tools: [{ pname: 'elixir', version: '1.18.4' }] },
+        'sha256',
+      );
+      expect(e).toContain('runnerPkgs.beamPackages.elixir_1_18');
+      expect(e).toContain('fetchMixDeps.override { inherit elixir; }');
+      // the top-level elixir_1_18 alias is deprecated and can pair an elixir
+      // with an erlang it doesn't support
+      expect(e).not.toContain('runnerPkgs.elixir_1_18');
+    });
+    it('zig: uses the compiler’s own fetchDeps, pinned to its version', () => {
+      const e = exprForZigDeps(
+        FLAKE,
+        { ...VEND, tools: [{ pname: 'zig', version: '0.16.0' }] },
+        'sha256',
+      );
+      // Each zig attr carries a fetchDeps with that compiler bound in.
+      expect(e).toContain('runnerPkgs.zig_0_16');
+      expect(e).toContain('.fetchDeps');
+      // The old build-support path no longer exists in nixpkgs.
+      expect(e).not.toContain('fetch-deps.nix');
+    });
+    it('zig: falls back to the default compiler when the version is unknown', () => {
       const e = exprForZigDeps(FLAKE, VEND, 'sha256');
-      expect(e).toContain('zig/fetch-deps.nix');
+      expect(e).toContain('runnerPkgs.zig.fetchDeps');
+    });
+    it('zig: mirrors fetchAll, which changes what lands in the store', () => {
+      expect(
+        exprForZigDeps(FLAKE, { ...VEND, fetchAll: true }, 'sha256'),
+      ).toContain('fetchAll = true;');
+      expect(exprForZigDeps(FLAKE, VEND, 'sha256')).not.toContain('fetchAll');
     });
     it('nuget: fetchNuGetDeps', () => {
       const e = exprForNuGetDeps(FLAKE, VEND, 'sha256');

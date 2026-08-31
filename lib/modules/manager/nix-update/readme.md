@@ -64,10 +64,10 @@ Add `nix-update` to your `enabledManagers` list:
 - Node: `npmDeps` (via `fetchNpmDeps`)
 - pnpm: `pnpmDeps` (via `pnpm.fetchDeps`)
 - Yarn: `yarnOfflineCache` / `offlineCache` (via `fetchYarnDeps`)
-- PHP: `composerVendor` / `composerRepository`
+- PHP: `composerVendor` (via `buildComposerProject2`) / `composerRepository` (via `buildComposerProject`)
 - Java/Maven: `fetchedMavenDeps`
 - Elixir: `mixFodDeps`
-- Zig: `zigDeps`
+- Zig: `zigDeps` (via `zig.fetchDeps`)
 - .NET: `nugetDeps`
 
 A package may carry several of these — they're all updated in one PR.
@@ -173,7 +173,8 @@ The package's `version` attribute is never rewritten; only the hash moves.
 - `--version=skip` is supported only for GitHub release assets fetched with a flat hash (`fetchurl`); anything else is skipped with a warning, since there is no way to observe the content changing
 - Custom out-of-nixpkgs fetchers (a `fetchMyThing` defined in your own flake) won't be recognised; the manager will emit an `artifactError` naming the FOD attribute path so you can either rename to a standard fetcher or open an issue
 - The flake's `nixpkgs` input is reused for runner-side hash computation. If your flake names it differently, the manager falls back to the host's `<nixpkgs>` channel, which may diverge from your pinned nixpkgs and produce different vendor hashes for some ecosystems
-- **Custom builder overrides** (e.g. a package that wraps `buildGoModule` to inject extra steps into the vendor build) are not faithfully reproduced. The manager calls plain `runnerPkgs.buildGoModule` / `runnerPkgs.rustPlatform.buildRustPackage` / etc., not the user's wrapper. If your `goModules`/`cargoDeps` build phase is non-standard, the computed hash may differ from what `nix build .#yourPkg` would produce. Open an issue if you hit this. One exception is pinned Go: a package built with `buildGo127Module` has its toolchain mirrored into the rebuild (`buildGoModule.override { go = go_1_27; }`), because vendoring under an older Go doesn't produce a different hash, it fails outright — nixpkgs sets `GOTOOLCHAIN=local`, so Go won't upgrade itself to satisfy the `go` directive in `go.mod`
+- **Custom builder overrides** (e.g. a package that wraps `buildGoModule` to inject extra steps into the vendor build) are not faithfully reproduced. The manager calls plain `runnerPkgs.buildGoModule` / `runnerPkgs.rustPlatform.buildRustPackage` / etc., not the user's wrapper. If your `goModules`/`cargoDeps` build phase is non-standard, the computed hash may differ from what `nix build .#yourPkg` would produce. Open an issue if you hit this
+- **Pinned toolchains are mirrored** where the FOD actually embeds one, since there the default would be wrong rather than merely different. The manager reads the toolchain off the package's own FOD and pins the rebuild to it: Go (`buildGo127Module` → `buildGoModule.override { go = go_1_27; }`), Zig (`zig_0_16.fetchDeps`), Elixir (`beamPackages.elixir_1_18`), PHP (`php83.buildComposerProject`) and the Maven `mvnJdk`. Pinning only happens on an exact `pname`+`version` match against the runner's nixpkgs — `jdk21` and `temurin-bin-21` share a version but are different derivations — so an unrecognised toolchain falls back to the default rather than to a confidently wrong pin. `cargoDeps`, `npmDeps` and `yarnOfflineCache` need no pin: their FODs vendor via `fetch-cargo-vendor-util` / `prefetch-npm-deps` / `prefetch-yarn-deps` and never run the language toolchain at all
 
 ### Troubleshooting
 

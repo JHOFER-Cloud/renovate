@@ -9,6 +9,7 @@ import {
   isString,
 } from '@sindresorhus/is';
 import { regEx } from '../../../util/regex.ts';
+import type { FodTool } from './extract.ts';
 
 export type HashAlgo = 'sha256' | 'sha512' | 'sha1';
 
@@ -192,9 +193,11 @@ export interface VendorInputs {
   version: string;
   // raw nix expression for src — usually a runner-side fetcher call with a known hash
   srcExpr: string;
-  // go toolchain the package's goModules derivation uses, read off that
-  // derivation by extract.ts
-  goVersion?: string | null;
+  // toolchains read off the package's own FOD by extract.ts, used to pin the
+  // rebuild to the same ones
+  tools?: FodTool[];
+  // zig.fetchDeps arg, read off the package's own zigDeps derivation
+  fetchAll?: boolean | null;
   // fetchPnpmDeps args, read off the package's own pnpmDeps derivation
   fetcherVersion?: number;
   pnpmVersion?: string;
@@ -203,24 +206,63 @@ export interface VendorInputs {
   prePnpmInstall?: string;
 }
 
-// nixpkgs' plain `buildGoModule` tracks the default go, but a package can pin
-// a newer toolchain (`buildGo127Module`). Vendoring under an older go doesn't
-// produce a different hash — it fails outright, because nixpkgs sets
-// GOTOOLCHAIN=local and go then refuses to upgrade itself past the `go`
-// directive in go.mod. So mirror the package's own go here.
-function goBuilder(goVersion: string | null | undefined): string {
-  const m = regEx(/^(\d+)\.(\d+)/).exec(goVersion ?? '');
-  if (!m) {
+// Several ecosystems bake a versioned toolchain into the vendor FOD, so a
+// package pinning a non-default one (buildGo127Module, zig_0_16, php83,
+// a beamPackages elixir, a non-default mvnJdk) is not reproduced by the plain
+// builder. Depending on the ecosystem that shows up as a hard build failure
+// (go refuses to upgrade past go.mod's directive under GOTOOLCHAIN=local) or
+// as a wrong hash. `pinnedTool` below resolves the nixpkgs attr to pin to.
+export function toolVersion(
+  tools: FodTool[] | undefined,
+  pname: string,
+): string | null {
+  return tools?.find((t) => t.pname === pname)?.version ?? null;
+}
+
+// Emit `runnerPkgs.<attr>` for the first candidate attr that is *exactly* the
+// derivation the package used, falling back to `fallback` when none is.
+//
+// The guard matters: `jdk21` and `temurin-bin-21` carry the same version but
+// are different derivations, and picking the wrong one moves the FOD's hash
+// silently. Matching pname as well as version means a candidate we can't
+// positively identify degrades to the default — i.e. today's behaviour — rather
+// than to a confidently wrong pin. runnerPkgs is normally the same nixpkgs the
+// package was evaluated from, so an exact match is the common case; it fails
+// only when the flake names its nixpkgs differently and we fall back to the
+// host channel, which is exactly when we should not be pinning.
+function pinnedTool(
+  candidates: string[],
+  tool: { pname: string; version: string },
+  fallback: string,
+): string {
+  return candidates.reduceRight(
+    (acc, attr) =>
+      `(if runnerPkgs ? ${attr} ` +
+      `&& (runnerPkgs.${attr}.pname or "") == ${nixVal(tool.pname)} ` +
+      `&& (runnerPkgs.${attr}.version or "") == ${nixVal(tool.version)} ` +
+      `then runnerPkgs.${attr} else ${acc})`,
+    fallback,
+  );
+}
+
+// Candidate attrs for a tool pinned as `<prefix><major>_<minor>` (go_1_27,
+// zig_0_16) — nixpkgs' canonical spelling for versioned compiler attrs.
+function versionedAttr(prefix: string, version: string | null): string | null {
+  const m = regEx(/^(\d+)\.(\d+)/).exec(version ?? '');
+  return m ? `${prefix}_${m[1]}_${m[2]}` : null;
+}
+
+function goBuilder(tools: FodTool[] | undefined): string {
+  const version = toolVersion(tools, 'go');
+  const attr = versionedAttr('go', version);
+  if (!attr || !version) {
     return 'runnerPkgs.buildGoModule';
   }
-  // Fall back to the default builder when the attr is absent: nixpkgs drops
-  // go attrs once they go EOL, and an unknown one would be an eval error
-  // rather than the (possibly still working) default.
-  const attr = `go_${m[1]}_${m[2]}`;
+  const go = pinnedTool([attr], { pname: 'go', version }, 'null');
   return (
-    `(if runnerPkgs ? ${attr} ` +
-    `then runnerPkgs.buildGoModule.override { go = runnerPkgs.${attr}; } ` +
-    `else runnerPkgs.buildGoModule)`
+    `(let go = ${go}; in ` +
+    `if go == null then runnerPkgs.buildGoModule ` +
+    `else runnerPkgs.buildGoModule.override { inherit go; })`
   );
 }
 
@@ -231,7 +273,7 @@ export function exprForGoModules(
   algo: HashAlgo,
 ): string {
   return `${preamble(flakePath)}
-    (${goBuilder(v.goVersion)} {
+    (${goBuilder(v.tools)} {
       pname = ${nixVal(v.pname)};
       version = ${nixVal(v.version)};
       src = ${v.srcExpr};
@@ -325,14 +367,31 @@ export function exprForComposerVendor(
   flakePath: string,
   v: VendorInputs,
   algo: HashAlgo,
+  attr: 'composerVendor' | 'composerRepository' = 'composerVendor',
 ): string {
+  // nixpkgs ships two generations of the composer builder and they expose the
+  // vendor FOD under different names: v1 `buildComposerProject` yields
+  // `composerRepository`, v2 `buildComposerProject2` yields `composerVendor`.
+  // The attribute extract.ts found tells us which generation the package uses,
+  // so dispatch on it — calling the wrong one is an eval error, not a wrong
+  // hash, because the attribute we then read simply isn't there.
+  const v2 = attr === 'composerVendor';
+  const builder = v2 ? 'buildComposerProject2' : 'buildComposerProject';
+  // The FOD's php is a `php-with-extensions` wrapper, so its pname never
+  // matches the `phpXX` attr we'd pin to; the version is the only usable
+  // discriminator here.
+  const version = toolVersion(v.tools, 'php-with-extensions');
+  const m = regEx(/^(\d+)\.(\d+)/).exec(version ?? '');
+  const php = m
+    ? `(if runnerPkgs ? php${m[1]}${m[2]} then runnerPkgs.php${m[1]}${m[2]} else runnerPkgs.php)`
+    : 'runnerPkgs.php';
   return `${preamble(flakePath)}
-    (runnerPkgs.php.buildComposerProject {
+    (${php}.${builder} {
       pname = ${nixVal(v.pname)};
       version = ${nixVal(v.version)};
       src = ${v.srcExpr};
       ${hashPlaceholderAttr(algo, 'vendorHash')}
-    }).composerVendor`;
+    }).${attr}`;
 }
 
 // Java/Maven: buildMavenPackage's fetchedMavenDeps.
@@ -341,13 +400,30 @@ export function exprForMavenDeps(
   v: VendorInputs,
   algo: HashAlgo,
 ): string {
+  // Maven itself isn't version-pinnable in nixpkgs (one `maven` attr), but the
+  // JDK is, and it does move the deps FOD. Vendors spell their attrs
+  // differently, so try the plausible ones and let the pname+version guard
+  // decide — an unrecognised JDK just leaves the default in place.
+  const jdk = ['temurin-bin', 'zulu-ca-jdk']
+    .map((pname) => ({ pname, version: toolVersion(v.tools, pname) }))
+    .find((t): t is { pname: string; version: string } => t.version !== null);
+  const major = regEx(/^(\d+)/).exec(jdk?.version ?? '')?.[1];
+  const mvnJdk =
+    jdk && major
+      ? pinnedTool(
+          [`jdk${major}`, `temurin-bin-${major}`, `zulu${major}`],
+          jdk,
+          'null',
+        )
+      : 'null';
   return `${preamble(flakePath)}
-    (runnerPkgs.maven.buildMavenPackage {
+    (runnerPkgs.maven.buildMavenPackage ({
       pname = ${nixVal(v.pname)};
       version = ${nixVal(v.version)};
       src = ${v.srcExpr};
       ${hashPlaceholderAttr(algo, 'mvnHash')}
-    }).fetchedMavenDeps`;
+    } // (let jdk = ${mvnJdk}; in if jdk == null then {} else { mvnJdk = jdk; }))
+    ).fetchedMavenDeps`;
 }
 
 // Elixir/Mix: fetchMixDeps (BEAM ecosystem).
@@ -356,13 +432,32 @@ export function exprForMixFodDeps(
   v: VendorInputs,
   algo: HashAlgo,
 ): string {
+  // Elixir lives in the beam package set, and the top-level `elixir_1_18` alias
+  // is deprecated in favour of `beamPackages.elixir_1_18` — so pin from within
+  // the set, which also keeps elixir and its erlang compatible. (Overriding to
+  // an elixir the default erlang doesn't support is an eval-time assertion
+  // failure, not a wrong hash.)
+  const version = toolVersion(v.tools, 'elixir');
+  const attr = versionedAttr('elixir', version);
+  const elixir =
+    attr && version
+      ? `(if runnerPkgs.beamPackages ? ${attr} ` +
+        `&& (runnerPkgs.beamPackages.${attr}.version or "") == ${nixVal(version)} ` +
+        `then runnerPkgs.beamPackages.${attr} else null)`
+      : 'null';
   return `${preamble(flakePath)}
-    runnerPkgs.beamPackages.fetchMixDeps {
+    (let
+      elixir = ${elixir};
+      fetcher =
+        if elixir == null
+        then runnerPkgs.beamPackages.fetchMixDeps
+        else runnerPkgs.beamPackages.fetchMixDeps.override { inherit elixir; };
+    in fetcher {
       pname = ${nixVal(`${v.pname}-deps`)};
       version = ${nixVal(v.version)};
       src = ${v.srcExpr};
       ${hashPlaceholderAttr(algo)}
-    }`;
+    })`;
 }
 
 // .NET: fetchNuGetDeps via dotnetCorePackages helpers.
@@ -385,11 +480,22 @@ export function exprForZigDeps(
   v: VendorInputs,
   algo: HashAlgo,
 ): string {
+  // Each zig attr carries its own `fetchDeps` with that compiler bound in
+  // (`passthru.nix`: `fetchDeps = callPackage ./fetcher.nix { inherit zig; }`),
+  // so pinning the compiler and reaching the fetcher are the same step. Zig
+  // makes breaking changes every 0.x, so the default is rarely the right one.
+  const version = toolVersion(v.tools, 'zig');
+  const attr = versionedAttr('zig', version);
+  const zig =
+    attr && version
+      ? pinnedTool([attr], { pname: 'zig', version }, 'runnerPkgs.zig')
+      : 'runnerPkgs.zig';
   return `${preamble(flakePath)}
-    runnerPkgs.callPackage (runnerPkgs.path + "/pkgs/build-support/zig/fetch-deps.nix") {
+    ${zig}.fetchDeps {
       pname = ${nixVal(v.pname)};
       version = ${nixVal(v.version)};
       src = ${v.srcExpr};
+      ${v.fetchAll ? `fetchAll = true;` : ''}
       ${hashPlaceholderAttr(algo)}
     }`;
 }
