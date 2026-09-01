@@ -807,6 +807,35 @@ Possible values:
   `ssh` uses the repository's `sshUrl` and authenticates via SSH key.
   In fork mode (`forkToken` set with `forkCreation`), `ssh` applies to both the fork's working URL and the upstream URL.
 
+## githubAppCrossOrgTrustGroups
+
+Groups of GitHub orgs whose installation tokens may be used for cross-org dependency lookups.
+Each group is an array of org names; any org in a group may use the tokens of the others when resolving dependencies hosted under those orgs.
+Orgs not listed here never share tokens.
+
+Example:
+
+```json {configType=global}
+{
+  "githubAppCrossOrgTrustGroups": [
+    ["org-a", "org-b"],
+    ["org-c", "org-d"]
+  ]
+}
+```
+
+## githubAppId
+
+GitHub App ID. Use together with `githubAppKey` to let Renovate generate installation tokens automatically, instead of providing a personal access token or installation token directly.
+
+When both `githubAppId` and `githubAppKey` are set, Renovate discovers all installations of the GitHub App and processes repositories from each installation.
+
+## githubAppKey
+
+GitHub App private key (PEM format). Use together with `githubAppId` to let Renovate generate installation tokens automatically.
+
+Store this value securely (e.g. as an environment variable or in a secret manager) rather than in plain text configuration files.
+
 ## `githubTokenWarn`
 
 By default, Renovate logs and displays a warning when the `RENOVATE_GITHUB_COM_TOKEN` is not set.
@@ -958,6 +987,20 @@ In the above example any reference to the `@company` preset will be replaced wit
 
 !!! tip
   Combine `migratePresets` with `configMigration` if you'd like your config migrated by PR.
+
+## `nixTrustedPublicKeys`
+
+Public keys Nix trusts to sign paths served by a repository's [`nixSubstituters`](./configuration-options.md#nixsubstituters).
+
+Keys are administrator-owned on purpose: a repository that could supply its own key would be trusting whatever cache it names, and paths fetched from it become build inputs for every repository sharing the runner's Nix store.
+
+Without a matching key, nix still accepts **content-addressed** paths from a repository's cache — they are verified against their hash, not a signature. A key is what lets a cache serve **input-addressed** paths such as `stdenv` or `bash`, which become build inputs for every repository sharing the runner's store. That is why keys are administrator-owned. Unsigned input-addressed paths are refused:
+
+```text
+warning: ignoring substitute for '/nix/store/...' from 'https://example.cachix.org', as it's not signed by any of the keys in 'trusted-public-keys'
+```
+
+Renovate logs a warning when a repository configures substituters and no keys are set.
 
 ## `onboarding`
 
