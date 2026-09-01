@@ -85,6 +85,60 @@ builtins.foldl'
       pnpmWorkspaces = maybeStrList "pnpmWorkspaces";
       pnpmInstallFlags = maybeStrList "pnpmInstallFlags";
       prePnpmInstall = maybe "prePnpmInstall";
+      /* zig.fetchDeps arg: fetches every dependency rather than only those
+         reachable from the default target. Changes what lands in the store,
+         so it has to be mirrored like the pnpm args above. */
+      fetchAll = maybeBool "fetchAll";
+      /* The toolchains this FOD was built with, read off its
+         nativeBuildInputs. Several ecosystems bake a versioned toolchain into
+         the vendor FOD (go, zig, elixir, php, the maven JDK), so a package
+         pinning a non-default one can't be reproduced by the plain builder.
+         Go is the loudest example: nixpkgs sets GOTOOLCHAIN=local, so a
+         package on buildGo127Module dies with "go.mod requires go >= ..."
+         under the default buildGoModule, before nix ever reports a hash.
+         Kept as a generic list rather than one field per ecosystem — the
+         builders in expr.ts pick out the tool each one cares about. */
+      tools =
+        let
+          nbi =
+            if drv ? nativeBuildInputs && builtins.isList drv.nativeBuildInputs
+            then drv.nativeBuildInputs
+            else [];
+          /* tryEval per element, because reading pname forces that build input
+             and some derivations abort when forced (EOL-toolchain aliases,
+             anything behind an assertion — and this eval walks every system,
+             so a darwin-only input is forced on a linux runner too). An
+             uncaught throw would take out the whole extraction and leave the
+             repository with no dependencies at all.
+
+             Per element rather than around the list: collapsing everything to
+             [] on one bad input looks exactly like "no toolchain recorded", so
+             the builders would silently pick the default instead of aborting —
+             the wrong-hash path those aborts exist to close.
+
+             deepSeq, because tryEval only forces to WHNF: for an attrset that
+             is just the outer braces, and a throwing pname inside would sail
+             through to abort later, while nix serialises the result to JSON. */
+          readTool = d:
+            let
+              /* isString rather than trusting tryEval: it contains throw and
+                 assert, but a type error is neither — discardCtx on a non-string
+                 pname raises "cannot coerce", which escapes the tryEval below
+                 and would abort the whole extraction. (builtins.abort escapes
+                 it too, but nixpkgs uses throw for the cases we hit.) */
+              e = {
+                pname =
+                  if builtins.isString d.pname then discardCtx d.pname else null;
+                version =
+                  if d ? version && builtins.isString d.version
+                  then discardCtx d.version
+                  else null;
+              };
+              r = builtins.tryEval (builtins.deepSeq e e);
+            in if r.success && r.value.pname != null then r.value else null;
+          keep = d: (builtins.tryEval (builtins.isAttrs d && d ? pname)).success
+            && builtins.isAttrs d && d ? pname;
+        in builtins.filter (x: x != null) (map readTool (builtins.filter keep nbi));
     };
   /* Well-known FOD attribute names. Order matters: src first, then vendor
      FODs. If a package has more than one of these, each becomes a separate
@@ -203,6 +257,18 @@ export interface FodInputs {
   pnpmWorkspaces?: string[] | null;
   pnpmInstallFlags?: string[] | null;
   prePnpmInstall?: string | null;
+  // zig.fetchDeps arg, read off the package's own zigDeps derivation.
+  fetchAll?: boolean | null;
+  // Toolchains found in the FOD's nativeBuildInputs, e.g.
+  // `[{ pname: "go", version: "1.27.0" }]`. Optional for the same reason as the
+  // pnpm args: older extracts in the repository cache predate it.
+  tools?: FodTool[];
+}
+
+// One entry of a FOD's nativeBuildInputs, as read by the nix eval above.
+export interface FodTool {
+  pname: string;
+  version: string | null;
 }
 
 export interface FodInfo {

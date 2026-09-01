@@ -12,6 +12,16 @@ import { collapseExpr } from './expr.ts';
 const sriRegex = regEx(/got:\s+(sha(?:256|512|1)-[A-Za-z0-9+/=]+)/);
 const base32Regex = regEx(/got:\s+([a-z0-9]{52})/);
 
+// A FOD whose builder itself fails (a vendor step that can't run under the
+// selected toolchain, say) never reaches the hash check, so there is no "got:"
+// line to parse. Reporting that as a parse failure sends the reader to this
+// file instead of to the build log, so name it for what it is. Two spellings:
+// nix >= 2.30 prints "error: Cannot build '<drv>'.", older ones
+// "error: builder for '<drv>' failed".
+const builderFailedRegex = regEx(
+  /error: (?:Cannot build|builder for) '([^']+)'/,
+);
+
 export interface PrefetchOptions {
   // raw nix expression (multi-line OK — we collapse before shell-quoting)
   expr: string;
@@ -70,6 +80,14 @@ export async function parseHashFromStderr(
       throw new Error(`nix hash to-sri produced unexpected output: ${sri}`);
     }
     return sri;
+  }
+
+  const buildFailure = builderFailedRegex.exec(stderr);
+  if (buildFailure) {
+    throw new Error(
+      `FOD build failed, so nix never reported a hash. Failing derivation: ` +
+        `${buildFailure[1]}. nix output:\n${truncate(stderr, 4000)}`,
+    );
   }
 
   throw new Error(

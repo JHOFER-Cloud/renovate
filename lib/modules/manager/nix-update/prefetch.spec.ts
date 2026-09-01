@@ -75,6 +75,31 @@ describe('modules/manager/nix-update/prefetch', () => {
       ).rejects.toThrow(/Could not extract hash/);
     });
 
+    it('reports a failed builder as a build failure, not a parse failure', async () => {
+      const stderr = [
+        "building '/nix/store/xxx-foo-go-modules.drv'...",
+        "error: Cannot build '/nix/store/xxx-foo-go-modules.drv'.",
+        '       Reason: builder failed with exit code 1.',
+        '       Last 8 log lines:',
+        '       > go: go.mod requires go >= 1.27.0 (running go 1.26.7; GOTOOLCHAIN=local)',
+      ].join('\n');
+      await expect(parseHashFromStderr(stderr, 'sha256')).rejects.toThrow(
+        /FOD build failed.*\/nix\/store\/xxx-foo-go-modules\.drv/s,
+      );
+      // The build log is what the user needs, so it has to survive into the message.
+      await expect(parseHashFromStderr(stderr, 'sha256')).rejects.toThrow(
+        /go\.mod requires go >= 1\.27\.0/,
+      );
+    });
+
+    it('reports an old-style failed builder as a build failure', async () => {
+      const stderr =
+        "error: builder for '/nix/store/yyy-bar.drv' failed with exit code 2";
+      await expect(parseHashFromStderr(stderr, 'sha256')).rejects.toThrow(
+        /FOD build failed/,
+      );
+    });
+
     it('truncates very long stderr but keeps both ends', async () => {
       const longStderr = `warning: binary cache is unusable\n${'x'.repeat(5000)}\nactual error: the thing that actually broke`;
       await expect(parseHashFromStderr(longStderr, 'sha256')).rejects.toThrow(

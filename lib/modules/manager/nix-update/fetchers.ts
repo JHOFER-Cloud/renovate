@@ -53,6 +53,10 @@ export function classifyFod(
       version: pkgVersion ?? '0',
       // srcExpr is the runner-side src fetcher call — passed in by the caller
       srcExpr: '',
+      // toolchains the package's own FOD was built with, so the rebuild can
+      // pin the same ones
+      tools: fod.inputs.tools,
+      fetchAll: fod.inputs.fetchAll,
     };
     switch (attr) {
       case 'goModules':
@@ -117,7 +121,7 @@ export function classifyFod(
           isSrc: false,
           fetcherName: attr,
           buildExpr: (flakePath, srcExpr) =>
-            exprForComposerVendor(flakePath, { ...v, srcExpr }, algo),
+            exprForComposerVendor(flakePath, { ...v, srcExpr }, algo, attr),
         };
       case 'fetchedMavenDeps':
         return {

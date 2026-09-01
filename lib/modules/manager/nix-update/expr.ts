@@ -9,6 +9,7 @@ import {
   isString,
 } from '@sindresorhus/is';
 import { regEx } from '../../../util/regex.ts';
+import type { FodTool } from './extract.ts';
 
 export type HashAlgo = 'sha256' | 'sha512' | 'sha1';
 
@@ -192,12 +193,124 @@ export interface VendorInputs {
   version: string;
   // raw nix expression for src — usually a runner-side fetcher call with a known hash
   srcExpr: string;
+  // toolchains read off the package's own FOD by extract.ts, used to pin the
+  // rebuild to the same ones
+  tools?: FodTool[];
+  // zig.fetchDeps arg, read off the package's own zigDeps derivation
+  fetchAll?: boolean | null;
   // fetchPnpmDeps args, read off the package's own pnpmDeps derivation
   fetcherVersion?: number;
   pnpmVersion?: string;
   pnpmWorkspaces?: string[];
   pnpmInstallFlags?: string[];
   prePnpmInstall?: string;
+}
+
+// Several ecosystems bake a versioned toolchain into the vendor FOD, so a
+// package pinning a non-default one (buildGo127Module, zig_0_16, php83, a
+// beamPackages elixir) is not reproduced by the plain builder. The helpers
+// below resolve the nixpkgs attr to pin to.
+function toolVersion(
+  tools: FodTool[] | undefined,
+  pname: string,
+): string | null {
+  return tools?.find((t) => t.pname === pname)?.version ?? null;
+}
+
+// A nix boolean that is true only when `<set>.<attr>` is *exactly* the
+// derivation the package used, and that is safe to evaluate even when it
+// isn't.
+//
+// Both halves matter. Matching pname as well as version is what stops a
+// same-version-different-derivation mix-up. And the whole comparison has to
+// sit inside `builtins.tryEval`: nixpkgs keeps EOL toolchains as attributes
+// that *abort when forced* (`runnerPkgs ? go_1_23` is true, touching it
+// raises "Go 1.23 is end-of-life and 'go_1_23' has been removed"), and `or ""`
+// only ever catches a missing attribute, never a throwing one. Without the
+// tryEval the guard that exists to avoid pinning is itself what explodes.
+function toolMatches(
+  set: string,
+  attr: string,
+  pname: string,
+  version: string,
+): string {
+  return (
+    `builtins.tryEval (${set} ? ${attr} ` +
+    `&& (${set}.${attr}.pname or "") == ${nixVal(pname)} ` +
+    `&& (${set}.${attr}.version or "") == ${nixVal(version)})`
+  );
+}
+
+// Pin to `<set>.<attr>`, or evaluate to `orElse` when it isn't an exact match.
+function pinnedTool(
+  set: string,
+  attr: string,
+  pname: string,
+  version: string,
+  orElse: string,
+): string {
+  return (
+    `(let ok = ${toolMatches(set, attr, pname, version)}; in ` +
+    `if ok.success && ok.value then ${set}.${attr} else ${orElse})`
+  );
+}
+
+// For toolchains whose version changes what gets *vendored*: refuse to guess.
+// Substituting the runner's default would fetch different content under a
+// hash the bot then writes into the user's repo, and a plausible wrong hash is
+// the one outcome worse than a failed run. (Go is the exception — see
+// `goBuilder`.) This mirrors the reasoning already applied to pnpm below.
+function pinnedToolOrAbort(
+  set: string,
+  attr: string,
+  pname: string,
+  version: string,
+  ecosystem: string,
+): string {
+  return pinnedTool(
+    set,
+    attr,
+    pname,
+    version,
+    `throw ${nixVal(
+      `nix-update: this package builds with ${pname} ${version}, but the runner's nixpkgs has no matching ${set}.${attr}, ` +
+        `so the ${ecosystem} dependencies would be fetched with a different toolchain and the resulting hash would be wrong.`,
+    )}`,
+  );
+}
+
+// Canonical nixpkgs spelling for versioned compiler attrs (go_1_27, zig_0_16).
+function versionedAttr(prefix: string, version: string | null): string | null {
+  const m = regEx(/^(\d+)\.(\d+)/).exec(version ?? '');
+  return m ? `${prefix}_${m[1]}_${m[2]}` : null;
+}
+
+function goBuilder(tools: FodTool[] | undefined): string {
+  const version = toolVersion(tools, 'go');
+  const attr = versionedAttr('go', version);
+  if (!attr || !version) {
+    return 'runnerPkgs.buildGoModule';
+  }
+  // Unlike the others, go falls back to the runner's default rather than
+  // aborting, because the mismatch that matters announces itself: nixpkgs sets
+  // GOTOOLCHAIN=local, so a go older than the package's `go` directive fails
+  // the build outright instead of vendoring something different.
+  //
+  // That guarantee is one-directional. The default branch of nixpkgs'
+  // buildGoModule runs `go mod vendor` (not `go mod download` — that is only
+  // the proxyVendor path), whose output is not toolchain-invariant in general:
+  // `vendor/modules.txt` is written by the toolchain, and go 1.24 changed which
+  // dependencies get vendored. So a package deliberately held on an *older* go
+  // than the runner's default could still vendor differently and yield a wrong
+  // hash if the pin misses. That is the pre-existing behaviour and it is narrow;
+  // aborting instead would fail every go package whose exact patch release the
+  // runner's nixpkgs doesn't carry.
+  const go = pinnedTool('runnerPkgs', attr, 'go', version, 'null');
+  return (
+    `(let go = ${go}; in ` +
+    `if go == null then runnerPkgs.buildGoModule ` +
+    `else runnerPkgs.buildGoModule.override { inherit go; })`
+  );
 }
 
 // (runnerPkgs.buildGoModule { ... vendorHash = ""; }).goModules
@@ -207,7 +320,7 @@ export function exprForGoModules(
   algo: HashAlgo,
 ): string {
   return `${preamble(flakePath)}
-    (runnerPkgs.buildGoModule {
+    (${goBuilder(v.tools)} {
       pname = ${nixVal(v.pname)};
       version = ${nixVal(v.version)};
       src = ${v.srcExpr};
@@ -301,14 +414,42 @@ export function exprForComposerVendor(
   flakePath: string,
   v: VendorInputs,
   algo: HashAlgo,
+  attr: 'composerVendor' | 'composerRepository' = 'composerVendor',
 ): string {
+  // nixpkgs ships two generations of the composer builder and they expose the
+  // vendor FOD under different names: v1 `buildComposerProject` yields
+  // `composerRepository`, v2 `buildComposerProject2` yields `composerVendor`.
+  // The attribute extract.ts found tells us which generation the package uses,
+  // so dispatch on it — calling the wrong one is an eval error, not a wrong
+  // hash, because the attribute we then read simply isn't there.
+  const v2 = attr === 'composerVendor';
+  const builder = v2 ? 'buildComposerProject2' : 'buildComposerProject';
+  // The FOD's php is a `php-with-extensions` wrapper, and so is the `phpXX`
+  // attr we pin to, so the pname half of the guard matches — but it carries no
+  // discriminating power here, since every php attr and every withExtensions
+  // wrapper shares that pname. The version is what actually decides, which is
+  // the right key: composer resolves platform requirements against the php
+  // version, so a different php can select different package versions. Pin
+  // exactly or abort.
+  const version = toolVersion(v.tools, 'php-with-extensions');
+  const m = regEx(/^(\d+)\.(\d+)/).exec(version ?? '');
+  const php =
+    m && version
+      ? pinnedToolOrAbort(
+          'runnerPkgs',
+          `php${m[1]}${m[2]}`,
+          'php-with-extensions',
+          version,
+          'composer',
+        )
+      : 'runnerPkgs.php';
   return `${preamble(flakePath)}
-    (runnerPkgs.php.buildComposerProject {
+    (${php}.${builder} {
       pname = ${nixVal(v.pname)};
       version = ${nixVal(v.version)};
       src = ${v.srcExpr};
       ${hashPlaceholderAttr(algo, 'vendorHash')}
-    }).composerVendor`;
+    }).${attr}`;
 }
 
 // Java/Maven: buildMavenPackage's fetchedMavenDeps.
@@ -317,6 +458,11 @@ export function exprForMavenDeps(
   v: VendorInputs,
   algo: HashAlgo,
 ): string {
+  // The JDK moves this FOD, but it can't be recovered from it: buildMavenPackage
+  // passes `mvnJdk` through `env.JAVA_HOME`, never into nativeBuildInputs, so
+  // there is nothing here to pin to. A package on a non-default `mvnJdk`
+  // therefore still gets its hash computed under the runner's default JDK.
+  // Documented as a limitation in readme.md rather than guessed at.
   return `${preamble(flakePath)}
     (runnerPkgs.maven.buildMavenPackage {
       pname = ${nixVal(v.pname)};
@@ -332,13 +478,36 @@ export function exprForMixFodDeps(
   v: VendorInputs,
   algo: HashAlgo,
 ): string {
+  // Elixir lives in the beam package set, and the top-level `elixir_1_18` alias
+  // is deprecated in favour of `beamPackages.elixir_1_18` — so pin from within
+  // the set, which also keeps elixir and its erlang compatible. (Overriding to
+  // an elixir the default erlang doesn't support is an eval-time assertion
+  // failure, not a wrong hash.)
+  const version = toolVersion(v.tools, 'elixir');
+  const attr = versionedAttr('elixir', version);
+  const elixir =
+    attr && version
+      ? pinnedToolOrAbort(
+          'runnerPkgs.beamPackages',
+          attr,
+          'elixir',
+          version,
+          'mix',
+        )
+      : 'null';
   return `${preamble(flakePath)}
-    runnerPkgs.beamPackages.fetchMixDeps {
+    (let
+      elixir = ${elixir};
+      fetcher =
+        if elixir == null
+        then runnerPkgs.beamPackages.fetchMixDeps
+        else runnerPkgs.beamPackages.fetchMixDeps.override { inherit elixir; };
+    in fetcher {
       pname = ${nixVal(`${v.pname}-deps`)};
       version = ${nixVal(v.version)};
       src = ${v.srcExpr};
       ${hashPlaceholderAttr(algo)}
-    }`;
+    })`;
 }
 
 // .NET: fetchNuGetDeps via dotnetCorePackages helpers.
@@ -361,11 +530,25 @@ export function exprForZigDeps(
   v: VendorInputs,
   algo: HashAlgo,
 ): string {
+  // Each zig attr carries its own `fetchDeps` with that compiler bound in
+  // (`passthru.nix`: `fetchDeps = callPackage ./fetcher.nix { inherit zig; }`),
+  // so pinning the compiler and reaching the fetcher are the same step. Zig
+  // makes breaking changes every 0.x, so the default is rarely the right one.
+  // Zig makes breaking changes every 0.x and `zig build --fetch` writes a
+  // cache layout that is not stable across them, so falling back to the
+  // runner's default compiler would fetch a different tree — abort instead.
+  const version = toolVersion(v.tools, 'zig');
+  const attr = versionedAttr('zig', version);
+  const zig =
+    attr && version
+      ? pinnedToolOrAbort('runnerPkgs', attr, 'zig', version, 'zig')
+      : 'runnerPkgs.zig';
   return `${preamble(flakePath)}
-    runnerPkgs.callPackage (runnerPkgs.path + "/pkgs/build-support/zig/fetch-deps.nix") {
+    ${zig}.fetchDeps {
       pname = ${nixVal(v.pname)};
       version = ${nixVal(v.version)};
       src = ${v.srcExpr};
+      ${v.fetchAll ? `fetchAll = true;` : ''}
       ${hashPlaceholderAttr(algo)}
     }`;
 }
