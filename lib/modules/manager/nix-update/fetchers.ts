@@ -1,8 +1,5 @@
 import { regEx } from '../../../util/regex.ts';
 import {
-  type FetcherInputs,
-  type HashAlgo,
-  type VendorInputs,
   exprForCargoDeps,
   exprForComposerVendor,
   exprForGoModules,
@@ -15,26 +12,13 @@ import {
   exprForYarnDeps,
   exprForZigDeps,
 } from './expr.ts';
-import type { FodInfo } from './extract.ts';
-
-// Result of classifying a FOD: which builder to use, plus the inputs we need
-// to feed back into the runner-side rebuild.
-export interface ClassifiedFod {
-  // attrPath inside the package, used by rewrite.ts to locate the hash
-  attrPath: string[];
-  // hash currently in the file (so rewrite can find/replace it; null = lib.fakeHash)
-  currentHash: string | null;
-  // hash algorithm — preserved through the rebuild
-  algo: HashAlgo;
-  // for ordering: src fetchers run first, vendor builders second
-  isSrc: boolean;
-  // a function that, given the runner-side srcExpr (used by vendor builders)
-  // and the package's flake path, returns the nix expression to nix-build.
-  // For src fetchers, srcExpr is unused.
-  buildExpr: (flakePath: string, srcExpr: string) => string;
-  // detected fetcher name (debug/error messaging only)
-  fetcherName: string;
-}
+import type {
+  ClassifiedFod,
+  FetcherInputs,
+  FodInfo,
+  HashAlgo,
+  VendorInputs,
+} from './types.ts';
 
 // Classify a FOD entry coming out of extract.ts. Throws if we can't recognize it.
 export function classifyFod(

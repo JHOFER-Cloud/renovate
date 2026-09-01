@@ -1,6 +1,7 @@
 import { createHash } from 'node:crypto';
 import { GlobalConfig } from '../../../config/global.ts';
 import { logger } from '../../../logger/index.ts';
+import { coerceArray } from '../../../util/array.ts';
 import { findGithubToken } from '../../../util/check-token.ts';
 import { readLocalFile, writeLocalFile } from '../../../util/fs/index.ts';
 import { getGitEnvironmentVariables } from '../../../util/git/auth.ts';
@@ -15,7 +16,7 @@ import type {
   UpdateArtifactsResult,
   Upgrade,
 } from '../types.ts';
-import type { FodInfo } from './extract.ts';
+import type { FodInfo } from './types.ts';
 import { buildKnownSrcExpr, classifyFod } from './fetchers.ts';
 import { assertSubstitutableStore, prefetch } from './prefetch.ts';
 import {
@@ -46,7 +47,7 @@ export async function updateArtifacts({
   const pkgSystem = md?.system;
   const pname = md?.pname ?? null;
   const isBranchTracked = md?.isBranchTracked === true;
-  const fods = md?.fods ?? [];
+  const fods = coerceArray(md?.fods);
 
   if (!attrName || !pkgSystem || !fods.length) {
     return null;
@@ -105,7 +106,9 @@ export async function updateArtifacts({
   // controls serve signed, input-addressed paths (stdenv, bash) into a store
   // every repo shares. Content-addressed paths need no signature — they are
   // verified against their hash instead — so a keyless cache is not inert.
-  const trustedPublicKeys = GlobalConfig.get('nixTrustedPublicKeys') ?? [];
+  const trustedPublicKeys = coerceArray(
+    GlobalConfig.get('nixTrustedPublicKeys'),
+  );
   if (substituters.length && !trustedPublicKeys.length) {
     logger.warn(
       { substituters },
@@ -511,7 +514,7 @@ function pickSrcExprFor(
 function usableSubstituters(configured: string[] | undefined): string[] {
   const ok: string[] = [];
   const rejected: string[] = [];
-  for (const entry of configured ?? []) {
+  for (const entry of coerceArray(configured)) {
     // Whitespace would split one entry into several substituters, and the
     // normalised href is what we forward — the raw string can differ.
     const url = regEx(/\s/).test(entry) ? null : parseUrl(entry);

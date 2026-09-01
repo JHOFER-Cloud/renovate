@@ -1,4 +1,4 @@
-import type { FodInfo } from './extract.ts';
+import type { FodInfo } from './types.ts';
 import { buildKnownSrcExpr, classifyFod } from './fetchers.ts';
 
 const FLAKE = '/tmp/repo';

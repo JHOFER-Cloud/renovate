@@ -2,9 +2,10 @@ import { isObject, isString } from '@sindresorhus/is';
 import { logger } from '../../../logger/index.ts';
 import { exec } from '../../../util/exec/index.ts';
 import type { ExecOptions } from '../../../util/exec/types.ts';
+import { coerceObject } from '../../../util/object.ts';
 import { regEx } from '../../../util/regex.ts';
-import type { HashAlgo } from './expr.ts';
 import { collapseExpr } from './expr.ts';
+import type { HashAlgo, PrefetchOptions } from './types.ts';
 
 // nix-build emits a "got: <hash>" line on hash mismatch. Newer nix uses SRI
 // (sha256-<base64>=); older versions emit base32 (52 chars [a-z0-9]).
@@ -21,31 +22,6 @@ const base32Regex = regEx(/got:\s+([a-z0-9]{52})/);
 const builderFailedRegex = regEx(
   /error: (?:Cannot build|builder for) '([^']+)'/,
 );
-
-export interface PrefetchOptions {
-  // raw nix expression (multi-line OK — we collapse before shell-quoting)
-  expr: string;
-  // package's declared system. Not passed to nix-build (see comment in
-  // `prefetch` on why) — used purely to namespace the prefetch cache so
-  // entries from packages declaring different systems don't collide.
-  pkgSystem: string;
-  // algo of the FOD we're prefetching; used to validate the parsed result.
-  algo: HashAlgo;
-  // env to pass to nix-build (e.g. GITHUB_TOKEN for private fetches)
-  extraEnv?: Record<string, string | undefined>;
-  // nix tool constraint from manager config
-  nixConstraint?: string;
-  // extra binary caches, already filtered against the admin allowlist, plus
-  // the admin's signing keys.
-  substituters?: string[];
-  trustedPublicKeys?: string[];
-  // Optional cache fingerprint. Two prefetches with the same expr+system+algo
-  // but a different fingerprint won't share a cache entry. Caller should pass
-  // a hash of `flake.lock` contents — `runnerPkgs` is resolved from
-  // `flake.inputs.nixpkgs`, so changing the lock changes what fetchers/builders
-  // we end up using.
-  flakeLockFingerprint?: string;
-}
 
 // Parse a hash from nix-build's stderr produced by an empty-hash FOD.
 // Returns SRI-formatted hash. Throws if no parseable hash found.
@@ -191,7 +167,7 @@ export async function prefetch(opts: PrefetchOptions): Promise<string> {
 
   const execOptions: ExecOptions = {
     toolConstraints: [{ toolName: 'nix', constraint: nixConstraint }],
-    extraEnv: extraEnv ?? {},
+    extraEnv: coerceObject(extraEnv),
     docker: {},
   };
 

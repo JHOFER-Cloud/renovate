@@ -673,7 +673,9 @@ export async function initRepo({
       // wins over https://github.com/ for that owner's repos, ensuring the
       // right installation token is used for cross-org dependency lookups.
       // Re-registered on every initRepo() so they survive hostRules.clear().
-      const trustGroups = platformConfig.githubAppCrossOrgTrustGroups ?? [];
+      const trustGroups = coerceArray(
+        platformConfig.githubAppCrossOrgTrustGroups,
+      );
       const currentOwner = config.repositoryOwner.toLowerCase();
       const trustedOwners = new Set<string>();
       for (const group of trustGroups) {

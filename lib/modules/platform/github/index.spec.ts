@@ -31,7 +31,12 @@ import type {
 import * as _appToken from './app-token.ts';
 import * as branch from './branch.ts';
 import * as github from './index.ts';
-import type { ApiPageCache, GhRestPr } from './types.ts';
+import type {
+  ApiPageCache,
+  GhAppInstallation,
+  GhRestPr,
+  InstallationToken,
+} from './types.ts';
 
 const githubApiHost = 'https://api.github.com';
 const graphqlRateLimitResponse = {
@@ -880,8 +885,8 @@ describe('modules/platform/github/index', () => {
 
     describe('initRepo() with ownerTokens', () => {
       async function setupAppPlatform(
-        installations: _appToken.GhAppInstallation[],
-        tokens: _appToken.InstallationToken[],
+        installations: GhAppInstallation[],
+        tokens: InstallationToken[],
       ): Promise<void> {
         appToken.listInstallations.mockResolvedValue(installations);
         for (const token of tokens) {
@@ -1017,8 +1022,8 @@ describe('modules/platform/github/index', () => {
 
       describe('githubAppCrossOrgTrustGroups', () => {
         async function setupWithTrustGroups(
-          installations: _appToken.GhAppInstallation[],
-          tokens: _appToken.InstallationToken[],
+          installations: GhAppInstallation[],
+          tokens: InstallationToken[],
           trustGroups?: string[][],
           endpoint?: string,
         ): Promise<void> {

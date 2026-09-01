@@ -1,5 +1,6 @@
 import { isObject } from '@sindresorhus/is';
 import { logger } from '../../../logger/index.ts';
+import { coerceArray } from '../../../util/array.ts';
 import { exec } from '../../../util/exec/index.ts';
 import type { ExecOptions } from '../../../util/exec/types.ts';
 import { readLocalFile } from '../../../util/fs/index.ts';
@@ -9,6 +10,7 @@ import {
   parseAssetUrl,
 } from '../../datasource/github-release-asset/index.ts';
 import type { ExtractConfig, PackageFile } from '../types.ts';
+import type { FodInfo, RenovateOverrides } from './types.ts';
 
 // Nix expression passed to `nix eval .#packages --apply` to introspect all
 // flake packages that have a passthru.updateScript. Returns a flat attrset of
@@ -235,57 +237,6 @@ in
 {}
 (builtins.attrNames pkgs)
 `;
-
-// Raw fetcher inputs as they come back from the nix expression.
-// Values are best-effort — most are null for any given fetcher type.
-export interface FodInputs {
-  outputHash: string;
-  outputHashAlgo: string;
-  outputHashMode: string;
-  url: string | null;
-  rev: string | null;
-  fetchSubmodules: boolean | null;
-  leaveDotGit: boolean | null;
-  deepClone: boolean | null;
-  forceFetchGit: boolean | null;
-  sparseCheckout: string[] | null;
-  name: string | null;
-  // fetchPnpmDeps args. Optional, not `| null`: package files extracted by an
-  // older Renovate can still be in the repository cache without them.
-  fetcherVersion?: number | null;
-  pnpmVersion?: string | null;
-  pnpmWorkspaces?: string[] | null;
-  pnpmInstallFlags?: string[] | null;
-  prePnpmInstall?: string | null;
-  // zig.fetchDeps arg, read off the package's own zigDeps derivation.
-  fetchAll?: boolean | null;
-  // Toolchains found in the FOD's nativeBuildInputs, e.g.
-  // `[{ pname: "go", version: "1.27.0" }]`. Optional for the same reason as the
-  // pnpm args: older extracts in the repository cache predate it.
-  tools?: FodTool[];
-}
-
-// One entry of a FOD's nativeBuildInputs, as read by the nix eval above.
-export interface FodTool {
-  pname: string;
-  version: string | null;
-}
-
-export interface FodInfo {
-  // Path inside the package attrset, e.g. ["src"], ["goModules"], ["cargoDeps"]
-  attrPath: string[];
-  inputs: FodInputs;
-}
-
-// Optional overrides declared on a package via `passthru.renovate`. Lets a
-// .nix file opt into a Renovate `customDatasources` lookup (or override the
-// derived extractVersion / packageName) when the built-in URL→datasource
-// inference can't handle its src URL.
-export interface RenovateOverrides {
-  datasource: string | null;
-  packageName: string | null;
-  extractVersion: string | null;
-}
 
 interface PackageInfo {
   system: string;
@@ -545,7 +496,7 @@ export async function extractAllPackageFiles(
   // Packages with no resolvable position fall back to flake.nix.
   const depsByFile = new Map<string, PackageFile['deps']>();
   function pushDep(file: string, dep: PackageFile['deps'][number]): void {
-    const list = depsByFile.get(file) ?? [];
+    const list = coerceArray(depsByFile.get(file));
     list.push(dep);
     depsByFile.set(file, list);
   }
