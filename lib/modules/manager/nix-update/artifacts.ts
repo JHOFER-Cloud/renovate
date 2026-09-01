@@ -16,7 +16,6 @@ import type {
   UpdateArtifactsResult,
   Upgrade,
 } from '../types.ts';
-import type { FodInfo } from './types.ts';
 import { buildKnownSrcExpr, classifyFod } from './fetchers.ts';
 import { assertSubstitutableStore, prefetch } from './prefetch.ts';
 import {
@@ -25,6 +24,7 @@ import {
   rewriteUnstableDate,
   rewriteUrl,
 } from './rewrite.ts';
+import type { FodInfo } from './types.ts';
 
 export async function updateArtifacts({
   packageFileName,

@@ -11,8 +11,8 @@ import { logger } from '../../../logger/index.ts';
 import type { Timestamp } from '../../../util/timestamp.ts';
 import type { UpdateArtifactsConfig } from '../types.ts';
 import { updateArtifacts } from './artifacts.ts';
-import type { FodInfo } from './types.ts';
 import { _resetPrefetchCacheForTesting } from './prefetch.ts';
+import type { FodInfo } from './types.ts';
 
 vi.mock('../../../util/exec/env.ts');
 vi.mock('../../../util/fs/index.ts');
