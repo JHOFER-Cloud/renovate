@@ -178,3 +178,13 @@ export interface ApiPageCache<T extends ApiPageItem = ApiPageItem> {
   items: Record<number, T>;
   lastModified?: string;
 }
+
+export interface GhAppInstallation {
+  id: number;
+  account: { login: string; type: string };
+}
+
+export interface InstallationToken {
+  token: string;
+  expiresAt: Date;
+}

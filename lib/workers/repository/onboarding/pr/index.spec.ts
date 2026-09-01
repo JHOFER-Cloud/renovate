@@ -44,20 +44,11 @@ describe('workers/repository/onboarding/pr/index', () => {
       InheritConfig.reset();
     });
 
-    it('returns if onboarded', async () => {
-      config.repoIsOnboarded = true;
-      await expect(
-        ensureOnboardingPr(config, packageFiles, branches),
-      ).resolves.not.toThrow();
-      expect(platform.createPr).toHaveBeenCalledTimes(0);
-      expect(platform.updatePr).toHaveBeenCalledTimes(0);
-    });
-
     it('returns if onboarded cache is valid', async () => {
       OnboardingState.onboardingCacheValid = true;
       await expect(
         ensureOnboardingPr(config, packageFiles, branches),
-      ).resolves.not.toThrow();
+      ).resolves.toBe('onboarding');
       expect(platform.createPr).toHaveBeenCalledTimes(0);
       expect(platform.updatePr).toHaveBeenCalledTimes(0);
     });
@@ -77,14 +68,16 @@ describe('workers/repository/onboarding/pr/index', () => {
         OnboardingState.prUpdateRequested = prUpdateRequested;
         await expect(
           ensureOnboardingPr(config, packageFiles, branches),
-        ).resolves.not.toThrow();
+        ).resolves.toBe('onboarding');
         expect(platform.updatePr).toHaveBeenCalledTimes(0);
         expect(platform.createPr).toHaveBeenCalledTimes(expected);
       },
     );
 
     it('creates PR', async () => {
-      await ensureOnboardingPr(config, packageFiles, branches);
+      await expect(
+        ensureOnboardingPr(config, packageFiles, branches),
+      ).resolves.toBe('onboarding');
       expect(platform.createPr).toHaveBeenCalledTimes(1);
     });
 
@@ -111,7 +104,9 @@ describe('workers/repository/onboarding/pr/index', () => {
 
       it('replaces the full PR list and package files with their summaries', async () => {
         platform.maxBodyLength.mockReturnValueOnce(1);
-        await ensureOnboardingPr(config, packageFiles, branches);
+        await expect(
+          ensureOnboardingPr(config, packageFiles, branches),
+        ).resolves.toBe('onboarding');
 
         expect(platform.createPr).toHaveBeenCalledTimes(1);
         expect(logger.debug).toHaveBeenCalledWith(
@@ -134,7 +129,9 @@ describe('workers/repository/onboarding/pr/index', () => {
 
       it('does not attempt to replace package files when none were detected', async () => {
         platform.maxBodyLength.mockReturnValueOnce(1);
-        await ensureOnboardingPr(config, {}, branches);
+        await expect(ensureOnboardingPr(config, {}, branches)).resolves.toBe(
+          'onboarding',
+        );
 
         expect(platform.createPr).toHaveBeenCalledTimes(1);
         const prBody = platform.createPr.mock.calls[0][0].prBody;
@@ -143,7 +140,9 @@ describe('workers/repository/onboarding/pr/index', () => {
       });
 
       it('leaves the PR body untouched when it is within the platform limit', async () => {
-        await ensureOnboardingPr(config, packageFiles, branches);
+        await expect(
+          ensureOnboardingPr(config, packageFiles, branches),
+        ).resolves.toBe('onboarding');
 
         expect(platform.createPr).toHaveBeenCalledTimes(1);
         expect(logger.debug).not.toHaveBeenCalledWith(
@@ -157,7 +156,7 @@ describe('workers/repository/onboarding/pr/index', () => {
     });
 
     it('creates semantic PR', async () => {
-      await ensureOnboardingPr(
+      const res = await ensureOnboardingPr(
         {
           ...config,
           semanticCommitType: undefined, // should default to "chore"
@@ -166,6 +165,8 @@ describe('workers/repository/onboarding/pr/index', () => {
         packageFiles,
         branches,
       );
+
+      expect(res).toBe('onboarding');
       expect(platform.createPr).toHaveBeenCalledExactlyOnceWith(
         expect.objectContaining({
           prTitle: 'chore: Configure Renovate',
@@ -174,7 +175,7 @@ describe('workers/repository/onboarding/pr/index', () => {
     });
 
     it('creates PR with labels', async () => {
-      await ensureOnboardingPr(
+      const res = await ensureOnboardingPr(
         {
           ...config,
           labels: ['label'],
@@ -183,6 +184,8 @@ describe('workers/repository/onboarding/pr/index', () => {
         packageFiles,
         branches,
       );
+
+      expect(res).toBe('onboarding');
       expect(platform.createPr).toHaveBeenCalledTimes(1);
       expect(platform.createPr.mock.calls[0][0].labels).toEqual([
         'additional-label',
@@ -200,7 +203,7 @@ describe('workers/repository/onboarding/pr/index', () => {
       async ({ onboardingRebaseCheckbox }) => {
         config.onboardingRebaseCheckbox = onboardingRebaseCheckbox;
         OnboardingState.prUpdateRequested = true; // case 'false' is tested in "breaks early when onboarding"
-        await ensureOnboardingPr(
+        const res = await ensureOnboardingPr(
           {
             ...config,
             prHeader: '',
@@ -209,6 +212,8 @@ describe('workers/repository/onboarding/pr/index', () => {
           packageFiles,
           branches,
         );
+
+        expect(res).toBe('onboarding');
         expect(platform.createPr).toHaveBeenCalledTimes(1);
         expect(platform.createPr.mock.calls[0][0].prBody).toMatchSnapshot(
           'PR body',
@@ -226,7 +231,7 @@ describe('workers/repository/onboarding/pr/index', () => {
       async ({ onboardingRebaseCheckbox }) => {
         config.onboardingRebaseCheckbox = onboardingRebaseCheckbox;
         OnboardingState.prUpdateRequested = true; // case 'false' is tested in "breaks early when onboarding"
-        await ensureOnboardingPr(
+        const res = await ensureOnboardingPr(
           {
             ...config,
             prHeader: undefined,
@@ -235,6 +240,8 @@ describe('workers/repository/onboarding/pr/index', () => {
           packageFiles,
           branches,
         );
+
+        expect(res).toBe('onboarding');
         expect(platform.createPr).toHaveBeenCalledTimes(1);
         const prBody = platform.createPr.mock.calls[0][0].prBody;
         // no `prHeader` is prepended
@@ -255,7 +262,7 @@ describe('workers/repository/onboarding/pr/index', () => {
       async ({ onboardingRebaseCheckbox }) => {
         config.onboardingRebaseCheckbox = onboardingRebaseCheckbox;
         OnboardingState.prUpdateRequested = true; // case 'false' is tested in "breaks early when onboarding"
-        await ensureOnboardingPr(
+        const res = await ensureOnboardingPr(
           {
             ...config,
             prHeader: '\r\r\nThis should not be the first line of the PR',
@@ -265,6 +272,8 @@ describe('workers/repository/onboarding/pr/index', () => {
           packageFiles,
           branches,
         );
+
+        expect(res).toBe('onboarding');
         expect(platform.createPr).toHaveBeenCalledTimes(1);
         expect(platform.createPr.mock.calls[0][0].prBody).toMatchSnapshot(
           'PR body',
@@ -285,7 +294,7 @@ describe('workers/repository/onboarding/pr/index', () => {
         config.onboardingRebaseCheckbox = onboardingRebaseCheckbox;
         config.onboardingConfigFileName = undefined; // checks the case when fileName isn't available
         OnboardingState.prUpdateRequested = true; // case 'false' is tested in "breaks early when onboarding"
-        await ensureOnboardingPr(
+        const res = await ensureOnboardingPr(
           {
             ...config,
             prHeader: 'This is a header for platform:{{platform}}',
@@ -295,6 +304,8 @@ describe('workers/repository/onboarding/pr/index', () => {
           packageFiles,
           branches,
         );
+
+        expect(res).toBe('onboarding');
         expect(platform.createPr).toHaveBeenCalledTimes(1);
         expect(platform.createPr.mock.calls[0][0].prBody).toMatch(
           /platform:github/,
@@ -326,7 +337,9 @@ describe('workers/repository/onboarding/pr/index', () => {
             bodyStruct: onboardingRebaseCheckbox ? bodyStruct : { hash },
           }),
         );
-        await ensureOnboardingPr(config, packageFiles, branches);
+        await expect(
+          ensureOnboardingPr(config, packageFiles, branches),
+        ).resolves.toBe('onboarding');
         expect(platform.createPr).toHaveBeenCalledTimes(0);
         expect(platform.updatePr).toHaveBeenCalledTimes(0);
       },
@@ -341,7 +354,9 @@ describe('workers/repository/onboarding/pr/index', () => {
         }),
       );
       scm.isBranchConflicted.mockResolvedValueOnce(true);
-      await ensureOnboardingPr(config, {}, branches);
+      await expect(ensureOnboardingPr(config, {}, branches)).resolves.toBe(
+        'onboarding',
+      );
       expect(platform.ensureComment).toHaveBeenCalledTimes(1);
       expect(platform.createPr).toHaveBeenCalledTimes(0);
       expect(platform.updatePr).toHaveBeenCalledTimes(0);
@@ -395,7 +410,9 @@ describe('workers/repository/onboarding/pr/index', () => {
             number: 1,
           }),
         );
-        await ensureOnboardingPr(config, {}, branches);
+        await expect(ensureOnboardingPr(config, {}, branches)).resolves.toBe(
+          'onboarding',
+        );
         expect(platform.ensureComment).toHaveBeenCalledTimes(0);
         expect(platform.createPr).toHaveBeenCalledTimes(0);
       });
@@ -545,7 +562,9 @@ describe('workers/repository/onboarding/pr/index', () => {
         }),
       );
       scm.isBranchConflicted.mockResolvedValueOnce(true);
-      await ensureOnboardingPr(config, {}, branches);
+      await expect(ensureOnboardingPr(config, {}, branches)).resolves.toBe(
+        'onboarding',
+      );
       expect(logger.info).toHaveBeenLastCalledWith(
         'DRY-RUN: Would comment that Onboarding PR is conflicted and needs manual resolving',
       );
@@ -562,7 +581,9 @@ describe('workers/repository/onboarding/pr/index', () => {
           bodyStruct,
         }),
       );
-      await ensureOnboardingPr(config, {}, branches);
+      await expect(ensureOnboardingPr(config, {}, branches)).resolves.toBe(
+        'onboarding',
+      );
       expect(platform.createPr).toHaveBeenCalledTimes(0);
       expect(platform.updatePr).toHaveBeenCalledTimes(1);
     });
@@ -574,20 +595,26 @@ describe('workers/repository/onboarding/pr/index', () => {
         onboardingPrTitle: 'Configure Renovate',
         requireConfig: 'optional',
       });
-      await ensureOnboardingPr(config, packageFiles, branches);
+      await expect(
+        ensureOnboardingPr(config, packageFiles, branches),
+      ).resolves.toBe('onboarding');
       expect(platform.createPr).toHaveBeenCalledTimes(1);
     });
 
     it('creates PR (require config)', async () => {
       config.requireConfig = 'required';
-      await ensureOnboardingPr(config, packageFiles, branches);
+      await expect(
+        ensureOnboardingPr(config, packageFiles, branches),
+      ).resolves.toBe('onboarding');
       expect(platform.createPr).toHaveBeenCalledTimes(1);
     });
 
     describe('the created PR references onboardingConfigFileName', () => {
       it('when set', async () => {
         GlobalConfig.set({ onboardingConfigFileName: '.github/renovate.json' });
-        await ensureOnboardingPr(config, packageFiles, branches);
+        await expect(
+          ensureOnboardingPr(config, packageFiles, branches),
+        ).resolves.toBe('onboarding');
         expect(platform.createPr.mock.calls[0][0].prBody).toContain(
           `Add your custom config to \`.github/renovate.json\` in this branch`,
         );
@@ -598,7 +625,9 @@ describe('workers/repository/onboarding/pr/index', () => {
 
       it('when not set, falls back to "renovate.json"', async () => {
         GlobalConfig.set({ onboardingConfigFileName: undefined });
-        await ensureOnboardingPr(config, packageFiles, branches);
+        await expect(
+          ensureOnboardingPr(config, packageFiles, branches),
+        ).resolves.toBe('onboarding');
         expect(platform.createPr.mock.calls[0][0].prBody).toContain(
           `Add your custom config to \`renovate.json\` in this branch`,
         );
@@ -606,7 +635,9 @@ describe('workers/repository/onboarding/pr/index', () => {
 
       it('when set, but not a valid filename, falls back to "renovate.json"', async () => {
         GlobalConfig.set({ onboardingConfigFileName: 'foo.bar' });
-        await ensureOnboardingPr(config, packageFiles, branches);
+        await expect(
+          ensureOnboardingPr(config, packageFiles, branches),
+        ).resolves.toBe('onboarding');
         expect(platform.createPr.mock.calls[0][0].prBody).toContain(
           `Add your custom config to \`renovate.json\` in this branch`,
         );
@@ -618,7 +649,9 @@ describe('workers/repository/onboarding/pr/index', () => {
         dryRun: 'full',
         onboardingBranch: config.onboardingBranch,
       });
-      await ensureOnboardingPr(config, packageFiles, branches);
+      await expect(
+        ensureOnboardingPr(config, packageFiles, branches),
+      ).resolves.toBe('onboarding');
 
       expect(logger.info).toHaveBeenCalledWith(
         'DRY-RUN: Would check branch renovate/configure',
@@ -639,7 +672,9 @@ describe('workers/repository/onboarding/pr/index', () => {
           bodyStruct,
         }),
       );
-      await ensureOnboardingPr(config, packageFiles, branches);
+      await expect(
+        ensureOnboardingPr(config, packageFiles, branches),
+      ).resolves.toBe('onboarding');
 
       expect(logger.info).toHaveBeenCalledWith(
         'DRY-RUN: Would check branch renovate/configure',
@@ -675,7 +710,7 @@ describe('workers/repository/onboarding/pr/index', () => {
         platform.createPr.mockRejectedValueOnce(err);
         await expect(
           ensureOnboardingPr(config, packageFiles, branches),
-        ).toResolve();
+        ).resolves.toBe('onboarding');
 
         expect(logger.warn).toHaveBeenCalledWith(
           'Onboarding PR already exists but cannot find it. It was probably created by a different user.',

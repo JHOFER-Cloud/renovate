@@ -2,16 +2,7 @@ import { createSign } from 'node:crypto';
 import { DateTime } from 'luxon';
 import { logger } from '../../../logger/index.ts';
 import { githubApi } from './common.ts';
-
-export interface GhAppInstallation {
-  id: number;
-  account: { login: string; type: string };
-}
-
-export interface InstallationToken {
-  token: string;
-  expiresAt: Date;
-}
+import type { GhAppInstallation, InstallationToken } from './types.ts';
 
 export function generateJWT(appId: string, privateKey: string): string {
   const now = Math.floor(Date.now() / 1000);

@@ -9,39 +9,12 @@ import {
   isString,
 } from '@sindresorhus/is';
 import { regEx } from '../../../util/regex.ts';
-import type { FodTool } from './extract.ts';
-
-export type HashAlgo = 'sha256' | 'sha512' | 'sha1';
-
-export interface FetcherInputs {
-  // URL-based fetchers
-  url?: string;
-  urls?: string[];
-
-  // GitHub-style fetchers
-  owner?: string;
-  repo?: string;
-  rev?: string;
-  domain?: string;
-  group?: string;
-  fetchSubmodules?: boolean;
-  leaveDotGit?: boolean;
-  forceFetchGit?: boolean;
-  deepClone?: boolean;
-  sparseCheckout?: string[];
-
-  // Pypi / Crate / Gem
-  pname?: string;
-  version?: string;
-  format?: string;
-  extension?: string;
-
-  // For vendor FODs that need an externally-built src
-  srcExpr?: string; // raw nix expression, e.g. a runner-side src fetcher call
-
-  // Generic
-  name?: string;
-}
+import type {
+  FetcherInputs,
+  FodTool,
+  HashAlgo,
+  VendorInputs,
+} from './types.ts';
 
 const HASH_PLACEHOLDER = 'sha256-AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA=';
 
@@ -187,24 +160,6 @@ function buildSrcFetcherArgs(name: string, inp: FetcherInputs): string {
 }
 
 // ---------- Vendor / dep FOD expressions ----------
-
-export interface VendorInputs {
-  pname: string;
-  version: string;
-  // raw nix expression for src — usually a runner-side fetcher call with a known hash
-  srcExpr: string;
-  // toolchains read off the package's own FOD by extract.ts, used to pin the
-  // rebuild to the same ones
-  tools?: FodTool[];
-  // zig.fetchDeps arg, read off the package's own zigDeps derivation
-  fetchAll?: boolean | null;
-  // fetchPnpmDeps args, read off the package's own pnpmDeps derivation
-  fetcherVersion?: number;
-  pnpmVersion?: string;
-  pnpmWorkspaces?: string[];
-  pnpmInstallFlags?: string[];
-  prePnpmInstall?: string;
-}
 
 // Several ecosystems bake a versioned toolchain into the vendor FOD, so a
 // package pinning a non-default one (buildGo127Module, zig_0_16, php83, a

@@ -11,6 +11,7 @@ import type {
   GetReleasesConfig,
   ReleaseResult,
 } from '../types.ts';
+import type { ParsedAssetUrl } from './types.ts';
 
 interface GithubAsset {
   name: string;
@@ -28,12 +29,6 @@ interface GithubRelease {
 const assetUrlRegex = regEx(
   /^https?:\/\/github\.com\/([^/]+)\/([^/]+)\/releases\/download\/(.+)\/([^/]+)$/,
 );
-
-export interface ParsedAssetUrl {
-  repo: string;
-  tag: string;
-  assetName: string;
-}
 
 export function parseAssetUrl(url: string): ParsedAssetUrl | null {
   const m = assetUrlRegex.exec(url);

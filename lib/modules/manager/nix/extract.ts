@@ -1,6 +1,7 @@
 import { logger } from '../../../logger/index.ts';
 import { getSiblingFileName, readLocalFile } from '../../../util/fs/index.ts';
 import { getHttpUrl, parseGitUrl } from '../../../util/git/url.ts';
+import { coerceObject } from '../../../util/object.ts';
 import { regEx } from '../../../util/regex.ts';
 import { FlakeHubDatasource } from '../../datasource/flakehub/index.ts';
 import { GitRefsDatasource } from '../../datasource/git-refs/index.ts';
@@ -46,10 +47,9 @@ export async function extractPackageFile(
 
   const flakeLock = flakeLockParsed.data;
   const rootInputs = new Map(
-    Object.entries(flakeLock.nodes.root?.inputs ?? {}).map(([key, value]) => [
-      value,
-      key,
-    ]),
+    Object.entries(coerceObject(flakeLock.nodes.root?.inputs)).map(
+      ([key, value]) => [value, key],
+    ),
   );
 
   if (!rootInputs.size) {

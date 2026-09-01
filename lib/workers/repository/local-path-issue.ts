@@ -5,6 +5,7 @@ import { logger } from '../../logger/index.ts';
 import type { PackageFile } from '../../modules/manager/types.ts';
 import type { Issue } from '../../modules/platform/index.ts';
 import { platform } from '../../modules/platform/index.ts';
+import { coerceArray } from '../../util/array.ts';
 import { regEx } from '../../util/regex.ts';
 
 /**
@@ -41,7 +42,7 @@ export function getLocalPathInputs(
   packageFiles: Record<string, PackageFile[]> | null,
 ): Map<string, LocalPathInput> {
   const detected = new Map<string, LocalPathInput>();
-  for (const file of packageFiles?.nix ?? []) {
+  for (const file of coerceArray(packageFiles?.nix)) {
     for (const dep of file.deps) {
       const localPath = dep.managerData?.localPath;
       if (

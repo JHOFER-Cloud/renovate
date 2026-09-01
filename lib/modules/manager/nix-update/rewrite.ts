@@ -1,5 +1,10 @@
 import { logger } from '../../../logger/index.ts';
 import { regEx } from '../../../util/regex.ts';
+import type {
+  RevRewriteContext,
+  RewriteContext,
+  UrlRewriteContext,
+} from './types.ts';
 
 // SRI/legacy hash literal pattern. SRI: sha256-<base64>=, sha512-..., sha1-...
 // Legacy nix base32 is 52 chars [a-z0-9]; older files may also have hex sha256 (64 hex chars).
@@ -18,17 +23,6 @@ const urlAttrLine = regEx(/(^|\s)(url)\s*=\s*"([^"]*)"/g);
 
 // Match `rev = "<value>"` inside a fetcher block. Used by rewriteRev below.
 const revAttrLine = regEx(/(^|\s)(rev)\s*=\s*"([^"]*)"/g);
-
-export interface RewriteContext {
-  // Path of attributes from the package root down to the FOD.
-  // E.g. ["src"], ["goModules"], ["passthru", "cargoDeps"].
-  attrPath: string[];
-  // Old hash currently in the file. Used as a sanity check + fallback.
-  // Can be `null` for `lib.fakeHash` placeholders.
-  oldHash: string | null;
-  // New hash (SRI form, e.g. "sha256-...=").
-  newHash: string;
-}
 
 // Rewrite a hash in the .nix file content. Strategy:
 // 1. Locate the binding for the deepest attr in attrPath (e.g. "goModules =").
@@ -101,15 +95,6 @@ export function rewriteHash(content: string, ctx: RewriteContext): string {
   );
 }
 
-export interface UrlRewriteContext {
-  // Path to the FOD whose url should be replaced (e.g. ["src"]).
-  attrPath: string[];
-  // URL currently in the file. Used for the unique-string fast path.
-  oldUrl: string;
-  // New URL to write.
-  newUrl: string;
-}
-
 // Rewrite a `url = "..."` attribute in the .nix file. Mirrors rewriteHash:
 // fast literal swap when oldUrl is unique, else contextual lookup via attrPath.
 // Used when a customDatasource provides `downloadUrl` and the new URL's shape
@@ -153,15 +138,6 @@ export function rewriteUrl(content: string, ctx: UrlRewriteContext): string {
   throw new Error(
     `Could not locate url for attrPath ${attrPath.join('.')} in nix file`,
   );
-}
-
-export interface RevRewriteContext {
-  // Path to the FOD whose rev should be replaced (e.g. ["src"]).
-  attrPath: string[];
-  // Commit currently pinned in the file.
-  oldRev: string;
-  // Commit to pin instead.
-  newRev: string;
 }
 
 // Rewrite a `rev = "..."` attribute in the .nix file.
