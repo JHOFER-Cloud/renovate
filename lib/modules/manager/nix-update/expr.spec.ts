@@ -133,6 +133,25 @@ describe('modules/manager/nix-update/expr', () => {
     it('go: only pins on an exact version match, never a same-major guess', () => {
       const e = exprForGoModules(FLAKE, { ...VEND, tools: GO_127 }, 'sha256');
       expect(e).toContain('(runnerPkgs.go_1_27.version or "") == "1.27.0"');
+      expect(e).toContain('(runnerPkgs.go_1_27.pname or "") == "go"');
+    });
+    it('go: contains a throwing attr in the guard rather than exploding on it', () => {
+      // nixpkgs keeps EOL toolchains as attrs that abort when forced, so
+      // `? attr` is true while touching it raises. Only tryEval contains that.
+      const e = exprForGoModules(
+        FLAKE,
+        { ...VEND, tools: [{ pname: 'go', version: '1.23.12' }] },
+        'sha256',
+      );
+      expect(e).toContain('builtins.tryEval');
+      expect(e).toContain('ok.success && ok.value');
+    });
+    it('go: falls back to the default builder rather than aborting', () => {
+      // Unique to go: the module tree does not vary with the toolchain, and a
+      // too-old go fails the build loudly instead of vendoring something else.
+      const e = exprForGoModules(FLAKE, { ...VEND, tools: GO_127 }, 'sha256');
+      expect(e).toContain('if go == null then runnerPkgs.buildGoModule');
+      expect(e).not.toContain('throw');
     });
     it('go: falls back to the default builder when the go version is unknown', () => {
       expect(exprForGoModules(FLAKE, VEND, 'sha256')).not.toContain('override');
@@ -255,10 +274,11 @@ describe('modules/manager/nix-update/expr', () => {
       expect(v1).not.toContain('buildComposerProject2');
       expect(v1).toContain('.composerRepository');
     });
-    it('composer: pins the php minor the package built against', () => {
+    it('composer: pins the php minor on an exact pname+version match', () => {
       const e = exprForComposerVendor(
         FLAKE,
-        // the FOD's php is a wrapper, so pname is php-with-extensions
+        // both the FOD's php and the phpXX attr are php-with-extensions
+        // wrappers, so pname is a usable half of the guard
         {
           ...VEND,
           tools: [{ pname: 'php-with-extensions', version: '8.3.33' }],
@@ -266,13 +286,23 @@ describe('modules/manager/nix-update/expr', () => {
         'sha256',
       );
       expect(e).toContain('runnerPkgs.php83');
+      expect(e).toContain(
+        '(runnerPkgs.php83.pname or "") == "php-with-extensions"',
+      );
+      expect(e).toContain('(runnerPkgs.php83.version or "") == "8.3.33"');
+      // composer resolves platform requirements against the php version, so a
+      // substituted php can select different packages — abort, don't guess
+      expect(e).toContain('throw "nix-update:');
     });
     it('maven: maven.buildMavenPackage with mvnHash', () => {
       const e = exprForMavenDeps(FLAKE, VEND, 'sha256');
       expect(e).toContain('maven.buildMavenPackage');
       expect(e).toContain('mvnHash');
     });
-    it('maven: pins mvnJdk on an exact pname+version match', () => {
+    it('maven: does not attempt to pin mvnJdk', () => {
+      // buildMavenPackage passes mvnJdk through env.JAVA_HOME, never into
+      // nativeBuildInputs, so there is nothing on the FOD to pin to. Even a
+      // JDK that happens to show up among the tools must not be used.
       const e = exprForMavenDeps(
         FLAKE,
         {
@@ -284,23 +314,8 @@ describe('modules/manager/nix-update/expr', () => {
         },
         'sha256',
       );
-      expect(e).toContain('mvnJdk');
-      // jdk21 and temurin-bin-21 share a version but are different
-      // derivations, so pname has to be part of the guard.
-      expect(e).toContain('(runnerPkgs.jdk21.pname or "") == "temurin-bin"');
-      expect(e).toContain('runnerPkgs.temurin-bin-21');
-    });
-    it('maven: recognises a zulu JDK too', () => {
-      const e = exprForMavenDeps(
-        FLAKE,
-        { ...VEND, tools: [{ pname: 'zulu-ca-jdk', version: '17.0.19' }] },
-        'sha256',
-      );
-      expect(e).toContain('(runnerPkgs.jdk17.pname or "") == "zulu-ca-jdk"');
-    });
-    it('maven: passes no mvnJdk at all when the JDK is unrecognised', () => {
-      const e = exprForMavenDeps(FLAKE, VEND, 'sha256');
-      expect(e).toContain('if jdk == null then {}');
+      expect(e).not.toContain('mvnJdk');
+      expect(e).not.toContain('temurin');
     });
     it('mix: beamPackages.fetchMixDeps with -deps suffix', () => {
       const e = exprForMixFodDeps(FLAKE, VEND, 'sha256');
@@ -318,6 +333,10 @@ describe('modules/manager/nix-update/expr', () => {
       // the top-level elixir_1_18 alias is deprecated and can pair an elixir
       // with an erlang it doesn't support
       expect(e).not.toContain('runnerPkgs.elixir_1_18');
+      // an elixir/erlang combination the runner can't build aborts at the
+      // guard, which therefore has to be inside tryEval
+      expect(e).toContain('builtins.tryEval');
+      expect(e).toContain('throw "nix-update:');
     });
     it('zig: uses the compiler’s own fetchDeps, pinned to its version', () => {
       const e = exprForZigDeps(
@@ -331,9 +350,25 @@ describe('modules/manager/nix-update/expr', () => {
       // The old build-support path no longer exists in nixpkgs.
       expect(e).not.toContain('fetch-deps.nix');
     });
+    it('zig: aborts rather than vendoring with a different compiler', () => {
+      // A wrong-major zig writes a different cache layout, so the fallback
+      // would be a plausible but wrong hash — worse than a failed run.
+      const e = exprForZigDeps(
+        FLAKE,
+        { ...VEND, tools: [{ pname: 'zig', version: '0.16.0' }] },
+        'sha256',
+      );
+      expect(e).toContain('throw "nix-update:');
+      // a regression to the old fallback renders `… else runnerPkgs.zig)`,
+      // so that — not `else runnerPkgs.zig.fetchDeps` — is what to exclude
+      expect(e).not.toContain('else runnerPkgs.zig)');
+    });
     it('zig: falls back to the default compiler when the version is unknown', () => {
+      // Nothing was extracted to pin to (a cache entry predating `tools`), so
+      // there is no basis to abort on.
       const e = exprForZigDeps(FLAKE, VEND, 'sha256');
       expect(e).toContain('runnerPkgs.zig.fetchDeps');
+      expect(e).not.toContain('throw');
     });
     it('zig: mirrors fetchAll, which changes what lands in the store', () => {
       expect(

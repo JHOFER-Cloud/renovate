@@ -104,10 +104,41 @@ builtins.foldl'
             if drv ? nativeBuildInputs && builtins.isList drv.nativeBuildInputs
             then drv.nativeBuildInputs
             else [];
-        in map (d: {
-          pname = discardCtx d.pname;
-          version = if d ? version then discardCtx d.version else null;
-        }) (builtins.filter (d: builtins.isAttrs d && d ? pname) nbi);
+          /* tryEval per element, because reading pname forces that build input
+             and some derivations abort when forced (EOL-toolchain aliases,
+             anything behind an assertion — and this eval walks every system,
+             so a darwin-only input is forced on a linux runner too). An
+             uncaught throw would take out the whole extraction and leave the
+             repository with no dependencies at all.
+
+             Per element rather than around the list: collapsing everything to
+             [] on one bad input looks exactly like "no toolchain recorded", so
+             the builders would silently pick the default instead of aborting —
+             the wrong-hash path those aborts exist to close.
+
+             deepSeq, because tryEval only forces to WHNF: for an attrset that
+             is just the outer braces, and a throwing pname inside would sail
+             through to abort later, while nix serialises the result to JSON. */
+          readTool = d:
+            let
+              /* isString rather than trusting tryEval: it contains throw and
+                 assert, but a type error is neither — discardCtx on a non-string
+                 pname raises "cannot coerce", which escapes the tryEval below
+                 and would abort the whole extraction. (builtins.abort escapes
+                 it too, but nixpkgs uses throw for the cases we hit.) */
+              e = {
+                pname =
+                  if builtins.isString d.pname then discardCtx d.pname else null;
+                version =
+                  if d ? version && builtins.isString d.version
+                  then discardCtx d.version
+                  else null;
+              };
+              r = builtins.tryEval (builtins.deepSeq e e);
+            in if r.success && r.value.pname != null then r.value else null;
+          keep = d: (builtins.tryEval (builtins.isAttrs d && d ? pname)).success
+            && builtins.isAttrs d && d ? pname;
+        in builtins.filter (x: x != null) (map readTool (builtins.filter keep nbi));
     };
   /* Well-known FOD attribute names. Order matters: src first, then vendor
      FODs. If a package has more than one of these, each becomes a separate
