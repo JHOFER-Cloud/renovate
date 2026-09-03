@@ -17,7 +17,7 @@ const options: Readonly<RenovateOptions>[] = [
   {
     name: 'allowedHeaders',
     description:
-      'List of allowed patterns for header names in repository hostRules config.',
+      'List of allowed patterns for header names in hostRules config.',
     type: 'array',
     default: ['X-*'],
     subType: 'string',
@@ -668,6 +668,7 @@ const options: Readonly<RenovateOptions>[] = [
       'Environment variables that Renovate uses when executing package manager commands.',
     type: 'object',
     default: {},
+    requiresCheckAtTrustBoundary: true,
   },
   {
     name: 'customDatasources',
@@ -702,7 +703,7 @@ const options: Readonly<RenovateOptions>[] = [
     description:
       'Change this value to override the default Renovate sidecar image.',
     type: 'string',
-    default: 'ghcr.io/renovatebot/base-image:13.95.3',
+    default: 'ghcr.io/renovatebot/base-image:13.95.6',
     globalOnly: true,
     deprecationMsg:
       'The usage of `binarySource=docker` is deprecated, and will be removed in the future',
@@ -1049,7 +1050,7 @@ const options: Readonly<RenovateOptions>[] = [
     type: 'boolean',
     default: true,
   },
-  // Bot administration
+  // Admin/self-hosted administration
   {
     name: 'persistRepoData',
     description:
@@ -2175,7 +2176,7 @@ const options: Readonly<RenovateOptions>[] = [
   },
   {
     name: 'rebaseLabel',
-    description: 'Label to request a rebase from Renovate bot.',
+    description: 'Label to request a rebase from Renovate.',
     type: 'string',
     default: 'rebase',
   },
@@ -2432,6 +2433,7 @@ const options: Readonly<RenovateOptions>[] = [
       branchTopic: `{{{datasource}}}-{{{depNameSanitized}}}-vulnerability`,
       prCreation: 'immediate',
       vulnerabilityFixStrategy: 'lowest',
+      prConcurrentLimit: 0,
     },
     mergeable: true,
     cli: false,
@@ -2883,6 +2885,7 @@ const options: Readonly<RenovateOptions>[] = [
     stage: 'repository',
     cli: true,
     mergeable: true,
+    requiresCheckAtTrustBoundary: true,
   },
   {
     name: 'hostType',
