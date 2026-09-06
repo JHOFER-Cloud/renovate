@@ -87,9 +87,12 @@ export function updateDependency({
       const refParam = parsedUrl.searchParams.get('ref');
 
       if (refParam) {
-        const refMatch = regEx(/^refs\/(tags|heads)\/(.+)$/).exec(refParam);
-        if (refMatch) {
-          const updatedRef = `refs/${refMatch[1]}/${refMatch[2].replace(currentValue, newValue)}`;
+        const refMatch = regEx(
+          /^refs\/(?<refType>tags|heads)\/(?<refName>.+)$/,
+        ).exec(refParam);
+        if (refMatch?.groups) {
+          const { refType, refName } = refMatch.groups;
+          const updatedRef = `refs/${refType}/${refName.replace(currentValue, newValue)}`;
           parsedUrl.searchParams.set('ref', updatedRef);
           urlModified = true;
         } else if (refParam.includes(currentValue)) {

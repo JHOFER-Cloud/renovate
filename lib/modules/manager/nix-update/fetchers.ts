@@ -367,25 +367,25 @@ function parseArchiveUrl(url: string, fetcher: string): ParsedArchive | null {
   switch (fetcher) {
     case 'fetchFromGitHub': {
       const m = regEx(
-        /^https?:\/\/github\.com\/([^/]+)\/([^/]+)\/archive\/([^/]+)\.(?:tar\.gz|zip)$/,
+        /^https?:\/\/github\.com\/(?<owner>[^/]+)\/(?<repo>[^/]+)\/archive\/(?<ref>[^/]+)\.(?:tar\.gz|zip)$/,
       ).exec(url);
       return m ? { owner: m[1], repo: m[2], rev: m[3] } : null;
     }
     case 'fetchFromGitea': {
       const m = regEx(
-        /^https?:\/\/[^/]+\/([^/]+)\/([^/]+)\/archive\/([^/]+)\.(?:tar\.gz|zip)$/,
+        /^https?:\/\/[^/]+\/(?<owner>[^/]+)\/(?<repo>[^/]+)\/archive\/(?<ref>[^/]+)\.(?:tar\.gz|zip)$/,
       ).exec(url);
       return m ? { owner: m[1], repo: m[2], rev: m[3] } : null;
     }
     case 'fetchFromBitbucket': {
       const m = regEx(
-        /^https?:\/\/bitbucket\.org\/([^/]+)\/([^/]+)\/get\/([^/]+)\.(?:tar\.gz|zip)$/,
+        /^https?:\/\/bitbucket\.org\/(?<owner>[^/]+)\/(?<repo>[^/]+)\/get\/(?<ref>[^/]+)\.(?:tar\.gz|zip)$/,
       ).exec(url);
       return m ? { owner: m[1], repo: m[2], rev: m[3] } : null;
     }
     case 'fetchFromSourcehut': {
       const m = regEx(
-        /^https?:\/\/git\.sr\.ht\/(~[^/]+)\/([^/]+)\/archive\/([^/]+)\.(?:tar\.gz|zip)$/,
+        /^https?:\/\/git\.sr\.ht\/(?<owner>~[^/]+)\/(?<repo>[^/]+)\/archive\/(?<ref>[^/]+)\.(?:tar\.gz|zip)$/,
       ).exec(url);
       return m ? { owner: m[1], repo: m[2], rev: m[3] } : null;
     }
@@ -403,17 +403,19 @@ function parseRegistryUrl(url: string, fetcher: string): FetcherInputs | null {
     case 'fetchPypi': {
       // https://files.pythonhosted.org/packages/source/<x>/<pname>/<pname>-<version>.tar.gz
       const m = regEx(
-        /\/([^/]+)\/([^/]+)-([0-9][^/]*)\.(tar\.gz|tar\.bz2|tar\.xz|zip|whl)$/,
+        /\/(?<dir>[^/]+)\/(?<name>[^/]+)-(?<version>[0-9][^/]*)\.(?<ext>tar\.gz|tar\.bz2|tar\.xz|zip|whl)$/,
       ).exec(url);
       return m ? { pname: m[2], version: m[3], extension: m[4] } : null;
     }
     case 'fetchCrate': {
       // https://crates.io/api/v1/crates/<pname>/<version>/download
-      const m = regEx(/\/crates\/([^/]+)\/([^/]+)\/download/).exec(url);
+      const m = regEx(
+        /\/crates\/(?<name>[^/]+)\/(?<version>[^/]+)\/download/,
+      ).exec(url);
       return m ? { pname: m[1], version: m[2] } : null;
     }
     case 'fetchgem': {
-      const m = regEx(/\/([^/]+)-([^/]+)\.gem$/).exec(url);
+      const m = regEx(/\/(?<name>[^/]+)-(?<version>[^/]+)\.gem$/).exec(url);
       return m ? { pname: m[1], version: m[2] } : null;
     }
     default:

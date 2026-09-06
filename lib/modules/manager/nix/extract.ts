@@ -141,7 +141,7 @@ export async function extractPackageFile(
     };
 
     dep.currentValue = flakeOriginal.ref?.replace(
-      regEx(/^refs\/(heads|tags)\//),
+      regEx(/^refs\/(?:heads|tags)\//),
       '',
     );
     dep.currentDigest = flakeLocked.rev;

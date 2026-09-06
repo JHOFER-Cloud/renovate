@@ -16,12 +16,12 @@ describe('modules/manager/nix/extract', () => {
 
   it('returns null when flake.lock file cannot be read', async () => {
     fs.readLocalFile.mockResolvedValueOnce(null);
-    expect(await extractPackageFile('', 'flake.nix')).toBeNull();
+    await expect(extractPackageFile('', 'flake.nix')).resolves.toBeNull();
   });
 
   it('returns null when flake.lock cannot be parsed', async () => {
     fs.readLocalFile.mockResolvedValueOnce('{ invalid json');
-    expect(await extractPackageFile('', 'flake.nix')).toBeNull();
+    await expect(extractPackageFile('', 'flake.nix')).resolves.toBeNull();
     expect(logger.logger.debug).toHaveBeenCalledExactlyOnceWith(
       { flakeLockFile: 'flake.lock', error: expect.any(ZodError) },
       'invalid flake.lock file',
@@ -35,7 +35,7 @@ describe('modules/manager/nix/extract', () => {
       "version": 7
     }`;
     fs.readLocalFile.mockResolvedValueOnce(flakeLock);
-    expect(await extractPackageFile('', 'flake.nix')).toBeNull();
+    await expect(extractPackageFile('', 'flake.nix')).resolves.toBeNull();
     expect(logger.logger.debug).toHaveBeenCalledExactlyOnceWith(
       { flakeLockFile: 'flake.lock' },
       'flake.lock is missing "root" node',
@@ -71,7 +71,7 @@ describe('modules/manager/nix/extract', () => {
       "version": 7
     }`;
     fs.readLocalFile.mockResolvedValueOnce(flakeLock);
-    expect(await extractPackageFile('', 'flake.nix')).toBeNull();
+    await expect(extractPackageFile('', 'flake.nix')).resolves.toBeNull();
   });
 
   it('returns null when inputs are missing locked', async () => {
@@ -95,7 +95,7 @@ describe('modules/manager/nix/extract', () => {
       "version": 7
     }`;
     fs.readLocalFile.mockResolvedValueOnce(flakeLock);
-    expect(await extractPackageFile('', 'flake.nix')).toBeNull();
+    await expect(extractPackageFile('', 'flake.nix')).resolves.toBeNull();
     expect(logger.logger.debug).toHaveBeenCalledExactlyOnceWith(
       {
         flakeLockFile: 'flake.lock',
@@ -135,7 +135,7 @@ describe('modules/manager/nix/extract', () => {
       "version": 7
     }`;
     fs.readLocalFile.mockResolvedValueOnce(flakeLock);
-    expect(await extractPackageFile('', 'flake.nix')).toBeNull();
+    await expect(extractPackageFile('', 'flake.nix')).resolves.toBeNull();
     expect(logger.logger.debug).toHaveBeenCalledExactlyOnceWith(
       {
         flakeLockFile: 'flake.lock',
@@ -179,7 +179,7 @@ describe('modules/manager/nix/extract', () => {
       "version": 7
     }`;
     fs.readLocalFile.mockResolvedValueOnce(flakeLock);
-    expect(await extractPackageFile('', 'flake.nix')).toBeNull();
+    await expect(extractPackageFile('', 'flake.nix')).resolves.toBeNull();
     expect(logger.logger.debug).toHaveBeenCalledExactlyOnceWith(
       {
         flakeLockFile: 'flake.lock',
@@ -229,7 +229,7 @@ describe('modules/manager/nix/extract', () => {
       "version": 7
     }`;
     fs.readLocalFile.mockResolvedValueOnce(flakeLock);
-    expect(await extractPackageFile('', 'flake.nix')).toBeNull();
+    await expect(extractPackageFile('', 'flake.nix')).resolves.toBeNull();
     expect(logger.logger.debug).toHaveBeenCalledExactlyOnceWith(
       {
         flakeLockFile: 'flake.lock',
@@ -279,7 +279,7 @@ describe('modules/manager/nix/extract', () => {
       "version": 7
     }`;
     fs.readLocalFile.mockResolvedValueOnce(flakeLock);
-    expect(await extractPackageFile('', 'flake.nix')).toBeNull();
+    await expect(extractPackageFile('', 'flake.nix')).resolves.toBeNull();
     expect(logger.logger.debug).toHaveBeenCalledExactlyOnceWith(
       {
         flakeLockFile: 'flake.lock',
@@ -326,7 +326,7 @@ describe('modules/manager/nix/extract', () => {
       "version": 7
     }`;
     fs.readLocalFile.mockResolvedValueOnce(flakeLock);
-    expect(await extractPackageFile('', 'flake.nix')).toEqual({
+    await expect(extractPackageFile('', 'flake.nix')).resolves.toEqual({
       deps: [
         {
           depName: 'my-local-flake',
@@ -365,7 +365,7 @@ describe('modules/manager/nix/extract', () => {
       "version": 7
     }`;
     fs.readLocalFile.mockResolvedValueOnce(flakeLock);
-    expect(await extractPackageFile('', 'flake.nix')).toEqual({
+    await expect(extractPackageFile('', 'flake.nix')).resolves.toEqual({
       deps: [
         {
           depName: 'my-local-flake',
@@ -403,7 +403,7 @@ describe('modules/manager/nix/extract', () => {
       "version": 7
     }`;
     fs.readLocalFile.mockResolvedValueOnce(flakeLock);
-    expect(await extractPackageFile('', 'flake.nix')).toEqual({
+    await expect(extractPackageFile('', 'flake.nix')).resolves.toEqual({
       deps: [
         {
           depName: 'my-local-flake',
@@ -441,7 +441,7 @@ describe('modules/manager/nix/extract', () => {
       "version": 7
     }`;
     fs.readLocalFile.mockResolvedValueOnce(flakeLock);
-    expect(await extractPackageFile('', 'flake.nix')).toBeNull();
+    await expect(extractPackageFile('', 'flake.nix')).resolves.toBeNull();
     expect(logger.logger.debug).toHaveBeenCalledExactlyOnceWith(
       expect.objectContaining({ flakeLockFile: 'flake.lock' }),
       'input is of type path, skipping',
@@ -474,7 +474,7 @@ describe('modules/manager/nix/extract', () => {
       "version": 7
     }`;
     fs.readLocalFile.mockResolvedValueOnce(flakeLock);
-    expect(await extractPackageFile('', 'flake.nix')).toBeNull();
+    await expect(extractPackageFile('', 'flake.nix')).resolves.toBeNull();
     expect(logger.logger.debug).toHaveBeenCalledExactlyOnceWith(
       expect.objectContaining({
         flakeLockFile: 'flake.lock',
@@ -509,7 +509,7 @@ describe('modules/manager/nix/extract', () => {
       "version": 7
     }`;
     fs.readLocalFile.mockResolvedValueOnce(flakeLock);
-    expect(await extractPackageFile('', 'flake.nix')).toBeNull();
+    await expect(extractPackageFile('', 'flake.nix')).resolves.toBeNull();
     expect(logger.logger.debug).toHaveBeenCalledExactlyOnceWith(
       {
         flakeLockFile: 'flake.lock',
@@ -555,7 +555,7 @@ describe('modules/manager/nix/extract', () => {
       "version": 7
     }`;
     fs.readLocalFile.mockResolvedValueOnce(flakeLock);
-    expect(await extractPackageFile('', 'flake.nix')).toEqual({
+    await expect(extractPackageFile('', 'flake.nix')).resolves.toEqual({
       deps: [
         {
           currentDigest: 'ff81ac966bb2cae68946d5ed5fc4994f96d0ffec',
@@ -596,7 +596,7 @@ describe('modules/manager/nix/extract', () => {
       "version": 7
     }`;
     fs.readLocalFile.mockResolvedValueOnce(flakeLock);
-    expect(await extractPackageFile('', 'flake.nix')).toEqual({
+    await expect(extractPackageFile('', 'flake.nix')).resolves.toEqual({
       deps: [
         {
           currentValue: '0.2411.5835',
@@ -635,7 +635,7 @@ describe('modules/manager/nix/extract', () => {
       "version": 7
     }`;
     fs.readLocalFile.mockResolvedValueOnce(flakeLock);
-    expect(await extractPackageFile('', 'flake.nix')).toEqual({
+    await expect(extractPackageFile('', 'flake.nix')).resolves.toEqual({
       deps: [
         {
           currentDigest: 'def456',
@@ -676,7 +676,7 @@ describe('modules/manager/nix/extract', () => {
       "version": 7
     }`;
     fs.readLocalFile.mockResolvedValueOnce(flakeLock);
-    expect(await extractPackageFile('', 'flake.nix')).toEqual({
+    await expect(extractPackageFile('', 'flake.nix')).resolves.toEqual({
       deps: [
         {
           currentDigest: 'jkl012',
@@ -717,7 +717,7 @@ describe('modules/manager/nix/extract', () => {
       "version": 7
     }`;
     fs.readLocalFile.mockResolvedValueOnce(flakeLock);
-    expect(await extractPackageFile('', 'flake.nix')).toEqual({
+    await expect(extractPackageFile('', 'flake.nix')).resolves.toEqual({
       deps: [
         {
           currentDigest: 'ghi789',
@@ -765,7 +765,7 @@ describe('modules/manager/nix/extract', () => {
         "version": 7
       }`;
       fs.readLocalFile.mockResolvedValueOnce(flakeLock);
-      expect(await extractPackageFile(flakeNix, 'flake.nix')).toEqual({
+      await expect(extractPackageFile(flakeNix, 'flake.nix')).resolves.toEqual({
         deps: [
           {
             currentDigest: 'be97b37989f11b724197b5f4c7ffd78f12c8c4bf',
@@ -812,7 +812,7 @@ describe('modules/manager/nix/extract', () => {
         "version": 7
       }`;
       fs.readLocalFile.mockResolvedValueOnce(flakeLock);
-      expect(await extractPackageFile(flakeNix, 'flake.nix')).toEqual({
+      await expect(extractPackageFile(flakeNix, 'flake.nix')).resolves.toEqual({
         deps: [
           {
             currentDigest: 'be97b37989f11b724197b5f4c7ffd78f12c8c4bf',
@@ -859,7 +859,7 @@ describe('modules/manager/nix/extract', () => {
         "version": 7
       }`;
       fs.readLocalFile.mockResolvedValueOnce(flakeLock);
-      expect(await extractPackageFile(flakeNix, 'flake.nix')).toEqual({
+      await expect(extractPackageFile(flakeNix, 'flake.nix')).resolves.toEqual({
         deps: [
           {
             currentDigest: 'be97b37989f11b724197b5f4c7ffd78f12c8c4bf',
@@ -905,7 +905,7 @@ describe('modules/manager/nix/extract', () => {
         "version": 7
       }`;
       fs.readLocalFile.mockResolvedValueOnce(flakeLock);
-      expect(await extractPackageFile(flakeNix, 'flake.nix')).toEqual({
+      await expect(extractPackageFile(flakeNix, 'flake.nix')).resolves.toEqual({
         deps: [
           {
             currentDigest: 'be97b37989f11b724197b5f4c7ffd78f12c8c4bf',
@@ -969,7 +969,7 @@ describe('modules/manager/nix/extract', () => {
         "version": 7
       }`;
       fs.readLocalFile.mockResolvedValueOnce(flakeLock);
-      expect(await extractPackageFile(flakeNix, 'flake.nix')).toEqual({
+      await expect(extractPackageFile(flakeNix, 'flake.nix')).resolves.toEqual({
         deps: [
           {
             currentDigest: '64334fda8d632bec7c80c9bef668ad9633a8dd64',
@@ -1025,7 +1025,7 @@ describe('modules/manager/nix/extract', () => {
         "version": 7
       }`;
       fs.readLocalFile.mockResolvedValueOnce(flakeLock);
-      expect(await extractPackageFile(flakeNix, 'flake.nix')).toEqual({
+      await expect(extractPackageFile(flakeNix, 'flake.nix')).resolves.toEqual({
         deps: [
           {
             currentDigest: '4524271976b625a4a605beefd893f270620fd751',
@@ -1071,7 +1071,7 @@ describe('modules/manager/nix/extract', () => {
         "version": 7
       }`;
       fs.readLocalFile.mockResolvedValueOnce(flakeLock);
-      expect(await extractPackageFile(flakeNix, 'flake.nix')).toEqual({
+      await expect(extractPackageFile(flakeNix, 'flake.nix')).resolves.toEqual({
         deps: [
           {
             currentDigest: '4524271976b625a4a605beefd893f270620fd751',
@@ -1118,7 +1118,7 @@ describe('modules/manager/nix/extract', () => {
         "version": 7
       }`;
       fs.readLocalFile.mockResolvedValueOnce(flakeLock);
-      expect(await extractPackageFile(flakeNix, 'flake.nix')).toEqual({
+      await expect(extractPackageFile(flakeNix, 'flake.nix')).resolves.toEqual({
         deps: [
           {
             currentDigest: '9f4128e00b0ae8ec65918efeba59db998750ead6',
@@ -1166,7 +1166,7 @@ describe('modules/manager/nix/extract', () => {
         "version": 7
       }`;
       fs.readLocalFile.mockResolvedValueOnce(flakeLock);
-      expect(await extractPackageFile(flakeNix, 'flake.nix')).toEqual({
+      await expect(extractPackageFile(flakeNix, 'flake.nix')).resolves.toEqual({
         deps: [
           {
             currentDigest: '612ee628421ba2c1abca4c99684862f76cb3b089',
@@ -1217,7 +1217,7 @@ describe('modules/manager/nix/extract', () => {
         "version": 7
       }`;
       fs.readLocalFile.mockResolvedValueOnce(flakeLock);
-      expect(await extractPackageFile(flakeNix, 'flake.nix')).toEqual({
+      await expect(extractPackageFile(flakeNix, 'flake.nix')).resolves.toEqual({
         deps: [
           {
             currentDigest: '6bf2706348447df6f8b86b1c3e54f87b0afda84f',
@@ -1267,7 +1267,7 @@ describe('modules/manager/nix/extract', () => {
         "version": 7
       }`;
       fs.readLocalFile.mockResolvedValueOnce(flakeLock);
-      expect(await extractPackageFile(flakeNix, 'flake.nix')).toEqual({
+      await expect(extractPackageFile(flakeNix, 'flake.nix')).resolves.toEqual({
         deps: [
           {
             currentDigest: '26993d87fd0d3b14f7667b74ad82235f120d986e',
@@ -1317,7 +1317,7 @@ describe('modules/manager/nix/extract', () => {
         "version": 7
       }`;
       fs.readLocalFile.mockResolvedValueOnce(flakeLock);
-      expect(await extractPackageFile(flakeNix, 'flake.nix')).toEqual({
+      await expect(extractPackageFile(flakeNix, 'flake.nix')).resolves.toEqual({
         deps: [
           {
             currentDigest: '2dcb371b407ba4009e27a8e8adf88e6f93d40bfb',
@@ -1367,7 +1367,7 @@ describe('modules/manager/nix/extract', () => {
         "version": 7
       }`;
       fs.readLocalFile.mockResolvedValueOnce(flakeLock);
-      expect(await extractPackageFile(flakeNix, 'flake.nix')).toEqual({
+      await expect(extractPackageFile(flakeNix, 'flake.nix')).resolves.toEqual({
         deps: [
           {
             currentDigest: 'f4bdddf0fdaabc68546cf561c5343b83d95d2466',
@@ -1410,7 +1410,7 @@ describe('modules/manager/nix/extract', () => {
         "version": 7
       }`;
       fs.readLocalFile.mockResolvedValueOnce(flakeLock);
-      expect(await extractPackageFile(flakeNix, 'flake.nix')).toEqual({
+      await expect(extractPackageFile(flakeNix, 'flake.nix')).resolves.toEqual({
         deps: [
           {
             currentDigest: '0e6684e6c5755325f801bda1751a8a4038145d7d',
@@ -1449,7 +1449,7 @@ describe('modules/manager/nix/extract', () => {
       "version": 7
     }`;
     fs.readLocalFile.mockResolvedValueOnce(flakeLock);
-    expect(await extractPackageFile('', 'flake.nix')).toBeNull();
+    await expect(extractPackageFile('', 'flake.nix')).resolves.toBeNull();
   });
 
   it('ignores unsupported file type and still extracts other inputs', async () => {

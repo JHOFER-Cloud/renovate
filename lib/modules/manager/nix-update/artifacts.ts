@@ -396,7 +396,7 @@ async function bumpUnstableDate(
     );
     return content;
   }
-  const newDate = regEx(/^(\d{4}-\d{2}-\d{2})/).exec(timestamp ?? '');
+  const newDate = regEx(/^(?<date>\d{4}-\d{2}-\d{2})/).exec(timestamp ?? '');
   return newDate ? rewriteUnstableDate(content, newDate[1]) : content;
 }
 

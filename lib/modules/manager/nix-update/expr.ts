@@ -236,7 +236,7 @@ function pinnedToolOrAbort(
 
 // Canonical nixpkgs spelling for versioned compiler attrs (go_1_27, zig_0_16).
 function versionedAttr(prefix: string, version: string | null): string | null {
-  const m = regEx(/^(\d+)\.(\d+)/).exec(version ?? '');
+  const m = regEx(/^(?<major>\d+)\.(?<minor>\d+)/).exec(version ?? '');
   return m ? `${prefix}_${m[1]}_${m[2]}` : null;
 }
 
@@ -324,7 +324,7 @@ export function exprForPnpmDeps(
   const attrs: string[] = [];
   // No `or runnerPkgs.pnpm` fallback: a different pnpm major writes a
   // different store layout, so guessing here would mean a silently wrong hash.
-  const major = regEx(/^(\d+)\./).exec(v.pnpmVersion ?? '')?.[1];
+  const major = regEx(/^(?<major>\d+)\./).exec(v.pnpmVersion ?? '')?.[1];
   if (major) {
     attrs.push(`pnpm = runnerPkgs.pnpm_${major};`);
   }
@@ -387,7 +387,7 @@ export function exprForComposerVendor(
   // version, so a different php can select different package versions. Pin
   // exactly or abort.
   const version = toolVersion(v.tools, 'php-with-extensions');
-  const m = regEx(/^(\d+)\.(\d+)/).exec(version ?? '');
+  const m = regEx(/^(?<major>\d+)\.(?<minor>\d+)/).exec(version ?? '');
   const php =
     m && version
       ? pinnedToolOrAbort(

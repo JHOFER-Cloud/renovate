@@ -29,26 +29,26 @@ describe('modules/datasource/flakehub/index', () => {
   describe('getReleases', () => {
     it('returns null for empty result', async () => {
       httpMock.scope(baseUrl).get('/version/non-existent/package/*').reply(200);
-      expect(
-        await getPkgReleases({
+      await expect(
+        getPkgReleases({
           datasource,
           packageName: 'non-existent/package',
         }),
-      ).toBeNull();
+      ).resolves.toBeNull();
     });
 
     it('returns null for 404', async () => {
       httpMock.scope(baseUrl).get('/version/some/package/*').reply(404);
-      expect(
-        await getPkgReleases({ datasource, packageName: 'some/package' }),
-      ).toBeNull();
+      await expect(
+        getPkgReleases({ datasource, packageName: 'some/package' }),
+      ).resolves.toBeNull();
     });
 
     it('returns null for unknown error', async () => {
       httpMock.scope(baseUrl).get('/version/some/package/*').replyWithError('');
-      expect(
-        await getPkgReleases({ datasource, packageName: 'some/package' }),
-      ).toBeNull();
+      await expect(
+        getPkgReleases({ datasource, packageName: 'some/package' }),
+      ).resolves.toBeNull();
     });
 
     it('processes real data', async () => {

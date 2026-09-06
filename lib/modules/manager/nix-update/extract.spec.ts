@@ -1071,7 +1071,7 @@ describe('modules/manager/nix-update/extract', () => {
     });
 
     it('skips when there is no src FOD at all', async () => {
-      expect(await extractSkip({ fods: [] })).toBeNull();
+      await expect(extractSkip({ fods: [] })).resolves.toBeNull();
     });
   });
 });

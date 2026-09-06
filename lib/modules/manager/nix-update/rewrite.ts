@@ -9,20 +9,24 @@ import type {
 // SRI/legacy hash literal pattern. SRI: sha256-<base64>=, sha512-..., sha1-...
 // Legacy nix base32 is 52 chars [a-z0-9]; older files may also have hex sha256 (64 hex chars).
 const hashLiteralRegex = regEx(
-  /"(sha(?:256|512|1)-[A-Za-z0-9+/=]+|[a-z0-9]{52}|[A-Fa-f0-9]{64})"/,
+  /"(?<hash>sha(?:256|512|1)-[A-Za-z0-9+/=]+|[a-z0-9]{52}|[A-Fa-f0-9]{64})"/,
 );
 
 // Match any of the hash attribute names on either side of the `=`.
 // Keeps the leading whitespace + name + `=` so we re-emit it in the replacement.
 const hashAttrLine = regEx(
-  /(^|\s)(hash|sha256|sha512|sha1|outputHash)\s*=\s*"([^"]*)"/g,
+  /(?<prefix>^|\s)(?<attr>hash|sha256|sha512|sha1|outputHash)\s*=\s*"(?<value>[^"]*)"/g,
 );
 
 // Match `url = "<value>"` inside a fetcher block. Used by rewriteUrl below.
-const urlAttrLine = regEx(/(^|\s)(url)\s*=\s*"([^"]*)"/g);
+const urlAttrLine = regEx(
+  /(?<prefix>^|\s)(?<attr>url)\s*=\s*"(?<value>[^"]*)"/g,
+);
 
 // Match `rev = "<value>"` inside a fetcher block. Used by rewriteRev below.
-const revAttrLine = regEx(/(^|\s)(rev)\s*=\s*"([^"]*)"/g);
+const revAttrLine = regEx(
+  /(?<prefix>^|\s)(?<attr>rev)\s*=\s*"(?<value>[^"]*)"/g,
+);
 
 // Rewrite a hash in the .nix file content. Strategy:
 // 1. Locate the binding for the deepest attr in attrPath (e.g. "goModules =").
@@ -195,7 +199,7 @@ export function rewriteRev(content: string, ctx: RevRewriteContext): string {
 // Match the date in a nixpkgs-style unstable version, e.g.
 // `version = "0-unstable-2025-11-17"` or `version = "1.2.0-unstable-2026-06-30"`.
 const unstableVersionLine = regEx(
-  /(\bversion\s*=\s*"[^"]*-unstable-)(\d{4}-\d{2}-\d{2})(")/,
+  /(?<prefix>\bversion\s*=\s*"[^"]*-unstable-)(?<date>\d{4}-\d{2}-\d{2})(?<suffix>")/,
 );
 
 // Bump the date in a `-unstable-YYYY-MM-DD` version string.

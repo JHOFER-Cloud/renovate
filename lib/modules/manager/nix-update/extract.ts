@@ -265,7 +265,7 @@ export function packageFileFromPosition(
   // Strip trailing :line[:col] — accept either form.
   const path = pos.replace(regEx(/(?::\d+)+$/), '');
   // Strip nix store prefix /nix/store/<32+hex>-<name>/
-  const storeMatch = regEx(/^\/nix\/store\/[^/]+\/(.+)$/).exec(path);
+  const storeMatch = regEx(/^\/nix\/store\/[^/]+\/(?<subPath>.+)$/).exec(path);
   return storeMatch ? storeMatch[1] : path;
 }
 
@@ -304,7 +304,7 @@ export function sriToHexDigest(sri: string | null): string | null {
   // sha256 only: GitHub reports asset digests as sha256, so any other
   // algorithm could never compare equal — better to skip the package than to
   // emit a digest that guarantees a permanent mismatch.
-  const m = regEx(/^sha256-([A-Za-z0-9+/]+={0,2})$/).exec(sri);
+  const m = regEx(/^sha256-(?<digest>[A-Za-z0-9+/]+={0,2})$/).exec(sri);
   if (!m) {
     return null;
   }
@@ -336,7 +336,7 @@ export function datasourceFromSrc(
 
   // GitHub
   const ghMatch = regEx(
-    /^https?:\/\/github\.com\/([^/]+\/[^/]+?)(?:\/|$)/,
+    /^https?:\/\/github\.com\/(?<repoPath>[^/]+\/[^/]+?)(?:\/|$)/,
   ).exec(cleanUrl);
   if (ghMatch) {
     return isBranchTracked
@@ -346,7 +346,7 @@ export function datasourceFromSrc(
 
   // GitLab
   const glMatch = regEx(
-    /^https?:\/\/gitlab\.com\/([^/]+\/[^/]+?)(?:\/|$)/,
+    /^https?:\/\/gitlab\.com\/(?<repoPath>[^/]+\/[^/]+?)(?:\/|$)/,
   ).exec(cleanUrl);
   if (glMatch) {
     return { datasource: 'gitlab-tags', packageName: glMatch[1] };
@@ -354,7 +354,7 @@ export function datasourceFromSrc(
 
   // Bitbucket
   const bbMatch = regEx(
-    /^https?:\/\/bitbucket\.org\/([^/]+\/[^/]+?)(?:\/|$)/,
+    /^https?:\/\/bitbucket\.org\/(?<repoPath>[^/]+\/[^/]+?)(?:\/|$)/,
   ).exec(cleanUrl);
   if (bbMatch) {
     return { datasource: 'bitbucket-tags', packageName: bbMatch[1] };
@@ -362,7 +362,7 @@ export function datasourceFromSrc(
 
   // Codeberg (runs Forgejo)
   const codebergMatch = regEx(
-    /^https?:\/\/codeberg\.org\/([^/]+\/[^/]+?)(?:\/|$)/,
+    /^https?:\/\/codeberg\.org\/(?<repoPath>[^/]+\/[^/]+?)(?:\/|$)/,
   ).exec(cleanUrl);
   if (codebergMatch) {
     return { datasource: 'forgejo-tags', packageName: codebergMatch[1] };
@@ -370,7 +370,7 @@ export function datasourceFromSrc(
 
   // Gitea.com
   const giteaMatch = regEx(
-    /^https?:\/\/gitea\.com\/([^/]+\/[^/]+?)(?:\/|$)/,
+    /^https?:\/\/gitea\.com\/(?<repoPath>[^/]+\/[^/]+?)(?:\/|$)/,
   ).exec(cleanUrl);
   if (giteaMatch) {
     return { datasource: 'gitea-tags', packageName: giteaMatch[1] };
@@ -378,7 +378,7 @@ export function datasourceFromSrc(
 
   // SourceHut
   const srhtMatch = regEx(
-    /^https?:\/\/git\.sr\.ht\/(~[^/]+\/[^/]+?)(?:\/|$)/,
+    /^https?:\/\/git\.sr\.ht\/(?<repoPath>~[^/]+\/[^/]+?)(?:\/|$)/,
   ).exec(cleanUrl);
   if (srhtMatch) {
     return {
@@ -388,7 +388,7 @@ export function datasourceFromSrc(
   }
 
   // Savannah (GNU + non-GNU)
-  if (regEx(/savannah\.(gnu|nongnu)\.org/).test(cleanUrl)) {
+  if (regEx(/savannah\.(?:gnu|nongnu)\.org/).test(cleanUrl)) {
     const base = cleanUrl.split('/archive/')[0].split('/download/')[0];
     return { datasource: 'git-tags', packageName: base };
   }
@@ -413,9 +413,9 @@ export function datasourceFromSrc(
   }
 
   // Generic git fallback — extract base repo URL (https://host/owner/repo)
-  const genericMatch = regEx(/^(https?:\/\/[^/]+\/[^/]+\/[^/]+?)(?:\/|$)/).exec(
-    cleanUrl,
-  );
+  const genericMatch = regEx(
+    /^(?<baseUrl>https?:\/\/[^/]+\/[^/]+\/[^/]+?)(?:\/|$)/,
+  ).exec(cleanUrl);
   if (genericMatch) {
     return { datasource: 'git-tags', packageName: genericMatch[1] };
   }
@@ -594,7 +594,7 @@ export async function extractAllPackageFiles(
       // 'main' (GitHub's modern default) when only --version=branch is given.
       const branchName =
         info.updateScriptArgs
-          .map((a) => regEx(/^--version=branch:(.+)$/).exec(a)?.[1])
+          .map((a) => regEx(/^--version=branch:(?<branch>.+)$/).exec(a)?.[1])
           .find(Boolean) ?? 'main';
       pushDep(file, {
         depName: attrName,

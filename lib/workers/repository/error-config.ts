@@ -195,7 +195,7 @@ export async function raiseDependencyLookupWarningsIssue(
       .split('\n')
       .join(' ')
       .trim()
-      .replace(regEx(/#(\d)/g), '&#35;$1')
+      .replace(regEx(/#(?<digit>\d)/g), '&#35;$1')
       .replace(regEx(/@/g), '&#64;');
     body += `- ${line}\n`;
   }

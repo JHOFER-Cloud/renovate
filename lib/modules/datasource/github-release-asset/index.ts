@@ -27,7 +27,7 @@ interface GithubRelease {
 // everything up to the final segment, which is why tags containing `/`
 // (e.g. `release/v1.2`) still parse correctly.
 const assetUrlRegex = regEx(
-  /^https?:\/\/github\.com\/([^/]+)\/([^/]+)\/releases\/download\/(.+)\/([^/]+)$/,
+  /^https?:\/\/github\.com\/(?<owner>[^/]+)\/(?<repo>[^/]+)\/releases\/download\/(?<tag>.+)\/(?<asset>[^/]+)$/,
 );
 
 export function parseAssetUrl(url: string): ParsedAssetUrl | null {

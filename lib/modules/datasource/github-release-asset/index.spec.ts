@@ -57,12 +57,12 @@ describe('modules/datasource/github-release-asset/index', () => {
     });
 
     it('returns null when packageName is not an asset URL', async () => {
-      expect(
-        await getPkgReleases({
+      await expect(
+        getPkgReleases({
           datasource,
           packageName: 'ghostty-org/ghostty',
         }),
-      ).toBeNull();
+      ).resolves.toBeNull();
     });
   });
 
@@ -80,7 +80,7 @@ describe('modules/datasource/github-release-asset/index', () => {
           ],
         });
 
-      expect(await ds.getDigest({ packageName }, 'tip')).toBe(digest);
+      await expect(ds.getDigest({ packageName }, 'tip')).resolves.toBe(digest);
     });
 
     it('returns null when the release cannot be fetched', async () => {
@@ -91,7 +91,7 @@ describe('modules/datasource/github-release-asset/index', () => {
         .get('/repos/ghostty-org/ghostty/releases/tags/tip')
         .reply(404);
 
-      expect(await ds.getDigest({ packageName }, 'tip')).toBeNull();
+      await expect(ds.getDigest({ packageName }, 'tip')).resolves.toBeNull();
     });
 
     it('propagates a non-404 host error instead of caching a null', async () => {
@@ -113,7 +113,7 @@ describe('modules/datasource/github-release-asset/index', () => {
         .get('/repos/ghostty-org/ghostty/releases/tags/tip')
         .reply(200, { assets: [{ name: 'ghostty-macos-universal.zip' }] });
 
-      expect(await ds.getDigest({ packageName }, 'tip')).toBeNull();
+      await expect(ds.getDigest({ packageName }, 'tip')).resolves.toBeNull();
     });
 
     it('returns null when the asset is missing from the release', async () => {
@@ -122,7 +122,7 @@ describe('modules/datasource/github-release-asset/index', () => {
         .get('/repos/ghostty-org/ghostty/releases/tags/tip')
         .reply(200, { assets: [{ name: 'other.zip', digest }] });
 
-      expect(await ds.getDigest({ packageName }, 'tip')).toBeNull();
+      await expect(ds.getDigest({ packageName }, 'tip')).resolves.toBeNull();
     });
 
     it('returns null when the release reports no assets', async () => {
@@ -131,13 +131,13 @@ describe('modules/datasource/github-release-asset/index', () => {
         .get('/repos/ghostty-org/ghostty/releases/tags/tip')
         .reply(200, {});
 
-      expect(await ds.getDigest({ packageName }, 'tip')).toBeNull();
+      await expect(ds.getDigest({ packageName }, 'tip')).resolves.toBeNull();
     });
 
     it('returns null when packageName is not an asset URL', async () => {
-      expect(
-        await ds.getDigest({ packageName: 'ghostty-org/ghostty' }, 'tip'),
-      ).toBeNull();
+      await expect(
+        ds.getDigest({ packageName: 'ghostty-org/ghostty' }, 'tip'),
+      ).resolves.toBeNull();
     });
   });
   describe('lookup integration', () => {

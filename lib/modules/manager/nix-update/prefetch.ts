@@ -10,8 +10,8 @@ import type { HashAlgo, PrefetchOptions } from './types.ts';
 // nix-build emits a "got: <hash>" line on hash mismatch. Newer nix uses SRI
 // (sha256-<base64>=); older versions emit base32 (52 chars [a-z0-9]).
 // We accept either and convert base32 → SRI for downstream consistency.
-const sriRegex = regEx(/got:\s+(sha(?:256|512|1)-[A-Za-z0-9+/=]+)/);
-const base32Regex = regEx(/got:\s+([a-z0-9]{52})/);
+const sriRegex = regEx(/got:\s+(?<hash>sha(?:256|512|1)-[A-Za-z0-9+/=]+)/);
+const base32Regex = regEx(/got:\s+(?<hash>[a-z0-9]{52})/);
 
 // A FOD whose builder itself fails (a vendor step that can't run under the
 // selected toolchain, say) never reaches the hash check, so there is no "got:"
@@ -20,7 +20,7 @@ const base32Regex = regEx(/got:\s+([a-z0-9]{52})/);
 // nix >= 2.30 prints "error: Cannot build '<drv>'.", older ones
 // "error: builder for '<drv>' failed".
 const builderFailedRegex = regEx(
-  /error: (?:Cannot build|builder for) '([^']+)'/,
+  /error: (?:Cannot build|builder for) '(?<drvPath>[^']+)'/,
 );
 
 // Parse a hash from nix-build's stderr produced by an empty-hash FOD.
@@ -203,7 +203,7 @@ export async function prefetch(opts: PrefetchOptions): Promise<string> {
 // nix only warns about this on stderr and then builds from source, which
 // otherwise looks like an unexplained slow run.
 const unsignedRegex = regEx(
-  /ignoring substitute for '[^']+' from '([^']+)', as it's not signed/g,
+  /ignoring substitute for '[^']+' from '(?<substituter>[^']+)', as it's not signed/g,
 );
 
 function warnOnUntrustedSubstitutes(stderr: string): void {
