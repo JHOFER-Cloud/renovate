@@ -46,6 +46,7 @@ export class GlobalConfig {
     /** NOTE that this is not a config option, but an internal variable **/
     'localDir',
     'migratePresets',
+    'nixTrustedPublicKeys',
     'onboarding',
     'onboardingAutoCloseAge',
     'onboardingBranch',
