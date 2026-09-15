@@ -16,6 +16,7 @@ import type {
   UpdateArtifactsResult,
   Upgrade,
 } from '../types.ts';
+import { resolveToolConstraint } from '../util.ts';
 import { buildKnownSrcExpr, classifyFod } from './fetchers.ts';
 import { assertSubstitutableStore, prefetch } from './prefetch.ts';
 import {
@@ -224,10 +225,12 @@ export async function updateArtifacts({
     return abandon(errors.map((e) => e.stderr).join('\n'));
   }
 
+  const nixConstraint = await resolveToolConstraint(config, 'nix');
+
   // Checked once per package rather than per FOD: it is an infrastructure
   // fault, so repeating it for every hash would just multiply the noise.
   try {
-    await assertSubstitutableStore(config.constraints?.nix);
+    await assertSubstitutableStore(nixConstraint);
   } catch (err) {
     logger.warn({ err, attrName }, 'nix-update: unusable nix store');
     return abandon(err instanceof Error ? err.message : String(err));
@@ -262,7 +265,7 @@ export async function updateArtifacts({
         extraEnv,
         substituters,
         trustedPublicKeys,
-        nixConstraint: config.constraints?.nix,
+        nixConstraint,
         flakeLockFingerprint,
       });
 

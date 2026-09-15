@@ -11,12 +11,13 @@ import { FlakeHubRelease } from './schema.ts';
 
 export class FlakeHubDatasource extends Datasource {
   static readonly id = 'flakehub';
+  static readonly publicApiUrl = 'https://api.flakehub.com';
 
   constructor() {
     super(FlakeHubDatasource.id);
   }
 
-  override readonly defaultRegistryUrls = ['https://api.flakehub.com'];
+  override readonly defaultRegistryUrls = [FlakeHubDatasource.publicApiUrl];
 
   override readonly releaseTimestampSupport = true;
   override readonly releaseTimestampNote =
@@ -34,6 +35,7 @@ export class FlakeHubDatasource extends Datasource {
       {
         namespace: `datasource-${FlakeHubDatasource.id}`,
         key: cacheKey,
+        cacheable: config.registryUrl === FlakeHubDatasource.publicApiUrl,
         fallback: true,
       },
       () => this._getReleases(config),
