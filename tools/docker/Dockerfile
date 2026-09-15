@@ -84,9 +84,9 @@ RUN set -ex; \
 FROM ${BASE_IMAGE_TYPE}-base
 
 LABEL name="renovate"
-LABEL org.opencontainers.image.source="https://github.com/renovatebot/renovate" \
-  org.opencontainers.image.url="https://renovatebot.com" \
-  org.opencontainers.image.licenses="AGPL-3.0-only"
+LABEL org.opencontainers.image.source="https://github.com/JHOFER-Cloud/renovate" \
+    org.opencontainers.image.url="https://renovatebot.com" \
+    org.opencontainers.image.licenses="AGPL-3.0-only"
 
 WORKDIR /usr/src/app
 
@@ -103,8 +103,37 @@ RUN ln -sf /usr/local/renovate/node /bin/node
 
 # ensure default base and cache directories exist.
 # /runner/cache is an alternative cache directory used in both Docker and microVMs.
-RUN mkdir -p /tmp/renovate/cache/renovate/repository /runner/cache/renovate/repository && \
-  chmod -R 777 /tmp/renovate /runner
+RUN mkdir -p /tmp/renovate/cache/renovate/repository /runner/cache/renovate/repository \
+    && chmod -R 777 /tmp/renovate /runner
+
+# Install Nix manually by copying binaries (avoiding installer validation)
+RUN NIX_VERSION=$(curl -sL https://api.github.com/repos/NixOS/nix/tags | grep -o '"name": "[^"]*"' | head -1 | cut -d'"' -f4) \
+    && mkdir -p /nix/store /nix/var/nix \
+    && curl -L https://releases.nixos.org/nix/nix-${NIX_VERSION}/nix-${NIX_VERSION}-$(uname -m)-linux.tar.xz | tar xJ \
+    && cp -RPp nix-*-linux/store/* /nix/store/ \
+    && rm -rf nix-*-linux \
+    && rm -f /usr/local/bin/nix \
+    && ln -sf /nix/store/*-nix-*/bin/nix /usr/local/bin/nix \
+    && /usr/local/bin/nix --version \
+    && mkdir -p /etc/nix \
+    && echo "experimental-features = nix-command flakes" >> /etc/nix/nix.conf \
+    && echo "sandbox = false" >> /etc/nix/nix.conf \
+    && echo "build-users-group =" >> /etc/nix/nix.conf \
+    && chown -R 12021:12021 /nix
+
+# containerbase's nix tool wraps nix with an unconditional
+# `export NIX_STORE_DIR=<cache>/nix/store … NIX_CONF_DIR=<cache>/nix/conf`, and
+# binary caches only serve /nix/store — so a containerbase-installed nix
+# substitutes nothing and builds the whole stdenv from source. Point it at the
+# canonical store instead, so every manager gets the same usable nix whether it
+# runs this one or installs its own. Remove once containerbase stops
+# overriding the environment (upstream: tools/v2/nix.sh `link_tool`).
+# The grep guards the sed: if a base-image bump moves that line, the build
+# fails here instead of silently shipping the broken behaviour.
+RUN F=/usr/local/containerbase/tools/v2/nix.sh \
+    && grep -q 'NIX_STORE_DIR=$(get_cache_path)/nix/store' "$F" \
+    && sed -i 's|NIX_STORE_DIR=$(get_cache_path)/nix/store NIX_DATA_DIR=$(get_cache_path)/nix/data NIX_LOG_DIR=$(get_cache_path)/nix/log NIX_STATE_DIR=$(get_cache_path)/nix/state NIX_CONF_DIR=$(get_cache_path)/nix/conf|NIX_STORE_DIR=/nix/store NIX_DATA_DIR=/nix/share NIX_LOG_DIR=/nix/var/log/nix NIX_STATE_DIR=/nix/var/nix NIX_CONF_DIR=/etc/nix|' "$F" \
+    && grep -q 'NIX_STORE_DIR=/nix/store' "$F"
 
 # test
 RUN set -ex; \
@@ -114,8 +143,8 @@ RUN set -ex; \
   true
 
 LABEL \
-  org.opencontainers.image.version="${RENOVATE_VERSION}" \
-  org.label-schema.version="${RENOVATE_VERSION}"
+    org.opencontainers.image.version="${RENOVATE_VERSION}" \
+    org.label-schema.version="${RENOVATE_VERSION}"
 
 # Numeric user ID for the ubuntu user. Used to indicate a non-root user to OpenShift
 USER 12021
