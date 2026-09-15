@@ -15,6 +15,7 @@ import { getRepoStatus } from '../../../util/git/index.ts';
 import * as hostRules from '../../../util/host-rules.ts';
 import { parseUrl } from '../../../util/url.ts';
 import type { UpdateArtifact, UpdateArtifactsResult } from '../types.ts';
+import { resolveToolConstraint } from '../util.ts';
 
 export async function updateArtifacts({
   packageFileName,
@@ -92,7 +93,7 @@ export async function updateArtifacts({
     toolConstraints: [
       {
         toolName: 'nix',
-        constraint: config.constraints?.nix,
+        constraint: await resolveToolConstraint(config, 'nix'),
       },
     ],
     docker: {},

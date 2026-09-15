@@ -1378,6 +1378,22 @@ describe('modules/platform/github/index', () => {
     });
   }
 
+  function prListMock(scope: httpMock.Scope, prNo: number): void {
+    scope
+      .get(
+        '/repos/some/repo/pulls?per_page=100&state=all&sort=updated&direction=desc&page=1',
+      )
+      .reply(200, [
+        {
+          number: prNo,
+          base: { ref: 'master' },
+          head: { ref: 'somebranch', repo: { full_name: 'some/repo' } },
+          state: 'open',
+          title: 'Some PR',
+        },
+      ]);
+  }
+
   function forkInitRepoMock(
     scope: httpMock.Scope,
     repository: string,
@@ -2156,6 +2172,113 @@ describe('modules/platform/github/index', () => {
       const secondResult = await github.getBranchForceRebase('dev');
       expect(secondResult).toBeFalse();
     });
+  });
+
+  describe('isBranchMergeQueueEnabled', () => {
+    it('should return true if the branch has a merge queue', async () => {
+      const scope = httpMock.scope(githubApiHost);
+      initRepoMock(scope, 'some/repo');
+      scope.post('/graphql').reply(200, {
+        data: { repository: { mergeQueue: { id: 'MQ_kwDOBJLedM0dmQ' } } },
+      });
+      await github.initRepo({ repository: 'some/repo' });
+
+      const res = await github.isBranchMergeQueueEnabled('main');
+
+      expect(res).toBeTrue();
+    });
+
+    it('should return false if the branch has no merge queue', async () => {
+      const scope = httpMock.scope(githubApiHost);
+      initRepoMock(scope, 'some/repo');
+      scope.post('/graphql').reply(200, {
+        data: { repository: { mergeQueue: null } },
+      });
+      await github.initRepo({ repository: 'some/repo' });
+
+      const res = await github.isBranchMergeQueueEnabled('main');
+
+      expect(res).toBeFalse();
+    });
+
+    it('should return cached result on subsequent calls', async () => {
+      const scope = httpMock.scope(githubApiHost);
+      initRepoMock(scope, 'some/repo');
+      scope.post('/graphql').reply(200, {
+        data: { repository: { mergeQueue: { id: 'MQ_kwDOBJLedM0dmQ' } } },
+      });
+      await github.initRepo({ repository: 'some/repo' });
+
+      // First call should make the HTTP request and cache the result
+      const firstResult = await github.isBranchMergeQueueEnabled('main');
+      // Second call should return cached result without making HTTP request
+      const secondResult = await github.isBranchMergeQueueEnabled('main');
+
+      expect(firstResult).toBeTrue();
+      expect(secondResult).toBeTrue();
+    });
+
+    it('should reuse the default branch result from initRepo', async () => {
+      const scope = httpMock.scope(githubApiHost);
+      initRepoMock(scope, 'some/repo', {
+        mergeQueue: { id: 'MQ_kwDOBJLedM0dmQ' },
+      });
+      await github.initRepo({ repository: 'some/repo' });
+
+      const res = await github.isBranchMergeQueueEnabled('master');
+
+      expect(res).toBeTrue();
+    });
+
+    it('should assume a merge queue if the query returns errors', async () => {
+      const scope = httpMock.scope(githubApiHost);
+      initRepoMock(scope, 'some/repo');
+      scope.post('/graphql').reply(200, {
+        errors: [
+          {
+            message: "Field 'mergeQueue' doesn't exist on type 'Repository'",
+          },
+        ],
+      });
+      await github.initRepo({ repository: 'some/repo' });
+
+      const res = await github.isBranchMergeQueueEnabled('main');
+
+      expect(res).toBeTrue();
+    });
+
+    it('should assume a merge queue on request error', async () => {
+      const scope = httpMock.scope(githubApiHost);
+      initRepoMock(scope, 'some/repo');
+      scope.post('/graphql').replyWithError('unknown error');
+      await github.initRepo({ repository: 'some/repo' });
+
+      const res = await github.isBranchMergeQueueEnabled('main');
+
+      expect(res).toBeTrue();
+    });
+  });
+
+  describe('isPrInMergeQueue', () => {
+    it.each`
+      isInMergeQueue
+      ${true}
+      ${false}
+    `(
+      'returns $isInMergeQueue from the pull request merge queue status',
+      async ({ isInMergeQueue }) => {
+        const scope = httpMock.scope(githubApiHost);
+        initRepoMock(scope, 'some/repo');
+        await github.initRepo({ repository: 'some/repo' });
+        scope.post('/graphql').reply(200, {
+          data: { repository: { pullRequest: { isInMergeQueue } } },
+        });
+
+        const res = await github.isPrInMergeQueue(1234);
+
+        expect(res).toBe(isInMergeQueue);
+      },
+    );
   });
 
   describe('getPrList()', () => {
@@ -5978,6 +6101,7 @@ describe('modules/platform/github/index', () => {
     it('should handle merge error', async () => {
       const scope = httpMock.scope(githubApiHost);
       initRepoMock(scope, 'some/repo');
+      prListMock(scope, 1234);
       scope
         .put('/repos/some/repo/pulls/1234/merge')
         .replyWithError('merge error');
@@ -5999,6 +6123,7 @@ describe('modules/platform/github/index', () => {
     it('should handle merge block', async () => {
       const scope = httpMock.scope(githubApiHost);
       initRepoMock(scope, 'some/repo');
+      prListMock(scope, 1234);
       scope
         .put('/repos/some/repo/pulls/1234/merge')
         .reply(405, { message: 'Required status check "build" is expected.' });
@@ -6025,6 +6150,7 @@ describe('modules/platform/github/index', () => {
     ])('should handle approvers required: %j', async (message) => {
       const scope = httpMock.scope(githubApiHost);
       initRepoMock(scope, 'some/repo');
+      prListMock(scope, 1234);
       scope.put('/repos/some/repo/pulls/1234/merge').reply(405, {
         message,
       });
@@ -6047,6 +6173,7 @@ describe('modules/platform/github/index', () => {
     it('should warn if automergeStrategy is not supported', async () => {
       const scope = httpMock.scope(githubApiHost);
       initRepoMock(scope, 'some/repo');
+      prListMock(scope, 1234);
       scope.put('/repos/some/repo/pulls/1234/merge').reply(200);
       await github.initRepo({ repository: 'some/repo' });
 
@@ -6066,6 +6193,7 @@ describe('modules/platform/github/index', () => {
     it('should use configured automergeStrategy', async () => {
       const scope = httpMock.scope(githubApiHost);
       initRepoMock(scope, 'some/repo');
+      prListMock(scope, 1234);
       scope.put('/repos/some/repo/pulls/1234/merge').reply(200);
       await github.initRepo({ repository: 'some/repo' });
 
@@ -6086,6 +6214,193 @@ describe('modules/platform/github/index', () => {
         },
         'mergePr',
       );
+    });
+  });
+
+  describe('mergePr(prNo) - merge queue', () => {
+    const pullsListItem = {
+      number: 1234,
+      node_id: 'abcd',
+      head: { ref: 'somebranch', repo: { full_name: 'some/repo' } },
+      base: { ref: 'main' },
+      state: 'open',
+      title: 'Some PR',
+      updated_at: '01-09-2022',
+    };
+
+    function mergeQueueMock(
+      scope: httpMock.Scope,
+      mergeQueue: { id: string } | null,
+    ): void {
+      initRepoMock(scope, 'some/repo');
+      scope.post('/graphql').reply(200, {
+        data: { repository: { mergeQueue } },
+      });
+    }
+
+    it('should add PR to the merge queue instead of merging', async () => {
+      const scope = httpMock.scope(githubApiHost);
+      mergeQueueMock(scope, { id: 'MQ_kwDOBJLedM0dmQ' });
+      scope
+        .get(
+          '/repos/some/repo/pulls?per_page=100&state=all&sort=updated&direction=desc&page=1',
+        )
+        .reply(200, [pullsListItem])
+        .post('/graphql')
+        .reply(200, {
+          data: {
+            enqueuePullRequest: {
+              mergeQueueEntry: { id: 'MQE_1', position: 1 },
+            },
+          },
+        });
+      await github.initRepo({ repository: 'some/repo' });
+
+      const res = await github.mergePr({
+        id: 1234,
+        branchName: 'somebranch',
+      });
+
+      expect(res).toBeTrue();
+      expect(httpMock.getTrace()).toMatchObject([
+        { url: 'https://api.github.com/graphql' },
+        {
+          url: 'https://api.github.com/repos/some/repo/pulls?per_page=100&state=all&sort=updated&direction=desc&page=1',
+        },
+        { url: 'https://api.github.com/graphql' },
+        {
+          url: 'https://api.github.com/graphql',
+          graphql: {
+            mutation: { enqueuePullRequest: {} },
+            variables: { pullRequestId: 'abcd' },
+          },
+        },
+      ]);
+      // The PR is not merged yet, so it must not be cached as merged
+      await expect(github.getPr(1234)).resolves.toMatchObject({
+        number: 1234,
+        state: 'open',
+      });
+    });
+
+    it('should return true if the PR is already in the merge queue', async () => {
+      const scope = httpMock.scope(githubApiHost);
+      mergeQueueMock(scope, { id: 'MQ_kwDOBJLedM0dmQ' });
+      scope
+        .get(
+          '/repos/some/repo/pulls?per_page=100&state=all&sort=updated&direction=desc&page=1',
+        )
+        .reply(200, [pullsListItem])
+        .post('/graphql')
+        .reply(200, {
+          errors: [
+            {
+              type: 'UNPROCESSABLE',
+              message: 'The pull request is already enqueued',
+            },
+          ],
+        });
+      await github.initRepo({ repository: 'some/repo' });
+
+      const res = await github.mergePr({
+        id: 1234,
+        branchName: 'somebranch',
+      });
+
+      expect(res).toBeTrue();
+    });
+
+    it('should return false if adding to the merge queue fails', async () => {
+      const scope = httpMock.scope(githubApiHost);
+      mergeQueueMock(scope, { id: 'MQ_kwDOBJLedM0dmQ' });
+      scope
+        .get(
+          '/repos/some/repo/pulls?per_page=100&state=all&sort=updated&direction=desc&page=1',
+        )
+        .reply(200, [pullsListItem])
+        .post('/graphql')
+        .reply(200, {
+          errors: [
+            {
+              type: 'UNPROCESSABLE',
+              message: 'Pull request is in unstable status',
+            },
+          ],
+        });
+      await github.initRepo({ repository: 'some/repo' });
+
+      const res = await github.mergePr({
+        id: 1234,
+        branchName: 'somebranch',
+      });
+
+      expect(res).toBeFalse();
+    });
+
+    it('should return false on merge queue request error', async () => {
+      const scope = httpMock.scope(githubApiHost);
+      mergeQueueMock(scope, { id: 'MQ_kwDOBJLedM0dmQ' });
+      scope
+        .get(
+          '/repos/some/repo/pulls?per_page=100&state=all&sort=updated&direction=desc&page=1',
+        )
+        .reply(200, [pullsListItem])
+        .post('/graphql')
+        .replyWithError('unknown error');
+      await github.initRepo({ repository: 'some/repo' });
+
+      const res = await github.mergePr({
+        id: 1234,
+        branchName: 'somebranch',
+      });
+
+      expect(res).toBeFalse();
+      expect(logger.logger.warn).toHaveBeenCalledWith(
+        { prNumber: 1234, err: expect.any(Error) },
+        'Failed to add PR to the merge queue',
+      );
+    });
+
+    it('should merge directly if the PR cannot be found', async () => {
+      const scope = httpMock.scope(githubApiHost);
+      initRepoMock(scope, 'some/repo');
+      scope
+        .get(
+          '/repos/some/repo/pulls?per_page=100&state=all&sort=updated&direction=desc&page=1',
+        )
+        .reply(200, [])
+        .get('/repos/some/repo/pulls/1234')
+        .reply(404)
+        .put('/repos/some/repo/pulls/1234/merge')
+        .reply(200);
+      await github.initRepo({ repository: 'some/repo' });
+
+      const res = await github.mergePr({
+        id: 1234,
+        branchName: 'somebranch',
+      });
+
+      expect(res).toBeTrue();
+    });
+
+    it('should merge directly if the branch has no merge queue', async () => {
+      const scope = httpMock.scope(githubApiHost);
+      mergeQueueMock(scope, null);
+      scope
+        .get(
+          '/repos/some/repo/pulls?per_page=100&state=all&sort=updated&direction=desc&page=1',
+        )
+        .reply(200, [pullsListItem])
+        .put('/repos/some/repo/pulls/1234/merge')
+        .reply(200);
+      await github.initRepo({ repository: 'some/repo' });
+
+      const res = await github.mergePr({
+        id: 1234,
+        branchName: 'somebranch',
+      });
+
+      expect(res).toBeTrue();
     });
   });
 
@@ -6145,6 +6460,7 @@ describe('modules/platform/github/index', () => {
     it('should try squash first', async () => {
       const scope = httpMock.scope(githubApiHost);
       initRepoMock(scope, 'some/repo');
+      prListMock(scope, 1235);
       scope.put('/repos/some/repo/pulls/1235/merge').reply(200);
       await github.initRepo({ repository: 'some/repo' });
       const pr = {
@@ -6164,6 +6480,7 @@ describe('modules/platform/github/index', () => {
     it('should try merge after squash', async () => {
       const scope = httpMock.scope(githubApiHost);
       initRepoMock(scope, 'some/repo');
+      prListMock(scope, 1236);
       scope
         .put('/repos/some/repo/pulls/1236/merge')
         .reply(400, 'no squashing allowed');
@@ -6185,6 +6502,7 @@ describe('modules/platform/github/index', () => {
     it('should try rebase after merge', async () => {
       const scope = httpMock.scope(githubApiHost);
       initRepoMock(scope, 'some/repo');
+      prListMock(scope, 1237);
       scope
         .put('/repos/some/repo/pulls/1237/merge')
         .reply(405, 'no squashing allowed')
@@ -6210,6 +6528,7 @@ describe('modules/platform/github/index', () => {
     it('should give up', async () => {
       const scope = httpMock.scope(githubApiHost);
       initRepoMock(scope, 'some/repo');
+      prListMock(scope, 1237);
       scope
         .put('/repos/some/repo/pulls/1237/merge')
         .reply(405, 'no squashing allowed')
