@@ -69,6 +69,7 @@ export const packageCacheNamespaces = [
   'datasource-gitlab-tags',
   'datasource-glasskube-packages',
   'datasource-go-direct',
+  'datasource-go-proxy-timestamps',
   'datasource-go-proxy',
   'datasource-go',
   'datasource-golang-version',
