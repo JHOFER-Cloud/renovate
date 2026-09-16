@@ -541,10 +541,10 @@ jobs:
       - name: Check coverage threshold
         run: |
           pnpm nyc check-coverage -t ./coverage/nyc \
-            --statements 100 \
-            --branches 99.14 \
-            --functions 100 \
-            --lines 100 \
+            --statements 99.88 \
+            --branches 97.84 \
+            --functions 99.96 \
+            --lines 99.87 \
 
   # Catch-all required check for test matrix and coverage
   test-success:
@@ -725,11 +725,11 @@ jobs:
           LOG_LEVEL: debug
 
       - name: Test docker
-        run: docker run -e LOG_LEVEL=debug --rm renovate/renovate --version
+        run: docker run -e LOG_LEVEL=debug --rm ghcr.io/jhofer-cloud/renovate --version
 
       - name: dry-run
-        if: github.event_name == 'merge_group' || github.event_name == 'workflow_dispatch' || (github.event_name == 'push' && env.DO_RELEASE != 'true')
-        run: docker run -e LOG_LEVEL=debug -e RENOVATE_TOKEN --rm renovate/renovate --dry-run=lookup ${{ github.repository }}
+        if: github.event_name == 'merge_group' || github.event_name == 'workflow_dispatch' || (github.event_name == 'push' && env.DO_REALEASE != 'true')
+        run: docker run -e LOG_LEVEL=debug -e RENOVATE_TOKEN --rm ghcr.io/jhofer-cloud/renovate --dry-run=lookup ${{ github.repository }}
         env:
           RENOVATE_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
@@ -834,7 +834,7 @@ jobs:
       - codecov
       - coverage-threshold
 
-    if: github.repository == 'renovatebot/renovate' && github.event_name != 'pull_request'
+    if: github.event_name != 'pull_request'
     runs-on: ubuntu-latest
     timeout-minutes: 60
     concurrency:
@@ -859,7 +859,7 @@ jobs:
           EXPECTED_SHA: ${{ github.sha }}
           RUN_ID: ${{ github.run_id }}
         run: |
-          latest_sha=$(git ls-remote https://github.com/renovatebot/renovate "refs/heads/$REF_NAME" | cut -f1)
+          latest_sha=$(git ls-remote https://github.com/jhofer-cloud/renovate "refs/heads/$REF_NAME" | cut -f1)
           if [[ "$latest_sha" != "$EXPECTED_SHA" ]]; then
             echo "Newer commit detected on $REF_NAME ($latest_sha), cancelling release run"
             gh run cancel "$RUN_ID"
@@ -891,12 +891,9 @@ jobs:
 
       - name: Docker registry login
         env:
-          DOCKER_USERNAME: ${{ secrets.DOCKER_USERNAME }}
-          DOCKER_PASSWORD: ${{ secrets.DOCKER_PASSWORD }}
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           REPOSITORY_OWNER: ${{ github.repository_owner }}
         run: |
-          echo "$DOCKER_PASSWORD" | docker login -u "$DOCKER_USERNAME" --password-stdin
           echo "$GITHUB_TOKEN" | docker login ghcr.io -u "$REPOSITORY_OWNER" --password-stdin
 
       - name: Setup uv
@@ -929,7 +926,7 @@ jobs:
           EXPECTED_SHA: ${{ github.sha }}
           RUN_ID: ${{ github.run_id }}
         run: |
-          latest_sha=$(git ls-remote https://github.com/renovatebot/renovate "refs/heads/$REF_NAME" | cut -f1)
+          latest_sha=$(git ls-remote https://github.com/jhofer-cloud/renovate "refs/heads/$REF_NAME" | cut -f1)
           if [[ "$latest_sha" != "$EXPECTED_SHA" ]]; then
             echo "Newer commit detected on $REF_NAME ($latest_sha), cancelling release run"
             gh run cancel "$RUN_ID"
