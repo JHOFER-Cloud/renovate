@@ -282,6 +282,99 @@ describe('workers/repository/update/branch/index', () => {
         expect(reuse.shouldReuseExistingBranch).toHaveBeenCalled();
       });
 
+      it('warns under timestamp-optional if the datasource declares it can supply a timestamp', async () => {
+        schedule.isScheduledNow.mockReturnValueOnce(true);
+        config.prCreation = 'not-pending';
+        config.upgrades = partial<BranchUpgradeConfig>([
+          {
+            releaseTimestamp: undefined,
+            minimumReleaseAge: '100 days',
+            minimumReleaseAgeBehaviour: 'timestamp-optional',
+            datasource: 'docker',
+          },
+        ]);
+        scm.isBranchModified.mockResolvedValueOnce(false);
+
+        await branchWorker.processBranch(config);
+
+        expect(logger.once.warn).toHaveBeenCalledWith(
+          "Some upgrade(s) did not have a releaseTimestamp, but as we're running with minimumReleaseAgeBehaviour=timestamp-optional, proceeding. See debug logs for more information",
+        );
+      });
+
+      it('does not warn under timestamp-optional if the datasource can never supply a timestamp', async () => {
+        // `git-refs` returns only {version, gitRef, newDigest} - there is no
+        // timestamp to be had, so the warning would never become actionable.
+        schedule.isScheduledNow.mockReturnValueOnce(true);
+        config.prCreation = 'not-pending';
+        config.upgrades = partial<BranchUpgradeConfig>([
+          {
+            releaseTimestamp: undefined,
+            minimumReleaseAge: '100 days',
+            minimumReleaseAgeBehaviour: 'timestamp-optional',
+            datasource: 'git-refs',
+          },
+        ]);
+        scm.isBranchModified.mockResolvedValueOnce(false);
+
+        await branchWorker.processBranch(config);
+
+        // the branch still proceeds, exactly as before - only the warn is suppressed
+        expect(reuse.shouldReuseExistingBranch).toHaveBeenCalled();
+        expect(logger.once.warn).not.toHaveBeenCalled();
+      });
+
+      it('warns on a grouped branch mixing datasources, if any of them declares support', async () => {
+        // `.some()`, not `.every()`: one git-refs dep sharing a branch with a docker
+        // dep must not suppress the docker dep's legitimate warning.
+        schedule.isScheduledNow.mockReturnValueOnce(true);
+        config.prCreation = 'not-pending';
+        config.upgrades = partial<BranchUpgradeConfig>([
+          {
+            releaseTimestamp: undefined,
+            minimumReleaseAge: '100 days',
+            minimumReleaseAgeBehaviour: 'timestamp-optional',
+            datasource: 'git-refs',
+          },
+          {
+            releaseTimestamp: undefined,
+            minimumReleaseAge: '100 days',
+            minimumReleaseAgeBehaviour: 'timestamp-optional',
+            datasource: 'docker',
+          },
+        ]);
+        scm.isBranchModified.mockResolvedValueOnce(false);
+
+        await branchWorker.processBranch(config);
+
+        expect(logger.once.warn).toHaveBeenCalledWith(
+          "Some upgrade(s) did not have a releaseTimestamp, but as we're running with minimumReleaseAgeBehaviour=timestamp-optional, proceeding. See debug logs for more information",
+        );
+      });
+
+      it('does not warn for a lockFileMaintenance upgrade, which carries no datasource', async () => {
+        // flatten.ts builds the lockFileMaintenance upgrade from packageFileConfig,
+        // outside the per-dep loop, so it never carries a datasource - and there is
+        // no release to age against in the first place.
+        schedule.isScheduledNow.mockReturnValueOnce(true);
+        config.prCreation = 'not-pending';
+        config.upgrades = partial<BranchUpgradeConfig>([
+          {
+            releaseTimestamp: undefined,
+            minimumReleaseAge: '100 days',
+            minimumReleaseAgeBehaviour: 'timestamp-optional',
+            updateType: 'lockFileMaintenance',
+            datasource: undefined,
+          },
+        ]);
+        scm.isBranchModified.mockResolvedValueOnce(false);
+
+        await branchWorker.processBranch(config);
+
+        expect(reuse.shouldReuseExistingBranch).toHaveBeenCalled();
+        expect(logger.once.warn).not.toHaveBeenCalled();
+      });
+
       it('does not skip branch if minimumReleaseAgeBehaviour=timestamp-required and minimumReleaseAge=0 days', async () => {
         schedule.isScheduledNow.mockReturnValueOnce(true);
         config.prCreation = 'not-pending';

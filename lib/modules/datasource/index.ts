@@ -535,6 +535,22 @@ export function supportsDigests(datasource: string | undefined): boolean {
   return !!ds && 'getDigest' in ds;
 }
 
+/**
+ * Whether a missing `releaseTimestamp` from this datasource is worth reporting.
+ *
+ * A datasource which declares it can never return a timestamp (e.g. `git-refs`,
+ * whose releases are only `{version, gitRef, newDigest}`) has no gap to report:
+ * the absence is inherent, so warning about it on every run is permanent noise
+ * the user cannot act on. A datasource which declares support and then returns
+ * nothing is a genuine gap, and does warrant a warning.
+ */
+export function supportsReleaseTimestamps(
+  datasource: string | undefined,
+): boolean {
+  const ds = !!datasource && getDatasourceFor(datasource);
+  return !!ds && ds.releaseTimestampSupport;
+}
+
 function getDigestConfig(
   datasource: DatasourceApi,
   config: GetDigestInputConfig,

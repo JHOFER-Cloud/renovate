@@ -5148,6 +5148,33 @@ describe('workers/repository/process/lookup/index', () => {
       expect(logger.logger.once.warn).not.toHaveBeenCalled();
     });
 
+    // `git-refs` declares `releaseTimestampSupport = false` - it can only ever return
+    // {version, gitRef, newDigest}, so the missing timestamp is inherent and a warn
+    // on every run would be permanent noise the user cannot act on.
+    it('does not warn about missing releaseTimestamps for a datasource which can never supply one', async () => {
+      config.packageName = 'some-path';
+      config.versioning = gitVersioningId;
+      config.datasource = GitRefsDatasource.id;
+      config.currentDigest = 'some-digest';
+      config.minimumReleaseAge = '3 days';
+      config.minimumReleaseAgeBehaviour = 'timestamp-optional';
+      config.internalChecksFilter = 'strict';
+
+      const { updates } = await Result.wrap(
+        lookup.lookupUpdates(config),
+      ).unwrapOrThrow();
+
+      // the update still proceeds un-aged, exactly as before - only the warn is suppressed
+      expect(updates).toEqual([
+        {
+          newDigest: '4b825dc642cb6eb9a060e54bf8d69288fbee4904',
+          newValue: undefined,
+          updateType: 'digest',
+        },
+      ]);
+      expect(logger.logger.once.warn).not.toHaveBeenCalled();
+    });
+
     // `currentValue` is a range, so unlike `matchUpdateTypes`, which is read from the incoming `config`, matching against `matchCurrentVersion` needs the resolved `currentVersion`
     it('respects a minimumReleaseAge packageRule scoped to matchCurrentVersion for digest updates', async () => {
       config.currentValue = '^1.0.0';
