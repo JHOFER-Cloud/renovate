@@ -30,6 +30,8 @@ export class PythonVersionDatasource extends Datasource {
 
   override readonly caching = true;
 
+  override readonly releaseTimestampSupport = true;
+
   async getPrebuildReleases(): Promise<ReleaseResult | null> {
     return await this.pythonPrebuildDatasource.getReleases({
       registryUrl: githubBaseUrl,

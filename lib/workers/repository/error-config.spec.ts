@@ -6,8 +6,14 @@ import { CONFIG_VALIDATION } from '../../constants/error-messages.ts';
 import { logger } from '../../logger/index.ts';
 import type { Pr } from '../../modules/platform/index.ts';
 import {
+  addSecretForSanitizing,
+  clearRepoSanitizedSecretsList,
+} from '../../util/sanitize.ts';
+import {
   raiseConfigWarningIssue,
   raiseCredentialsWarningIssue,
+  raiseDependencyLookupWarningsIssue,
+  raiseRepositoryErrorIssue,
 } from './error-config.ts';
 
 let config: RenovateConfig;
@@ -144,6 +150,314 @@ Message: some-message
         { notificationName },
         'Configuration failure, issues will be suppressed',
       );
+    });
+  });
+
+  describe('raiseDependencyLookupWarningsIssue()', () => {
+    beforeEach(() => {
+      GlobalConfig.reset();
+    });
+
+    const packageFilesWithWarnings = {
+      nix: [
+        partial({
+          packageFile: 'flake.nix',
+          deps: [
+            partial({
+              warnings: [
+                {
+                  topic: 'https://github.com/foo/bar',
+                  message:
+                    'Dependency lookup error for `git-refs` package `https://github.com/foo/bar`: Repository not found.',
+                },
+              ],
+            }),
+          ],
+        }),
+      ],
+    };
+
+    it('returns if mode is silent', async () => {
+      config.mode = 'silent';
+      await raiseDependencyLookupWarningsIssue(config, {});
+      expect(logger.debug).toHaveBeenCalledWith(
+        'Dependency lookup warning issues are not created, updated or closed when mode=silent',
+      );
+      expect(platform.ensureIssue).not.toHaveBeenCalled();
+    });
+
+    it('suppresses issue when suppressNotifications includes dependencyLookupWarnings', async () => {
+      config.suppressNotifications = ['dependencyLookupWarnings'];
+      await raiseDependencyLookupWarningsIssue(
+        config,
+        packageFilesWithWarnings,
+      );
+      expect(logger.info).toHaveBeenCalledWith(
+        { notificationName: 'dependencyLookupWarnings' },
+        'Dependency lookup warnings, issues will be suppressed',
+      );
+      expect(platform.ensureIssue).not.toHaveBeenCalled();
+    });
+
+    it('closes existing issue when there are no warnings', async () => {
+      await raiseDependencyLookupWarningsIssue(config, {});
+      expect(platform.ensureIssue).not.toHaveBeenCalled();
+      expect(platform.ensureIssueClosing).toHaveBeenCalledExactlyOnceWith(
+        'Action Required: Fix Dependency Lookup Errors',
+      );
+    });
+
+    it('logs dry-run message instead of creating issue', async () => {
+      GlobalConfig.set({ dryRun: 'full' });
+      await raiseDependencyLookupWarningsIssue(
+        config,
+        packageFilesWithWarnings,
+      );
+      expect(platform.ensureIssue).not.toHaveBeenCalled();
+      expect(logger.info).toHaveBeenCalledWith(
+        expect.objectContaining({ warnings: expect.any(Array) }),
+        'DRY-RUN: Would ensure dependency lookup warning issue',
+      );
+    });
+
+    it('logs dry-run message instead of closing issue when no warnings', async () => {
+      GlobalConfig.set({ dryRun: 'full' });
+      await raiseDependencyLookupWarningsIssue(config, {});
+      expect(platform.ensureIssueClosing).not.toHaveBeenCalled();
+      expect(logger.info).toHaveBeenCalledWith(
+        { warnings: [] },
+        'DRY-RUN: Would close dependency lookup warning issue',
+      );
+    });
+
+    it('creates issue with correct body format', async () => {
+      platform.ensureIssue.mockResolvedValueOnce('created');
+      await raiseDependencyLookupWarningsIssue(
+        config,
+        packageFilesWithWarnings,
+      );
+      expect(platform.ensureIssue).toHaveBeenCalledExactlyOnceWith(
+        expect.objectContaining({
+          title: 'Action Required: Fix Dependency Lookup Errors',
+          body: expect.stringContaining(
+            '- Dependency lookup error for `git-refs` package `https://github.com/foo/bar`: Repository not found.',
+          ),
+          once: false,
+          shouldReOpen: true,
+        }),
+      );
+      expect(logger.warn).toHaveBeenCalledWith(
+        expect.objectContaining({ res: 'created' }),
+        'Dependency Lookup Warning',
+      );
+    });
+
+    it('escapes @ signs to prevent GitHub mentions', async () => {
+      platform.ensureIssue.mockResolvedValueOnce('created');
+      const packageFilesWithAt = {
+        npm: [
+          partial({
+            packageFile: 'package.json',
+            deps: [
+              partial({
+                warnings: [
+                  {
+                    topic: '@scope/pkg',
+                    message:
+                      'Dependency lookup error for `npm` package `@scope/pkg`: not found',
+                  },
+                ],
+              }),
+            ],
+          }),
+        ],
+      };
+      await raiseDependencyLookupWarningsIssue(config, packageFilesWithAt);
+      const body: string = platform.ensureIssue.mock.calls[0][0].body;
+      expect(body).not.toContain('@scope');
+      expect(body).toContain('&#64;scope');
+    });
+
+    it('escapes #number to prevent GitHub issue linkification', async () => {
+      platform.ensureIssue.mockResolvedValueOnce('created');
+      const packageFilesWithHash = {
+        npm: [
+          partial({
+            packageFile: 'package.json',
+            deps: [
+              partial({
+                warnings: [
+                  {
+                    topic: 'pkg',
+                    message: 'lookup failed, see #123 for details',
+                  },
+                ],
+              }),
+            ],
+          }),
+        ],
+      };
+      await raiseDependencyLookupWarningsIssue(config, packageFilesWithHash);
+      const body: string = platform.ensureIssue.mock.calls[0][0].body;
+      expect(body).not.toContain('#123');
+      expect(body).toContain('&#35;123');
+    });
+
+    it('updates existing issue and logs warning', async () => {
+      platform.ensureIssue.mockResolvedValueOnce('updated');
+      await raiseDependencyLookupWarningsIssue(
+        config,
+        packageFilesWithWarnings,
+      );
+      expect(logger.warn).toHaveBeenCalledWith(
+        expect.objectContaining({ res: 'updated' }),
+        'Dependency Lookup Warning',
+      );
+    });
+
+    it('does not log warning when issue is unchanged', async () => {
+      platform.ensureIssue.mockResolvedValueOnce(null);
+      await raiseDependencyLookupWarningsIssue(
+        config,
+        packageFilesWithWarnings,
+      );
+      expect(logger.warn).not.toHaveBeenCalledWith(
+        expect.anything(),
+        'Dependency Lookup Warning',
+      );
+    });
+
+    it('normalizes newlines in warning messages', async () => {
+      platform.ensureIssue.mockResolvedValueOnce('created');
+      const packageFilesWithNewline = {
+        nix: [
+          partial({
+            packageFile: 'flake.nix',
+            deps: [
+              partial({
+                warnings: [
+                  {
+                    topic: 'pkg',
+                    message: 'line one\nline two',
+                  },
+                ],
+              }),
+            ],
+          }),
+        ],
+      };
+      await raiseDependencyLookupWarningsIssue(config, packageFilesWithNewline);
+      expect(platform.ensureIssue).toHaveBeenCalledExactlyOnceWith(
+        expect.objectContaining({
+          body: expect.stringContaining('line one line two'),
+        }),
+      );
+    });
+  });
+
+  describe('raiseRepositoryErrorIssue()', () => {
+    beforeEach(() => {
+      GlobalConfig.reset();
+    });
+
+    afterEach(() => {
+      clearRepoSanitizedSecretsList();
+    });
+
+    it('returns if mode is silent', async () => {
+      config.mode = 'silent';
+      const res = await raiseRepositoryErrorIssue(config, new Error('oops'));
+      expect(res).toBeUndefined();
+      expect(logger.debug).toHaveBeenCalledWith(
+        'Repository error issues are not created, updated or closed when mode=silent',
+      );
+    });
+
+    it('suppresses issue when suppressNotifications includes repositoryErrorIssue', async () => {
+      config.suppressNotifications = ['repositoryErrorIssue'];
+      const res = await raiseRepositoryErrorIssue(config, new Error('oops'));
+      expect(res).toBeUndefined();
+      expect(logger.info).toHaveBeenCalledWith(
+        { notificationName: 'repositoryErrorIssue' },
+        'Repository error, issues will be suppressed',
+      );
+    });
+
+    it('logs dry-run message instead of creating issue', async () => {
+      GlobalConfig.set({ dryRun: 'full' });
+      const error = new Error('oops');
+      const res = await raiseRepositoryErrorIssue(config, error);
+      expect(res).toBeUndefined();
+      expect(platform.ensureIssue).not.toHaveBeenCalled();
+      expect(logger.info).toHaveBeenCalledWith(
+        { err: error },
+        'DRY-RUN: Would ensure repository error issue',
+      );
+    });
+
+    it('dry-run takes precedence over suppressNotifications', async () => {
+      GlobalConfig.set({ dryRun: 'full' });
+      config.suppressNotifications = ['repositoryErrorIssue'];
+      const error = new Error('oops');
+      const res = await raiseRepositoryErrorIssue(config, error);
+      expect(res).toBeUndefined();
+      expect(platform.ensureIssue).not.toHaveBeenCalled();
+      expect(logger.info).toHaveBeenCalledWith(
+        { err: error },
+        'DRY-RUN: Would ensure repository error issue',
+      );
+    });
+
+    it('sanitizes URLs with credentials in error message', async () => {
+      platform.ensureIssue.mockResolvedValueOnce('created');
+      const error = new Error('Invalid URL: https://token@example.com/repo');
+      const res = await raiseRepositoryErrorIssue(config, error);
+      expect(res).toBeUndefined();
+      expect(platform.ensureIssue).toHaveBeenCalledExactlyOnceWith(
+        expect.objectContaining({
+          title: 'Action Required: Fix Renovate Repository Error',
+          body: expect.stringContaining('**redacted**'),
+        }),
+      );
+      expect(logger.warn).toHaveBeenCalledWith(
+        { err: error, res: 'created' },
+        'Repository Error Warning',
+      );
+    });
+
+    it('sanitizes registered secrets in error message', async () => {
+      platform.ensureIssue.mockResolvedValueOnce('created');
+      addSecretForSanitizing('super-secret-token');
+      const error = new Error('auth failed: super-secret-token is invalid');
+      await raiseRepositoryErrorIssue(config, error);
+      expect(platform.ensureIssue).toHaveBeenCalledExactlyOnceWith(
+        expect.objectContaining({
+          body: expect.stringContaining('**redacted**'),
+        }),
+      );
+      expect(platform.ensureIssue).toHaveBeenCalledExactlyOnceWith(
+        expect.objectContaining({
+          body: expect.not.stringContaining('super-secret-token'),
+        }),
+      );
+    });
+
+    it('updates existing issue and logs warning', async () => {
+      platform.ensureIssue.mockResolvedValueOnce('updated');
+      const error = new Error('some error');
+      const res = await raiseRepositoryErrorIssue(config, error);
+      expect(res).toBeUndefined();
+      expect(logger.warn).toHaveBeenCalledWith(
+        { err: error, res: 'updated' },
+        'Repository Error Warning',
+      );
+    });
+
+    it('does not log warning when issue is unchanged', async () => {
+      platform.ensureIssue.mockResolvedValueOnce(null);
+      const res = await raiseRepositoryErrorIssue(config, new Error('oops'));
+      expect(res).toBeUndefined();
+      expect(logger.warn).not.toHaveBeenCalled();
     });
   });
 });

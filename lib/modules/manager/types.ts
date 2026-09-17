@@ -64,6 +64,7 @@ export interface UpdateArtifactsConfig extends ToolConstraintsConfig {
   isLockFileMaintenance?: boolean;
   composerIgnorePlatformReqs?: string[];
   goGetDirs?: string[];
+  nixSubstituters?: string[];
   currentValue?: string;
   postUpdateOptions?: string[];
   ignorePlugins?: boolean;
@@ -265,6 +266,7 @@ export interface Upgrade<
   isLockfileUpdate?: boolean;
   currentRawValue?: any;
   depGroup?: string;
+  downloadUrl?: string;
   lockFiles?: string[];
   manager?: string;
   name?: string;

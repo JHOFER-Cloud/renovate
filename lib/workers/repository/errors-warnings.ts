@@ -34,7 +34,7 @@ export function getErrors(config: RenovateConfig): string {
   return errorText;
 }
 
-function getDepWarnings(
+export function getDepWarnings(
   packageFiles: Record<string, PackageFile[]>,
 ): DepWarnings {
   const warnings: string[] = [];

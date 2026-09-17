@@ -291,6 +291,75 @@ describe('workers/repository/process/lookup/filter-checks', () => {
         expect(res.release?.version).toBe('1.0.4');
       });
 
+      it('warns about a missing releaseTimestamp if the datasource declares it can supply one', async () => {
+        class TimestampDatasource extends DummyDatasource {
+          override readonly releaseTimestampSupport = true;
+        }
+        getDatasourceFor.mockReturnValue(new TimestampDatasource());
+
+        const releasesWithMissingReleaseTimestamp: Release[] = [
+          {
+            version: '1.0.1',
+            releaseTimestamp: '2021-01-01T00:00:01.000Z' as Timestamp,
+          },
+          {
+            version: '1.0.4',
+            // no releaseTimestamp
+          },
+        ];
+
+        config.datasource = 'some-datasource';
+        config.internalChecksFilter = 'strict';
+        config.minimumReleaseAge = '100 days';
+        config.minimumReleaseAgeBehaviour = 'timestamp-optional';
+        await filterInternalChecks(
+          config,
+          versioning,
+          'patch',
+          releasesWithMissingReleaseTimestamp,
+        );
+
+        expect(logger.logger.once.warn).toHaveBeenCalledWith(
+          "Some release(s) did not have a releaseTimestamp, but as we're running with minimumReleaseAgeBehaviour=timestamp-optional, proceeding. See debug logs for more information",
+        );
+      });
+
+      it('does not warn about a missing releaseTimestamp if the datasource can never supply one', async () => {
+        // A datasource such as `git-refs` has no timestamp to give, so the absence
+        // is inherent and warning every run would be permanent, unactionable noise.
+        getDatasourceFor.mockReturnValue(new DummyDatasource());
+
+        const releasesWithMissingReleaseTimestamp: Release[] = [
+          {
+            version: '1.0.1',
+            releaseTimestamp: '2021-01-01T00:00:01.000Z' as Timestamp,
+          },
+          {
+            version: '1.0.4',
+            // no releaseTimestamp
+          },
+        ];
+
+        config.datasource = 'some-datasource';
+        config.internalChecksFilter = 'strict';
+        config.minimumReleaseAge = '100 days';
+        config.minimumReleaseAgeBehaviour = 'timestamp-optional';
+        const res = await filterInternalChecks(
+          config,
+          versioning,
+          'patch',
+          releasesWithMissingReleaseTimestamp,
+        );
+
+        // still proceeds, exactly as before - only the warn is suppressed
+        expect(res.release?.version).toBe('1.0.4');
+        expect(logger.logger.once.warn).not.toHaveBeenCalled();
+        expect(logger.logger.once.debug).toHaveBeenCalledWith(
+          expect.objectContaining({ versions: ['1.0.4'] }),
+          "1 release(s) did not have a releaseTimestamp, but as we're running with minimumReleaseAgeBehaviour=timestamp-optional, proceeding",
+        );
+      });
+
       it('returns the latest release, if minimumReleaseAgeBehaviour is not set', async () => {
         const releasesWithMissingReleaseTimestamp: Release[] = [
           {

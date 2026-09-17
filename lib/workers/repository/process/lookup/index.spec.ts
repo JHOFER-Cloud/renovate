@@ -5148,6 +5148,33 @@ describe('workers/repository/process/lookup/index', () => {
       expect(logger.logger.once.warn).not.toHaveBeenCalled();
     });
 
+    // `git-refs` declares `releaseTimestampSupport = false` - it can only ever return
+    // {version, gitRef, newDigest}, so the missing timestamp is inherent and a warn
+    // on every run would be permanent noise the user cannot act on.
+    it('does not warn about missing releaseTimestamps for a datasource which can never supply one', async () => {
+      config.packageName = 'some-path';
+      config.versioning = gitVersioningId;
+      config.datasource = GitRefsDatasource.id;
+      config.currentDigest = 'some-digest';
+      config.minimumReleaseAge = '3 days';
+      config.minimumReleaseAgeBehaviour = 'timestamp-optional';
+      config.internalChecksFilter = 'strict';
+
+      const { updates } = await Result.wrap(
+        lookup.lookupUpdates(config),
+      ).unwrapOrThrow();
+
+      // the update still proceeds un-aged, exactly as before - only the warn is suppressed
+      expect(updates).toEqual([
+        {
+          newDigest: '4b825dc642cb6eb9a060e54bf8d69288fbee4904',
+          newValue: undefined,
+          updateType: 'digest',
+        },
+      ]);
+      expect(logger.logger.once.warn).not.toHaveBeenCalled();
+    });
+
     // `currentValue` is a range, so unlike `matchUpdateTypes`, which is read from the incoming `config`, matching against `matchCurrentVersion` needs the resolved `currentVersion`
     it('respects a minimumReleaseAge packageRule scoped to matchCurrentVersion for digest updates', async () => {
       config.currentValue = '^1.0.0';
@@ -7049,6 +7076,70 @@ describe('workers/repository/process/lookup/index', () => {
         versioning: 'maven',
         warnings: [],
       });
+    });
+
+    it('adds sanitized warning when an unexpected error occurs during lookup', async () => {
+      config.datasource = GithubTagsDatasource.id;
+      config.packageName = 'some/pkg';
+      config.currentValue = 'v1.0.0';
+      config.currentDigest = 'abc123';
+      getGithubTags.mockResolvedValueOnce({
+        releases: [
+          {
+            version: 'v1.0.0',
+            gitRef: 'v1.0.0',
+          },
+        ],
+      });
+      vi.spyOn(
+        GithubTagsDatasource.prototype,
+        'getDigest',
+      ).mockRejectedValueOnce(
+        new Error('remote: Repository not found.\nfatal: repo not found'),
+      );
+
+      const res = await Result.wrap(
+        lookup.lookupUpdates(config),
+      ).unwrapOrThrow();
+
+      expect(res.skipReason).toBe('internal-error');
+      expect(res.warnings).toHaveLength(1);
+      expect(res.warnings[0]).toMatchObject({
+        topic: 'some/pkg',
+        message: expect.stringContaining('github-tags'),
+      });
+      expect(res.warnings[0].message).toContain('some/pkg');
+      expect(res.warnings[0].message).toContain('Repository not found');
+    });
+
+    it('sanitizes credentials from warning message on lookup error', async () => {
+      config.datasource = GithubTagsDatasource.id;
+      config.packageName = 'some/pkg';
+      config.currentValue = 'v1.0.0';
+      config.currentDigest = 'abc123';
+      getGithubTags.mockResolvedValueOnce({
+        releases: [
+          {
+            version: 'v1.0.0',
+            gitRef: 'v1.0.0',
+          },
+        ],
+      });
+      vi.spyOn(
+        GithubTagsDatasource.prototype,
+        'getDigest',
+      ).mockRejectedValueOnce(
+        new Error(
+          'auth failure: https://mytoken@api.github.com/repos/some/pkg',
+        ),
+      );
+
+      const res = await Result.wrap(
+        lookup.lookupUpdates(config),
+      ).unwrapOrThrow();
+
+      expect(res.warnings[0].message).not.toContain('mytoken');
+      expect(res.warnings[0].message).toContain('**redacted**');
     });
   });
 });
