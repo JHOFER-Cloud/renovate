@@ -20,6 +20,7 @@ import {
   WORKER_FILE_UPDATE_FAILED,
 } from '../../../../constants/error-messages.ts';
 import { logger, removeMeta } from '../../../../logger/index.ts';
+import { supportsReleaseTimestamps } from '../../../../modules/datasource/index.ts';
 import { updateActionsLockfile } from '../../../../modules/manager/github-actions/artifacts.ts';
 import { getAdditionalFiles } from '../../../../modules/manager/npm/post-update/index.ts';
 import {
@@ -447,6 +448,8 @@ export async function processBranch(
         {
           depName: string;
           updateType: UpdateType;
+          // absent for lockFileMaintenance upgrades, which have no dep to age
+          datasource: string | undefined;
         }[]
       > = {
         'timestamp-required': [],
@@ -487,6 +490,7 @@ export async function processBranch(
               depNamesWithoutReleaseTimestamp['timestamp-required'].push({
                 depName: upgrade.depName!,
                 updateType: upgrade.updateType!,
+                datasource: upgrade.datasource,
               });
               config.stabilityStatus = 'yellow';
               continue;
@@ -495,6 +499,7 @@ export async function processBranch(
               depNamesWithoutReleaseTimestamp['timestamp-optional'].push({
                 depName: upgrade.depName!,
                 updateType: upgrade.updateType!,
+                datasource: upgrade.datasource,
               });
             }
           }
@@ -535,9 +540,15 @@ export async function processBranch(
         );
       }
       if (depNamesWithoutReleaseTimestamp['timestamp-optional'].length) {
-        logger.once.warn(
-          "Some upgrade(s) did not have a releaseTimestamp, but as we're running with minimumReleaseAgeBehaviour=timestamp-optional, proceeding. See debug logs for more information",
-        );
+        if (
+          depNamesWithoutReleaseTimestamp['timestamp-optional'].some(
+            ({ datasource }) => supportsReleaseTimestamps(datasource),
+          )
+        ) {
+          logger.once.warn(
+            "Some upgrade(s) did not have a releaseTimestamp, but as we're running with minimumReleaseAgeBehaviour=timestamp-optional, proceeding. See debug logs for more information",
+          );
+        }
         logger.once.debug(
           { updates: depNamesWithoutReleaseTimestamp['timestamp-optional'] },
           `${depNamesWithoutReleaseTimestamp['timestamp-optional'].length} upgrade(s) did not have a releaseTimestamp, but as we're running with minimumReleaseAgeBehaviour=timestamp-optional, proceeding`,

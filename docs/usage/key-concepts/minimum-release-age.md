@@ -35,6 +35,9 @@ When Renovate runs with `minimumReleaseAgeBehaviour=timestamp-optional`, Renovat
 
 This warning serves to inform users about at least one dependency not being able to adhere to the minimum release age due to the configuration.
 
+The warning is only logged for datasources which _can_ return a release timestamp, see [Which datasources support release timestamps?](#which-datasources-support-release-timestamps).
+A datasource which can never return one (`git-refs`, for example, whose releases carry only a version, ref and digest) has no gap to report, so a missing timestamp from it is not warned about.
+
 In cases where this is not desired, you can remap the warning to a lower log level with [`logLevelRemap`](../configuration-options.md#loglevelremap):
 
 ```json

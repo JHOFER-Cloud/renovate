@@ -19,6 +19,7 @@ import {
   getRawPkgReleases,
   isGetPkgReleasesConfig,
   supportsDigests,
+  supportsReleaseTimestamps,
 } from '../../../../modules/datasource/index.ts';
 import { postprocessRelease } from '../../../../modules/datasource/postprocess-release.ts';
 import { getRangeStrategy } from '../../../../modules/manager/index.ts';
@@ -151,7 +152,10 @@ async function applyMinimumReleaseAgeToDigestUpdate(
 
   // Mirror filterInternalChecks()'s logging so a held/passed digest update is diagnosable.
   if (ageCheck.minimumReleaseAgeMs && !ageCheck.hasTimestamp) {
-    if (releaseConfig.minimumReleaseAgeBehaviour === 'timestamp-optional') {
+    if (
+      releaseConfig.minimumReleaseAgeBehaviour === 'timestamp-optional' &&
+      supportsReleaseTimestamps(config.datasource)
+    ) {
       logger.once.warn(
         "Some release(s) did not have a releaseTimestamp, but as we're running with minimumReleaseAgeBehaviour=timestamp-optional, proceeding. See debug logs for more information",
       );
