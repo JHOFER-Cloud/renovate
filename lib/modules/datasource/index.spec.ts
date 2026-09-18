@@ -20,6 +20,7 @@ import {
   getDigest,
   getPkgReleases,
   supportsDigests,
+  supportsReleaseTimestamps,
 } from './index.ts';
 import type {
   DatasourceApi,
@@ -254,6 +255,27 @@ describe('modules/datasource/index', () => {
         'Custom registries are not allowed for this datasource and will be ignored',
       );
       expect(res).toMatchObject({ releases: [{ version: '1.2.3' }] });
+    });
+  });
+
+  describe('Release timestamps', () => {
+    it('returns false when the datasource cannot supply a timestamp', () => {
+      datasources.set(datasource, new DummyDatasource());
+      expect(supportsReleaseTimestamps(datasource)).toBeFalse();
+    });
+
+    it('returns true when the datasource declares support', () => {
+      class TestDatasource extends DummyDatasource {
+        override readonly releaseTimestampSupport = true;
+      }
+      datasources.set(datasource, new TestDatasource());
+
+      expect(supportsReleaseTimestamps(datasource)).toBeTrue();
+    });
+
+    it('returns false for an unknown datasource', () => {
+      expect(supportsReleaseTimestamps('not-a-datasource')).toBeFalse();
+      expect(supportsReleaseTimestamps(undefined)).toBeFalse();
     });
   });
 

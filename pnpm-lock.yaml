@@ -401,9 +401,6 @@ importers:
       '@containerbase/istanbul-reports-html':
         specifier: 2.0.18
         version: 2.0.18
-      '@containerbase/semantic-release-pnpm':
-        specifier: 1.4.3
-        version: 1.4.3(semantic-release@25.0.9)
       '@hyrious/marshal':
         specifier: 0.3.4
         version: 0.3.4
@@ -425,6 +422,9 @@ importers:
       '@types/adm-zip':
         specifier: 0.5.8
         version: 0.5.8
+      '@types/auth-header':
+        specifier: 1.0.6
+        version: 1.0.6
       '@types/aws4':
         specifier: 1.11.6
         version: 1.11.6
@@ -907,12 +907,6 @@ packages:
   '@containerbase/istanbul-reports-html@2.0.18':
     resolution: {integrity: sha512-b4u8n2mUS6V3NwQGq5U0hVq0+ZhE3q/l4ZGrN8GijFAN5OLtKk7zaIRdbbYZEi8b8U7cznFwRUCn0ew6pZGn+A==}
     engines: {node: ^22.11.0 || >=24.0.0, pnpm: '>=10.0.0'}
-
-  '@containerbase/semantic-release-pnpm@1.4.3':
-    resolution: {integrity: sha512-dOMyBw+mzcKHt6OqYyRj6arFeszoINlNRq1eIR7oEE0TB0i0lhj8BsJ/2IFISJUPwf9lUxKbV8ES6vjqqMIQYg==}
-    engines: {node: ^22.11.0 || ^24}
-    peerDependencies:
-      semantic-release: ^24.0.0 || ^25.0.0
 
   '@esbuild/aix-ppc64@0.28.2':
     resolution: {integrity: sha512-XExcO+dvLKvVtNTibSTBej1NCAbaGhWn9Ww1ZPx80qsahhPFe/8jgWP0IchNe0F3HwkU7n8ejhH8bjonqht8mQ==}
@@ -2071,6 +2065,9 @@ packages:
 
   '@types/adm-zip@0.5.8':
     resolution: {integrity: sha512-RVVH7QvZYbN+ihqZ4kX/dMiowf6o+Jk1fNwiSdx0NahBJLU787zkULhGhJM8mf/obmLGmgdMM0bXsQTmyfbR7Q==}
+
+  '@types/auth-header@1.0.6':
+    resolution: {integrity: sha512-TjQyS7b+msxND/uuvza7FWSiBBLtI5y9vB55rpTeMcO2M5DSs4ony9WNKDvZLJL2w5aJH2A4C+ht1c9MPHhJWQ==}
 
   '@types/aws4@1.11.6':
     resolution: {integrity: sha512-5CnVUkHNyLGpD9AnOcK66YyP0qvIh6nhJJoeK8zSl5YKikUcUbdB7SlHevUYVqicgeh6j5AJa1qa/h08dSZHoA==}
@@ -6304,14 +6301,6 @@ snapshots:
     dependencies:
       istanbul-reports: 3.2.0
 
-  '@containerbase/semantic-release-pnpm@1.4.3(semantic-release@25.0.9)':
-    dependencies:
-      '@semantic-release/error': 4.0.0
-      aggregate-error: 5.0.0
-      execa: 9.6.1
-      semantic-release: 25.0.9(supports-color@7.2.0)(typescript@7.0.2)
-      semver: 7.8.5
-
   '@esbuild/aix-ppc64@0.28.2':
     optional: true
 
@@ -7371,6 +7360,8 @@ snapshots:
   '@types/adm-zip@0.5.8':
     dependencies:
       '@types/node': 24.13.4
+
+  '@types/auth-header@1.0.6': {}
 
   '@types/aws4@1.11.6':
     dependencies:
