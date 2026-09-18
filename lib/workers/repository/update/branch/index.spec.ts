@@ -291,6 +291,7 @@ describe('workers/repository/update/branch/index', () => {
             minimumReleaseAge: '100 days',
             minimumReleaseAgeBehaviour: 'timestamp-optional',
             datasource: 'docker',
+            registryProvidesReleaseTimestamps: true,
           },
         ]);
         scm.isBranchModified.mockResolvedValueOnce(false);
@@ -324,6 +325,53 @@ describe('workers/repository/update/branch/index', () => {
         expect(logger.once.warn).not.toHaveBeenCalled();
       });
 
+      it('does not warn under timestamp-optional if the registry was shown to provide no timestamps', async () => {
+        // `docker` declares support, but GHCR never returns a timestamp
+        schedule.isScheduledNow.mockReturnValueOnce(true);
+        config.prCreation = 'not-pending';
+        config.upgrades = partial<BranchUpgradeConfig>([
+          {
+            releaseTimestamp: undefined,
+            minimumReleaseAge: '100 days',
+            minimumReleaseAgeBehaviour: 'timestamp-optional',
+            datasource: 'docker',
+          },
+        ]);
+        scm.isBranchModified.mockResolvedValueOnce(false);
+
+        await branchWorker.processBranch(config);
+
+        expect(reuse.shouldReuseExistingBranch).toHaveBeenCalled();
+        expect(logger.once.warn).not.toHaveBeenCalled();
+      });
+
+      it('warns on a grouped branch if any upgrade comes from a registry which provides timestamps', async () => {
+        schedule.isScheduledNow.mockReturnValueOnce(true);
+        config.prCreation = 'not-pending';
+        config.upgrades = partial<BranchUpgradeConfig>([
+          {
+            releaseTimestamp: undefined,
+            minimumReleaseAge: '100 days',
+            minimumReleaseAgeBehaviour: 'timestamp-optional',
+            datasource: 'docker',
+          },
+          {
+            releaseTimestamp: undefined,
+            minimumReleaseAge: '100 days',
+            minimumReleaseAgeBehaviour: 'timestamp-optional',
+            datasource: 'docker',
+            registryProvidesReleaseTimestamps: true,
+          },
+        ]);
+        scm.isBranchModified.mockResolvedValueOnce(false);
+
+        await branchWorker.processBranch(config);
+
+        expect(logger.once.warn).toHaveBeenCalledWith(
+          "Some upgrade(s) did not have a releaseTimestamp, but as we're running with minimumReleaseAgeBehaviour=timestamp-optional, proceeding. See debug logs for more information",
+        );
+      });
+
       it('warns on a grouped branch mixing datasources, if any of them declares support', async () => {
         // `.some()`, not `.every()`: one git-refs dep sharing a branch with a docker
         // dep must not suppress the docker dep's legitimate warning.
@@ -341,6 +389,7 @@ describe('workers/repository/update/branch/index', () => {
             minimumReleaseAge: '100 days',
             minimumReleaseAgeBehaviour: 'timestamp-optional',
             datasource: 'docker',
+            registryProvidesReleaseTimestamps: true,
           },
         ]);
         scm.isBranchModified.mockResolvedValueOnce(false);

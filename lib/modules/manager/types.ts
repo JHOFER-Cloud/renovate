@@ -249,6 +249,12 @@ export interface PackageDependency<
 
   mostRecentTimestamp?: Timestamp;
   isAbandoned?: boolean;
+  /**
+   * Set by the lookup when the registry returned a release timestamp for at least one release of this dependency, i.e. when a missing timestamp is a real gap rather than a registry which never provides them.
+   *
+   * @see registryProvidesReleaseTimestamps
+   */
+  registryProvidesReleaseTimestamps?: boolean;
   extractedConstraints?: Partial<Record<ConstraintName, string>>;
   /**
    * Whether the package registry has attestation information for the given update.
