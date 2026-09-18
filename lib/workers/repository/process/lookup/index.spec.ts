@@ -5175,6 +5175,120 @@ describe('workers/repository/process/lookup/index', () => {
       expect(logger.logger.once.warn).not.toHaveBeenCalled();
     });
 
+    // `docker` declares timestamp support, but only Docker Hub provides them - a registry like GHCR never does, so the
+    // absence is just as inherent as for `git-refs`, and a warn on every run would be noise the user cannot act on.
+    it('does not warn about missing releaseTimestamps when the registry provides none for any release', async () => {
+      config.currentValue = 'v7';
+      config.currentDigest = fakeSha('current');
+      config.packageName = 'actions/checkout';
+      config.versioning = githubActionsVersioningId;
+      config.datasource = GithubTagsDatasource.id;
+      config.minimumReleaseAge = '3 days';
+      config.minimumReleaseAgeBehaviour = 'timestamp-optional';
+      config.internalChecksFilter = 'strict';
+      getGithubTags.mockResolvedValueOnce({
+        releases: [{ version: 'v7.0.0' }, { version: 'v7.0.1' }],
+      });
+      vi.spyOn(
+        GithubTagsDatasource.prototype,
+        'getDigest',
+      ).mockResolvedValueOnce(fakeSha('new'));
+
+      const res = await Result.wrap(
+        lookup.lookupUpdates(config),
+      ).unwrapOrThrow();
+
+      // the update still proceeds un-aged, exactly as before - only the warn is suppressed
+      expect(res.updates).toEqual([
+        {
+          updateType: 'digest',
+          newValue: 'v7',
+          newDigest: fakeSha('new'),
+        },
+      ]);
+      expect(res.registryProvidesReleaseTimestamps).toBeUndefined();
+      expect(logger.logger.once.warn).not.toHaveBeenCalled();
+    });
+
+    // An unversioned tag such as `latest` has no versioned release to age against, so no
+    // release lookup happens at all - there is no evidence, and nothing the user can act on.
+    it('does not warn about missing releaseTimestamps for an unversioned tag with a pinned digest', async () => {
+      config.currentValue = 'latest';
+      config.currentDigest = fakeSha('current');
+      config.packageName = 'ghcr.io/some/image';
+      config.datasource = DockerDatasource.id;
+      config.versioning = dockerVersioningId;
+      config.minimumReleaseAge = '3 days';
+      config.minimumReleaseAgeBehaviour = 'timestamp-optional';
+      config.internalChecksFilter = 'strict';
+      getDockerReleases.mockResolvedValueOnce({
+        releases: [{ version: 'latest' }, { version: 'edge' }],
+      });
+      vi.spyOn(DockerDatasource.prototype, 'getDigest').mockResolvedValueOnce(
+        fakeSha('new'),
+      );
+
+      const res = await Result.wrap(
+        lookup.lookupUpdates(config),
+      ).unwrapOrThrow();
+
+      expect(res.updates).toEqual([
+        { updateType: 'digest', newValue: 'latest', newDigest: fakeSha('new') },
+      ]);
+      expect(logger.logger.once.warn).not.toHaveBeenCalled();
+    });
+
+    // End-to-end over the version-update path, which reads the flag from the merged
+    // dep config rather than from `res` directly, unlike the digest path above.
+    it('warns about a missing releaseTimestamp on a version update when the registry provides timestamps', async () => {
+      config.currentValue = '8.0.0';
+      config.packageName = 'some/image';
+      config.datasource = DockerDatasource.id;
+      config.minimumReleaseAge = '3 days';
+      config.minimumReleaseAgeBehaviour = 'timestamp-optional';
+      config.internalChecksFilter = 'strict';
+      getDockerReleases.mockResolvedValueOnce({
+        releases: [
+          {
+            version: '8.0.0',
+            releaseTimestamp: '2021-01-01T00:00:00.000Z' as Timestamp,
+          },
+          { version: '8.1.0' },
+        ],
+      });
+
+      const res = await Result.wrap(
+        lookup.lookupUpdates(config),
+      ).unwrapOrThrow();
+
+      expect(res.registryProvidesReleaseTimestamps).toBeTrue();
+      expect(res.updates).toMatchObject([{ newValue: '8.1.0' }]);
+      expect(logger.logger.once.warn).toHaveBeenCalledWith(
+        "Some release(s) did not have a releaseTimestamp, but as we're running with minimumReleaseAgeBehaviour=timestamp-optional, proceeding. See debug logs for more information",
+      );
+    });
+
+    // Same path, but the registry never provides timestamps - e.g. GHCR
+    it('does not warn about a missing releaseTimestamp on a version update when the registry provides none', async () => {
+      config.currentValue = '8.0.0';
+      config.packageName = 'ghcr.io/some/image';
+      config.datasource = DockerDatasource.id;
+      config.minimumReleaseAge = '3 days';
+      config.minimumReleaseAgeBehaviour = 'timestamp-optional';
+      config.internalChecksFilter = 'strict';
+      getDockerReleases.mockResolvedValueOnce({
+        releases: [{ version: '8.0.0' }, { version: '8.1.0' }],
+      });
+
+      const res = await Result.wrap(
+        lookup.lookupUpdates(config),
+      ).unwrapOrThrow();
+
+      expect(res.registryProvidesReleaseTimestamps).toBeUndefined();
+      expect(res.updates).toMatchObject([{ newValue: '8.1.0' }]);
+      expect(logger.logger.once.warn).not.toHaveBeenCalled();
+    });
+
     // `currentValue` is a range, so unlike `matchUpdateTypes`, which is read from the incoming `config`, matching against `matchCurrentVersion` needs the resolved `currentVersion`
     it('respects a minimumReleaseAge packageRule scoped to matchCurrentVersion for digest updates', async () => {
       config.currentValue = '^1.0.0';
@@ -5290,7 +5404,14 @@ describe('workers/repository/process/lookup/index', () => {
       config.minimumReleaseAgeBehaviour = 'timestamp-optional';
       config.internalChecksFilter = 'strict';
       getGithubTags.mockResolvedValueOnce({
-        releases: [{ version: 'v7.0.0' }, { version: 'v7.0.1' }],
+        releases: [
+          // the registry does provide timestamps, just not for the release the digest resolves to
+          {
+            version: 'v7.0.0',
+            releaseTimestamp: '2021-01-01T00:00:00.000Z' as Timestamp,
+          },
+          { version: 'v7.0.1' },
+        ],
       });
       vi.spyOn(
         GithubTagsDatasource.prototype,
@@ -5919,6 +6040,7 @@ describe('workers/repository/process/lookup/index', () => {
       ).unwrapOrThrow();
 
       expect(res).toEqual({
+        registryProvidesReleaseTimestamps: true,
         currentVersion: '0.9.99',
         fixedVersion: '0.9.99',
         isSingleVersion: true,
@@ -6029,6 +6151,7 @@ describe('workers/repository/process/lookup/index', () => {
       ).unwrapOrThrow();
 
       expect(res).toEqual({
+        registryProvidesReleaseTimestamps: true,
         currentVersion: '17.0.0',
         currentVersionAgeInDays: 1,
         currentVersionTimestamp: releaseTimestamp,

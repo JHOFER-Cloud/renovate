@@ -18,8 +18,9 @@ import {
   getDigest,
   getRawPkgReleases,
   isGetPkgReleasesConfig,
+  isMissingReleaseTimestampReportable,
+  registryProvidesReleaseTimestamps,
   supportsDigests,
-  supportsReleaseTimestamps,
 } from '../../../../modules/datasource/index.ts';
 import { postprocessRelease } from '../../../../modules/datasource/postprocess-release.ts';
 import { getRangeStrategy } from '../../../../modules/manager/index.ts';
@@ -154,7 +155,10 @@ async function applyMinimumReleaseAgeToDigestUpdate(
   if (ageCheck.minimumReleaseAgeMs && !ageCheck.hasTimestamp) {
     if (
       releaseConfig.minimumReleaseAgeBehaviour === 'timestamp-optional' &&
-      supportsReleaseTimestamps(config.datasource)
+      isMissingReleaseTimestampReportable(
+        config.datasource,
+        res.registryProvidesReleaseTimestamps,
+      )
     ) {
       logger.once.warn(
         "Some release(s) did not have a releaseTimestamp, but as we're running with minimumReleaseAgeBehaviour=timestamp-optional, proceeding. See debug logs for more information",
@@ -286,6 +290,19 @@ export async function lookupUpdates(
       const { val: releaseResult, err: lookupError } = await getRawPkgReleases(
         config,
       )
+        .transform((rawRes) => {
+          // Read the evidence off the raw response: filtering below drops releases,
+          // and with them the timestamps which show that this registry has any.
+          if (
+            registryProvidesReleaseTimestamps(
+              config.datasource,
+              rawRes.releases,
+            )
+          ) {
+            res.registryProvidesReleaseTimestamps = true;
+          }
+          return rawRes;
+        })
         .transform((res) => calculateMostRecentTimestamp(versioningApi, res))
         .transform((res) => calculateAbandonment(res, config))
         .transform((res) => applyDatasourceFilters(res, config))

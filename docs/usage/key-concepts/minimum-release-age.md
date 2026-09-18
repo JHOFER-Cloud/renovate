@@ -35,8 +35,23 @@ When Renovate runs with `minimumReleaseAgeBehaviour=timestamp-optional`, Renovat
 
 This warning serves to inform users about at least one dependency not being able to adhere to the minimum release age due to the configuration.
 
-The warning is only logged for datasources which _can_ return a release timestamp, see [Which datasources support release timestamps?](#which-datasources-support-release-timestamps).
-A datasource which can never return one (`git-refs`, for example, whose releases carry only a version, ref and digest) has no gap to report, so a missing timestamp from it is not warned about.
+The warning is only logged when a release timestamp could have been there, but was not.
+Two conditions must hold:
+
+- the datasource must support release timestamps, see [Which datasources support release timestamps?](#which-datasources-support-release-timestamps).
+  A datasource which never returns one, like `git-refs`, whose releases carry only a version, ref and digest, is not warned about
+- the registry must have returned a release timestamp for at least one release of the dependency.
+  Whether timestamps are available often depends on the registry, see [Which registries support release timestamps?](#which-registries-support-release-timestamps).
+  A dependency whose releases all lack a timestamp is therefore not warned about, for example a Docker image hosted on GHCR instead of Docker Hub
+
+Two cases yield no evidence about the registry, and are not warned about either:
+
+- a dependency Renovate never looked up releases for, such as an unversioned tag like `latest`, which has no versioned release to age against
+- a registry request which failed, or returned fewer releases than usual, so that no timestamp was seen this run
+
+For datasources which fetch release timestamps one release at a time, for example Maven, the release list cannot show whether the registry provides timestamps.
+Renovate still logs the warning for those, when the timestamp is missing after the release has been fetched.
+The `custom` datasource is also still warned about, as its timestamps come from your own [`transformTemplates`](../configuration-options.md#customdatasources), which you can fix.
 
 In cases where this is not desired, you can remap the warning to a lower log level with [`logLevelRemap`](../configuration-options.md#loglevelremap):
 

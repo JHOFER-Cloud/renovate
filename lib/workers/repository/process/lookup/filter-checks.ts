@@ -5,7 +5,7 @@ import type {
 } from '../../../../config/types.ts';
 import { logger } from '../../../../logger/index.ts';
 import type { Release } from '../../../../modules/datasource/index.ts';
-import { supportsReleaseTimestamps } from '../../../../modules/datasource/index.ts';
+import { isMissingReleaseTimestampReportable } from '../../../../modules/datasource/index.ts';
 import { postprocessRelease } from '../../../../modules/datasource/postprocess-release.ts';
 import type { VersioningApi } from '../../../../modules/versioning/index.ts';
 import {
@@ -215,7 +215,12 @@ export async function filterInternalChecks(
     }
 
     if (candidateVersionsWithoutReleaseTimestamp['timestamp-optional'].length) {
-      if (supportsReleaseTimestamps(config.datasource)) {
+      if (
+        isMissingReleaseTimestampReportable(
+          config.datasource,
+          config.registryProvidesReleaseTimestamps,
+        )
+      ) {
         logger.once.warn(
           "Some release(s) did not have a releaseTimestamp, but as we're running with minimumReleaseAgeBehaviour=timestamp-optional, proceeding. See debug logs for more information",
         );

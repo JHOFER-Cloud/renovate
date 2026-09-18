@@ -11,6 +11,7 @@ import { ExternalHostError } from '../../types/errors/external-host-error.ts';
 import * as memCache from '../../util/cache/memory/index.ts';
 import * as _packageCache from '../../util/cache/package/index.ts';
 import { loadModules } from '../../util/modules.ts';
+import type { Timestamp } from '../../util/timestamp.ts';
 import datasources from './api.ts';
 import { getDefaultVersioning } from './common.ts';
 import { Datasource } from './datasource.ts';
@@ -19,6 +20,8 @@ import {
   getDatasources,
   getDigest,
   getPkgReleases,
+  isMissingReleaseTimestampReportable,
+  registryProvidesReleaseTimestamps,
   supportsDigests,
   supportsReleaseTimestamps,
 } from './index.ts';
@@ -27,6 +30,9 @@ import type {
   DigestConfig,
   GetPkgReleasesConfig,
   GetReleasesConfig,
+  PostprocessReleaseConfig,
+  PostprocessReleaseResult,
+  Release,
   ReleaseResult,
 } from './types.ts';
 
@@ -276,6 +282,87 @@ describe('modules/datasource/index', () => {
     it('returns false for an unknown datasource', () => {
       expect(supportsReleaseTimestamps('not-a-datasource')).toBeFalse();
       expect(supportsReleaseTimestamps(undefined)).toBeFalse();
+    });
+
+    describe('registryProvidesReleaseTimestamps', () => {
+      class TimestampDatasource extends DummyDatasource {
+        override readonly releaseTimestampSupport = true;
+      }
+
+      const withTimestamp = {
+        releaseTimestamp: '2021-01-01T00:00:00.000Z' as Timestamp,
+      };
+
+      it('returns true if any release has a timestamp', () => {
+        datasources.set(datasource, new TimestampDatasource());
+        expect(
+          registryProvidesReleaseTimestamps(datasource, [{}, withTimestamp]),
+        ).toBeTrue();
+      });
+
+      it('returns false if no release has a timestamp', () => {
+        datasources.set(datasource, new TimestampDatasource());
+        expect(
+          registryProvidesReleaseTimestamps(datasource, [{}, {}]),
+        ).toBeFalse();
+      });
+
+      it('returns false for an unknown datasource', () => {
+        expect(
+          registryProvidesReleaseTimestamps(undefined, [withTimestamp]),
+        ).toBeFalse();
+      });
+
+      it('returns true if timestamps are fetched lazily in postprocessRelease()', () => {
+        // e.g. `maven`: the release list carries no timestamps until each release is
+        // postprocessed, so it is not evidence about the registry either way
+        class LazyTimestampDatasource extends TimestampDatasource {
+          override postprocessRelease(
+            _config: PostprocessReleaseConfig,
+            release: Release,
+          ): Promise<PostprocessReleaseResult> {
+            return Promise.resolve(release);
+          }
+        }
+        datasources.set(datasource, new LazyTimestampDatasource());
+
+        expect(registryProvidesReleaseTimestamps(datasource, [{}])).toBeTrue();
+      });
+
+      it('returns true for the custom datasource, whose timestamps the user controls', () => {
+        // a missing timestamp there is fixable via `transformTemplates`, so it stays reportable
+        expect(
+          registryProvidesReleaseTimestamps('custom.foo', [{}]),
+        ).toBeTrue();
+      });
+    });
+
+    describe('isMissingReleaseTimestampReportable', () => {
+      it('returns true only if the datasource supports timestamps and the registry provided one', () => {
+        class TimestampDatasource extends DummyDatasource {
+          override readonly releaseTimestampSupport = true;
+        }
+        datasources.set(datasource, new TimestampDatasource());
+
+        expect(
+          isMissingReleaseTimestampReportable(datasource, true),
+        ).toBeTrue();
+        // no evidence, e.g. an unversioned tag for which no release lookup ran
+        expect(
+          isMissingReleaseTimestampReportable(datasource, undefined),
+        ).toBeFalse();
+        expect(
+          isMissingReleaseTimestampReportable(datasource, false),
+        ).toBeFalse();
+      });
+
+      it('returns false if the datasource does not support timestamps', () => {
+        datasources.set(datasource, new DummyDatasource());
+
+        expect(
+          isMissingReleaseTimestampReportable(datasource, true),
+        ).toBeFalse();
+      });
     });
   });
 

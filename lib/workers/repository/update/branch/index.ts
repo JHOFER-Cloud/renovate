@@ -20,7 +20,7 @@ import {
   WORKER_FILE_UPDATE_FAILED,
 } from '../../../../constants/error-messages.ts';
 import { logger, removeMeta } from '../../../../logger/index.ts';
-import { supportsReleaseTimestamps } from '../../../../modules/datasource/index.ts';
+import { isMissingReleaseTimestampReportable } from '../../../../modules/datasource/index.ts';
 import { updateActionsLockfile } from '../../../../modules/manager/github-actions/artifacts.ts';
 import { getAdditionalFiles } from '../../../../modules/manager/npm/post-update/index.ts';
 import {
@@ -450,6 +450,7 @@ export async function processBranch(
           updateType: UpdateType;
           // absent for lockFileMaintenance upgrades, which have no dep to age
           datasource: string | undefined;
+          registryProvidesReleaseTimestamps?: boolean;
         }[]
       > = {
         'timestamp-required': [],
@@ -500,6 +501,8 @@ export async function processBranch(
                 depName: upgrade.depName!,
                 updateType: upgrade.updateType!,
                 datasource: upgrade.datasource,
+                registryProvidesReleaseTimestamps:
+                  upgrade.registryProvidesReleaseTimestamps,
               });
             }
           }
@@ -542,7 +545,11 @@ export async function processBranch(
       if (depNamesWithoutReleaseTimestamp['timestamp-optional'].length) {
         if (
           depNamesWithoutReleaseTimestamp['timestamp-optional'].some(
-            ({ datasource }) => supportsReleaseTimestamps(datasource),
+            ({ datasource, registryProvidesReleaseTimestamps }) =>
+              isMissingReleaseTimestampReportable(
+                datasource,
+                registryProvidesReleaseTimestamps,
+              ),
           )
         ) {
           logger.once.warn(

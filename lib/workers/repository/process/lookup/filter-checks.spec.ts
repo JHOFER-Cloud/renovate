@@ -309,6 +309,7 @@ describe('workers/repository/process/lookup/filter-checks', () => {
         ];
 
         config.datasource = 'some-datasource';
+        config.registryProvidesReleaseTimestamps = true;
         config.internalChecksFilter = 'strict';
         config.minimumReleaseAge = '100 days';
         config.minimumReleaseAgeBehaviour = 'timestamp-optional';
@@ -322,6 +323,34 @@ describe('workers/repository/process/lookup/filter-checks', () => {
         expect(logger.logger.once.warn).toHaveBeenCalledWith(
           "Some release(s) did not have a releaseTimestamp, but as we're running with minimumReleaseAgeBehaviour=timestamp-optional, proceeding. See debug logs for more information",
         );
+      });
+
+      it('does not warn about a missing releaseTimestamp if the registry provides none', async () => {
+        // e.g. `docker` on GHCR: the datasource declares support, but only Docker Hub actually has timestamps
+        class TimestampDatasource extends DummyDatasource {
+          override readonly releaseTimestampSupport = true;
+        }
+        getDatasourceFor.mockReturnValue(new TimestampDatasource());
+
+        const releasesWithoutReleaseTimestamps: Release[] = [
+          { version: '1.0.1' },
+          { version: '1.0.4' },
+        ];
+
+        config.datasource = 'some-datasource';
+        config.internalChecksFilter = 'strict';
+        config.minimumReleaseAge = '100 days';
+        config.minimumReleaseAgeBehaviour = 'timestamp-optional';
+        const res = await filterInternalChecks(
+          config,
+          versioning,
+          'patch',
+          releasesWithoutReleaseTimestamps,
+        );
+
+        // still proceeds, exactly as before - only the warn is suppressed
+        expect(res.release?.version).toBe('1.0.4');
+        expect(logger.logger.once.warn).not.toHaveBeenCalled();
       });
 
       it('does not warn about a missing releaseTimestamp if the datasource can never supply one', async () => {
