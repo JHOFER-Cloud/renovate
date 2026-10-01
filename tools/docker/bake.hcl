@@ -1,5 +1,5 @@
 variable "OWNER" {
-  default = "renovatebot"
+  default = "jhofer-cloud"
 }
 variable "FILE" {
   default = "renovate"
@@ -68,19 +68,11 @@ target "slim" {
     notequal("", CHANNEL)
       ? "ghcr.io/${OWNER}/${FILE}:${CHANNEL}"
       : "ghcr.io/${OWNER}/${FILE}",
-    notequal("", CHANNEL)
-      ? "${FILE}/${FILE}:${CHANNEL}"
-      : "${FILE}/${FILE}",
 
     // GitHub versioned tags
     notequal("", RENOVATE_VERSION) ? "ghcr.io/${OWNER}/${FILE}:${RENOVATE_VERSION}": "",
     notequal("", RENOVATE_MAJOR_VERSION) ? "ghcr.io/${OWNER}/${FILE}:${RENOVATE_MAJOR_VERSION}": "",
     notequal("", RENOVATE_MAJOR_MINOR_VERSION) ? "ghcr.io/${OWNER}/${FILE}:${RENOVATE_MAJOR_MINOR_VERSION}": "",
-
-    // Docker Hub versioned tags
-    notequal("", RENOVATE_VERSION) ? "${FILE}/${FILE}:${RENOVATE_VERSION}": "",
-    notequal("", RENOVATE_MAJOR_VERSION) ? "${FILE}/${FILE}:${RENOVATE_MAJOR_VERSION}": "",
-    notequal("", RENOVATE_MAJOR_MINOR_VERSION) ? "${FILE}/${FILE}:${RENOVATE_MAJOR_MINOR_VERSION}": "",
   ]
 }
 
@@ -94,17 +86,11 @@ target "full" {
   # ]
   tags = [
     notequal("", CHANNEL) ? "ghcr.io/${OWNER}/${FILE}:${CHANNEL}-full" : "ghcr.io/${OWNER}/${FILE}:full",
-    notequal("", CHANNEL) ? "${FILE}/${FILE}:${CHANNEL}-full" : "${FILE}/${FILE}:full",
 
     // GitHub versioned tags
     notequal("", RENOVATE_VERSION) ? "ghcr.io/${OWNER}/${FILE}:${RENOVATE_VERSION}-full": "",
     notequal("", RENOVATE_MAJOR_VERSION) ? "ghcr.io/${OWNER}/${FILE}:${RENOVATE_MAJOR_VERSION}-full": "",
     notequal("", RENOVATE_MAJOR_MINOR_VERSION) ? "ghcr.io/${OWNER}/${FILE}:${RENOVATE_MAJOR_MINOR_VERSION}-full": "",
-
-    // Docker Hub versioned tags
-    notequal("", RENOVATE_VERSION) ? "${FILE}/${FILE}:${RENOVATE_VERSION}-full": "",
-    notequal("", RENOVATE_MAJOR_VERSION) ? "${FILE}/${FILE}:${RENOVATE_MAJOR_VERSION}-full": "",
-    notequal("", RENOVATE_MAJOR_MINOR_VERSION) ? "${FILE}/${FILE}:${RENOVATE_MAJOR_MINOR_VERSION}-full": "",
   ]
 }
 

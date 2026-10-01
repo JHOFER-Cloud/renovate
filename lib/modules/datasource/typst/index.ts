@@ -19,6 +19,8 @@ export class TypstDatasource extends Datasource {
 
   override defaultVersioning = semver;
 
+  override readonly releaseTimestampSupport = true;
+
   constructor() {
     super(TypstDatasource.id);
   }

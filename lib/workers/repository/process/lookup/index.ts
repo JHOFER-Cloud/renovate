@@ -3,6 +3,7 @@ import { mergeChildConfig } from '../../../../config/index.ts';
 import type { ValidationMessage } from '../../../../config/types.ts';
 import { CONFIG_VALIDATION } from '../../../../constants/error-messages.ts';
 import { logger } from '../../../../logger/index.ts';
+import { sanitizeUrls } from '../../../../logger/utils.ts';
 import {
   getDatasourceFor,
   getDefaultVersioning,
@@ -15,6 +16,7 @@ import {
   applyDatasourceFilters,
   getRawPkgReleases,
   isGetPkgReleasesConfig,
+  registryProvidesReleaseTimestamps,
   supportsDigests,
 } from '../../../../modules/datasource/index.ts';
 import { postprocessRelease } from '../../../../modules/datasource/postprocess-release.ts';
@@ -26,6 +28,7 @@ import { getElapsedDays } from '../../../../util/date.ts';
 import { applyPackageRules } from '../../../../util/package-rules/index.ts';
 import { regEx } from '../../../../util/regex.ts';
 import { Result } from '../../../../util/result.ts';
+import { sanitize } from '../../../../util/sanitize.ts';
 import { safeStringify } from '../../../../util/stringify.ts';
 import type { Timestamp } from '../../../../util/timestamp.ts';
 import { calculateAbandonment } from './abandonment.ts';
@@ -158,6 +161,19 @@ export async function lookupUpdates(
       const { val: releaseResult, err: lookupError } = await getRawPkgReleases(
         config,
       )
+        .transform((rawRes) => {
+          // Read the evidence off the raw response: filtering below drops releases,
+          // and with them the timestamps which show that this registry has any.
+          if (
+            registryProvidesReleaseTimestamps(
+              config.datasource,
+              rawRes.releases,
+            )
+          ) {
+            res.registryProvidesReleaseTimestamps = true;
+          }
+          return rawRes;
+        })
         .transform((res) => calculateMostRecentTimestamp(versioningApi, res))
         .transform((res) => calculateAbandonment(res, config))
         .transform((res) => applyDatasourceFilters(res, config))
@@ -661,7 +677,7 @@ export async function lookupUpdates(
       return Result.err(err);
     }
 
-    logger.error(
+    logger.warn(
       {
         currentDigest: config.currentDigest,
         currentValue: config.currentValue,
@@ -680,6 +696,13 @@ export async function lookupUpdates(
       'lookupUpdates error',
     );
     res.skipReason = 'internal-error';
+    const safeMessage = sanitize(
+      sanitizeUrls(err instanceof Error ? err.message : String(err)),
+    ).slice(0, 150);
+    res.warnings.push({
+      topic: config.packageName,
+      message: `Dependency lookup error for \`${config.datasource}\` package \`${config.packageName}\`: ${safeMessage}`,
+    });
   }
   return Result.ok(res);
 }
