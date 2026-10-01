@@ -30,6 +30,11 @@ import type {
 } from '../types.ts';
 import * as _appToken from './app-token.ts';
 import * as branch from './branch.ts';
+import {
+  enableAutoMergeMutation,
+  enqueuePullRequestMutation,
+  repoInfoQuery,
+} from './graphql.ts';
 import * as github from './index.ts';
 import type {
   ApiPageCache,
@@ -1353,8 +1358,9 @@ describe('modules/platform/github/index', () => {
     scope: httpMock.Scope,
     repository: string,
     other: any = {},
+    requestBody?: httpMock.Body,
   ): void {
-    scope.post(`/graphql`).reply(200, {
+    scope.post(`/graphql`, requestBody).reply(200, {
       data: {
         repository: {
           isFork: false,
@@ -1460,7 +1466,18 @@ describe('modules/platform/github/index', () => {
         .scope('https://github.company.com')
         .head('/')
         .reply(200);
-      initRepoMock(scope, 'some/repo');
+      initRepoMock(
+        scope,
+        'some/repo',
+        {},
+        {
+          query: repoInfoQuery,
+          variables: {
+            name: 'repo',
+            owner: 'some',
+          },
+        },
+      );
       await github.initPlatform({
         endpoint: 'https://github.company.com',
         token: '123test',
@@ -1470,20 +1487,7 @@ describe('modules/platform/github/index', () => {
 
       await github.initRepo({ repository: 'some/repo' });
 
-      expect(httpMock.getTrace()).toContainEqual(
-        expect.objectContaining({
-          graphql: expect.objectContaining({
-            query: expect.objectContaining({
-              repository: expect.objectContaining({
-                autoMergeAllowed: null,
-                hasIssuesEnabled: null,
-                hasVulnerabilityAlertsEnabled: null,
-                mergeQueue: { id: null },
-              }),
-            }),
-          }),
-        }),
-      );
+      expect(httpMock.allUsed()).toBeTrue();
     });
 
     // for coverage
@@ -4851,6 +4855,14 @@ describe('modules/platform/github/index', () => {
         ],
       };
 
+      const graphqlAutomergeBody = {
+        query: enableAutoMergeMutation,
+        variables: {
+          pullRequestId: 'abcd',
+          mergeMethod: 'SQUASH',
+        },
+      };
+
       const prConfig: CreatePRConfig = {
         sourceBranch: 'some-branch',
         targetBranch: 'dev',
@@ -4872,58 +4884,12 @@ describe('modules/platform/github/index', () => {
         return scope;
       }
 
-      const graphqlGetRepo = {
-        method: 'POST',
-        url: 'https://api.github.com/graphql',
-        graphql: { query: { repository: {} } },
-      };
-
-      const restCreatePr = {
-        method: 'POST',
-        url: 'https://api.github.com/repos/some/repo/pulls',
-      };
-
-      const restAddLabels = {
-        method: 'POST',
-        url: 'https://api.github.com/repos/some/repo/issues/123/labels',
-      };
-
-      const graphqlAutomerge = {
-        method: 'POST',
-        url: 'https://api.github.com/graphql',
-        graphql: {
-          mutation: {
-            __vars: {
-              $pullRequestId: 'ID!',
-              $mergeMethod: 'PullRequestMergeMethod!',
-            },
-            enablePullRequestAutoMerge: {
-              __args: {
-                input: {
-                  pullRequestId: '$pullRequestId',
-                  mergeMethod: '$mergeMethod',
-                },
-              },
-            },
-          },
-          variables: {
-            pullRequestId: 'abcd',
-            mergeMethod: 'SQUASH',
-          },
-        },
-      };
-
       it('should skip automerge if disabled in repo settings', async () => {
         await mockScope({ autoMergeAllowed: false });
 
         const pr = await github.createPr(prConfig);
 
         expect(pr).toMatchObject({ number: 123 });
-        expect(httpMock.getTrace()).toMatchObject([
-          graphqlGetRepo,
-          restCreatePr,
-          restAddLabels,
-        ]);
       });
 
       it('should skip automerge if GHE <3.3.0', async () => {
@@ -4972,23 +4938,15 @@ describe('modules/platform/github/index', () => {
           .post('/repos/some/repo/pulls')
           .reply(200, {
             number: 123,
+            node_id: 'abcd',
           })
           .post('/repos/some/repo/issues/123/labels')
-          .reply(200, [])
-          .post('/graphql')
-          .reply(200, {
-            data: {
-              repository: {
-                defaultBranchRef: {
-                  name: 'main',
-                },
-                nameWithOwner: 'some/repo',
-                autoMergeAllowed: true,
-              },
-            },
-          });
+          .reply(200, []);
 
         initRepoMock(scope, 'some/repo');
+        scope
+          .post('/graphql', graphqlAutomergeBody)
+          .reply(200, graphqlAutomergeResp);
         await github.initPlatform({
           endpoint: 'https://github.company.com',
           token: '123test',
@@ -5046,22 +5004,26 @@ describe('modules/platform/github/index', () => {
 
       it('should set automatic merge', async () => {
         const scope = await mockScope();
-        scope.post('/graphql').reply(200, graphqlAutomergeResp);
+        scope
+          .post('/graphql', graphqlAutomergeBody)
+          .reply(200, graphqlAutomergeResp);
 
         const pr = await github.createPr(prConfig);
 
         expect(pr).toMatchObject({ number: 123 });
-        expect(httpMock.getTrace()).toMatchObject([
-          graphqlGetRepo,
-          restCreatePr,
-          restAddLabels,
-          graphqlAutomerge,
-        ]);
       });
 
       it('should use the configured automerge strategy', async () => {
         const scope = await mockScope();
-        scope.post('/graphql').reply(200, graphqlAutomergeResp);
+        scope
+          .post('/graphql', {
+            query: enableAutoMergeMutation,
+            variables: {
+              pullRequestId: 'abcd',
+              mergeMethod: 'REBASE',
+            },
+          })
+          .reply(200, graphqlAutomergeResp);
 
         const pr = await github.createPr({
           ...prConfig,
@@ -5072,47 +5034,22 @@ describe('modules/platform/github/index', () => {
         });
 
         expect(pr).toMatchObject({ number: 123 });
-        expect(httpMock.getTrace()).toMatchObject([
-          graphqlGetRepo,
-          restCreatePr,
-          restAddLabels,
-          {
-            ...graphqlAutomerge,
-            graphql: {
-              ...graphqlAutomerge.graphql,
-              variables: {
-                pullRequestId: 'abcd',
-                mergeMethod: 'REBASE',
-              },
-            },
-          },
-        ]);
       });
 
       it('should handle GraphQL errors', async () => {
         const scope = await mockScope();
-        scope.post('/graphql').reply(200, graphqlAutomergeErrorResp);
+        scope
+          .post('/graphql', graphqlAutomergeBody)
+          .reply(200, graphqlAutomergeErrorResp);
         const pr = await github.createPr(prConfig);
         expect(pr).toMatchObject({ number: 123 });
-        expect(httpMock.getTrace()).toMatchObject([
-          graphqlGetRepo,
-          restCreatePr,
-          restAddLabels,
-          graphqlAutomerge,
-        ]);
       });
 
       it('should handle REST API errors', async () => {
         const scope = await mockScope();
-        scope.post('/graphql').reply(500);
+        scope.post('/graphql', graphqlAutomergeBody).reply(500);
         const pr = await github.createPr(prConfig);
         expect(pr).toMatchObject({ number: 123 });
-        expect(httpMock.getTrace()).toMatchObject([
-          graphqlGetRepo,
-          restCreatePr,
-          restAddLabels,
-          graphqlAutomerge,
-        ]);
       });
 
       it('should propagate GraphQL rate limit errors', async () => {
@@ -5126,7 +5063,16 @@ describe('modules/platform/github/index', () => {
 
       it('should pass commit message as commitHeadline and commitBody for squash merge', async () => {
         const scope = await mockScope();
-        scope.post('/graphql').reply(200, graphqlAutomergeResp);
+        scope
+          .post('/graphql', {
+            query: enableAutoMergeMutation,
+            variables: {
+              pullRequestId: 'abcd',
+              mergeMethod: 'SQUASH',
+              commitHeadline: 'Update dependency foo to v1.2.3 (#123)',
+            },
+          })
+          .reply(200, graphqlAutomergeResp);
 
         const pr = await github.createPr({
           ...prConfig,
@@ -5137,22 +5083,6 @@ describe('modules/platform/github/index', () => {
         });
 
         expect(pr).toMatchObject({ number: 123 });
-        expect(httpMock.getTrace()).toMatchObject([
-          graphqlGetRepo,
-          restCreatePr,
-          restAddLabels,
-          {
-            ...graphqlAutomerge,
-            graphql: {
-              ...graphqlAutomerge.graphql,
-              variables: {
-                pullRequestId: 'abcd',
-                mergeMethod: 'SQUASH',
-                commitHeadline: 'Update dependency foo to v1.2.3 (#123)',
-              },
-            },
-          },
-        ]);
       });
 
       it('should pass commit message as commitHeadline and commitBody for merge commit', async () => {
@@ -5160,7 +5090,16 @@ describe('modules/platform/github/index', () => {
           squashMergeAllowed: false,
           mergeCommitAllowed: true,
         });
-        scope.post('/graphql').reply(200, graphqlAutomergeResp);
+        scope
+          .post('/graphql', {
+            query: enableAutoMergeMutation,
+            variables: {
+              pullRequestId: 'abcd',
+              mergeMethod: 'MERGE',
+              commitHeadline: 'Update dependency foo to v1.2.3 (#123)',
+            },
+          })
+          .reply(200, graphqlAutomergeResp);
 
         const pr = await github.createPr({
           ...prConfig,
@@ -5171,27 +5110,21 @@ describe('modules/platform/github/index', () => {
         });
 
         expect(pr).toMatchObject({ number: 123 });
-        expect(httpMock.getTrace()).toMatchObject([
-          graphqlGetRepo,
-          restCreatePr,
-          restAddLabels,
-          {
-            ...graphqlAutomerge,
-            graphql: {
-              ...graphqlAutomerge.graphql,
-              variables: {
-                pullRequestId: 'abcd',
-                mergeMethod: 'MERGE',
-                commitHeadline: 'Update dependency foo to v1.2.3 (#123)',
-              },
-            },
-          },
-        ]);
       });
 
       it('should pass multi-line commit message body for squash merge', async () => {
         const scope = await mockScope();
-        scope.post('/graphql').reply(200, graphqlAutomergeResp);
+        scope
+          .post('/graphql', {
+            query: enableAutoMergeMutation,
+            variables: {
+              pullRequestId: 'abcd',
+              mergeMethod: 'SQUASH',
+              commitHeadline: 'Update dependency foo to v1.2.3 (#123)',
+              commitBody: 'Some commit body',
+            },
+          })
+          .reply(200, graphqlAutomergeResp);
 
         const pr = await github.createPr({
           ...prConfig,
@@ -5203,23 +5136,6 @@ describe('modules/platform/github/index', () => {
         });
 
         expect(pr).toMatchObject({ number: 123 });
-        expect(httpMock.getTrace()).toMatchObject([
-          graphqlGetRepo,
-          restCreatePr,
-          restAddLabels,
-          {
-            ...graphqlAutomerge,
-            graphql: {
-              ...graphqlAutomerge.graphql,
-              variables: {
-                pullRequestId: 'abcd',
-                mergeMethod: 'SQUASH',
-                commitHeadline: 'Update dependency foo to v1.2.3 (#123)',
-                commitBody: 'Some commit body',
-              },
-            },
-          },
-        ]);
       });
 
       it('should not pass commit message headline/body for rebase merge', async () => {
@@ -5228,7 +5144,15 @@ describe('modules/platform/github/index', () => {
           mergeCommitAllowed: false,
           rebaseMergeAllowed: true,
         });
-        scope.post('/graphql').reply(200, graphqlAutomergeResp);
+        scope
+          .post('/graphql', {
+            query: enableAutoMergeMutation,
+            variables: {
+              pullRequestId: 'abcd',
+              mergeMethod: 'REBASE',
+            },
+          })
+          .reply(200, graphqlAutomergeResp);
 
         const pr = await github.createPr({
           ...prConfig,
@@ -5240,29 +5164,6 @@ describe('modules/platform/github/index', () => {
         });
 
         expect(pr).toMatchObject({ number: 123 });
-
-        const trace = httpMock.getTrace();
-        expect(trace).toMatchObject([
-          graphqlGetRepo,
-          restCreatePr,
-          restAddLabels,
-          {
-            ...graphqlAutomerge,
-            graphql: {
-              ...graphqlAutomerge.graphql,
-              variables: {
-                pullRequestId: 'abcd',
-                mergeMethod: 'REBASE',
-              },
-            },
-          },
-        ]);
-
-        const automergeTrace = trace.at(-1);
-        expect(
-          automergeTrace?.graphql?.variables?.commitHeadline,
-        ).toBeUndefined();
-        expect(automergeTrace?.graphql?.variables?.commitBody).toBeUndefined();
       });
     });
 
@@ -5976,63 +5877,23 @@ describe('modules/platform/github/index', () => {
       return scope;
     }
 
-    const graphqlGetRepo = {
-      method: 'POST',
-      url: 'https://api.github.com/graphql',
-      graphql: { query: { repository: {} } },
-    };
-
-    const restGetPrList = {
-      method: 'GET',
-      url: 'https://api.github.com/repos/some/repo/pulls?per_page=100&state=all&sort=updated&direction=desc&page=1',
-    };
-
-    const restGetPr = {
-      method: 'GET',
-      url: 'https://api.github.com/repos/some/repo/pulls/123',
-    };
-
-    const graphqlAutomerge = {
-      method: 'POST',
-      url: 'https://api.github.com/graphql',
-      graphql: {
-        mutation: {
-          __vars: {
-            $pullRequestId: 'ID!',
-            $mergeMethod: 'PullRequestMergeMethod!',
-          },
-          enablePullRequestAutoMerge: {
-            __args: {
-              input: {
-                pullRequestId: '$pullRequestId',
-                mergeMethod: '$mergeMethod',
-              },
-            },
-          },
-        },
-        variables: {
-          pullRequestId: 'abcd',
-          mergeMethod: 'SQUASH',
-        },
-      },
-    };
-
     it('should set automatic merge', async () => {
       const scope = await mockScope();
-      scope.post('/graphql').reply(200, graphqlAutomergeResp);
+      scope
+        .post('/graphql', {
+          query: enableAutoMergeMutation,
+          variables: {
+            pullRequestId: 'abcd',
+            mergeMethod: 'SQUASH',
+          },
+        })
+        .reply(200, graphqlAutomergeResp);
 
       await expect(github.reattemptPlatformAutomerge(pr)).toResolve();
 
       expect(logger.logger.debug).toHaveBeenLastCalledWith(
         'PR platform automerge re-attempted...prNo: 123',
       );
-
-      expect(httpMock.getTrace()).toMatchObject([
-        graphqlGetRepo,
-        restGetPrList,
-        restGetPr,
-        graphqlAutomerge,
-      ]);
     });
 
     it('handles unknown error', async () => {
@@ -6256,13 +6117,6 @@ describe('modules/platform/github/index', () => {
       });
 
       expect(res).toBeTrue();
-      expect(httpMock.getTrace()).toMatchObject([
-        { url: 'https://api.github.com/graphql' },
-        {
-          url: 'https://api.github.com/repos/some/repo/pulls?per_page=100&state=all&sort=updated&direction=desc&page=1',
-        },
-        { url: 'https://api.github.com/repos/some/repo/pulls/1234/merge' },
-      ]);
       // The PR is merged, so it must be cached as merged
       await expect(github.getPr(1234)).resolves.toMatchObject({
         number: 1234,
@@ -6283,7 +6137,10 @@ describe('modules/platform/github/index', () => {
           message:
             'At least 1 approving review is required by reviewers with write access.',
         })
-        .post('/graphql')
+        .post('/graphql', {
+          query: enqueuePullRequestMutation,
+          variables: { pullRequestId: 'abcd' },
+        })
         .reply(200, {
           data: {
             enqueuePullRequest: {
@@ -6299,21 +6156,6 @@ describe('modules/platform/github/index', () => {
       });
 
       expect(res).toBeTrue();
-      expect(httpMock.getTrace()).toMatchObject([
-        { url: 'https://api.github.com/graphql' },
-        {
-          url: 'https://api.github.com/repos/some/repo/pulls?per_page=100&state=all&sort=updated&direction=desc&page=1',
-        },
-        { url: 'https://api.github.com/repos/some/repo/pulls/1234/merge' },
-        { url: 'https://api.github.com/graphql' },
-        {
-          url: 'https://api.github.com/graphql',
-          graphql: {
-            mutation: { enqueuePullRequest: {} },
-            variables: { pullRequestId: 'abcd' },
-          },
-        },
-      ]);
       // The PR is not merged yet, so it must not be cached as merged
       await expect(github.getPr(1234)).resolves.toMatchObject({
         number: 1234,
@@ -6435,11 +6277,6 @@ describe('modules/platform/github/index', () => {
       });
 
       expect(res).toBeFalse();
-      expect(httpMock.getTrace()).not.toContainEqual(
-        expect.objectContaining({
-          graphql: { mutation: { enqueuePullRequest: {} } },
-        }),
-      );
     });
 
     it('should add PR to the merge queue when the direct merge is refused with an unrecognized message', async () => {

@@ -17,7 +17,9 @@ export class FlakeHubDatasource extends Datasource {
     super(FlakeHubDatasource.id);
   }
 
-  override readonly defaultRegistryUrls = [FlakeHubDatasource.publicApiUrl];
+  override getDefaultRegistryUrls(_packageName: string): string[] {
+    return [FlakeHubDatasource.publicApiUrl];
+  }
 
   override readonly releaseTimestampSupport = true;
   override readonly releaseTimestampNote =

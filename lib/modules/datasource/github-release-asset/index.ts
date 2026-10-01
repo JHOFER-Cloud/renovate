@@ -67,12 +67,16 @@ export class GithubReleaseAssetDatasource extends Datasource {
     this.http = new GithubHttp(GithubReleaseAssetDatasource.id);
   }
 
-  override readonly defaultRegistryUrls = ['https://github.com'];
+  override getDefaultRegistryUrls(_packageName: string): string[] {
+    return ['https://github.com'];
+  }
 
   // The asset URL parser is github.com-only, so a GHE registryUrl could never
   // resolve. Advertise that rather than letting the generated docs promise
   // custom-registry support that cannot work.
-  override readonly customRegistrySupport = false;
+  override supportsCustomRegistry(_packageName: string): boolean {
+    return false;
+  }
 
   override readonly defaultVersioning = exactVersioning.id;
 

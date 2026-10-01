@@ -41,6 +41,8 @@ When a lock file is present:
 
 - Lock file maintenance is supported via the `lockFileMaintenance` option. When the `mise` version Renovate runs supports it (see [safe mode](#trust-model-for-lock-file-updates) for how the version is detected), maintenance runs `mise lock --bump`, which advances fuzzy selectors (e.g. `node = "22"`) to the latest matching version rather than only refreshing existing locked versions.
 
+When `mise lock` pins a tool's dependencies in a [native dependency sidecar](https://mise.jdx.dev/dev-tools/mise-lock.html#native-dependency-sidecars) (for example `.mise/locks/npm-prettier/3.3.3/aube-lock.yaml`), Renovate commits the sidecar changes together with the lock file, including new sidecar directories and the removal of ones that `mise lock` deleted.
+
 Renovate recognizes environment-specific lock files:
 
 - `mise.lock` - default lock file
@@ -88,6 +90,18 @@ erlang = ["23.3", "22.0"]
 
 Renovate will update `"23.3"` (the primary version) but will not touch `"22.0"` (the fallback version).
 
+The same applies when the array items are inline tables:
+
+```toml
+[tools]
+rust = [
+  { version = "1.98.1", components = "clippy,rustfmt" },
+  { version = "nightly-2026-07-12", profile = "minimal" },
+]
+```
+
+Renovate will update `"1.98.1"` and read backend options such as `version_prefix` or `tag_regex` from that first item only.
+
 #### Why can Renovate only update primary versions?
 
 To maintain consistency and reliability, Renovate opts to only manage the _first_ listed version.
@@ -124,12 +138,14 @@ Renovate's `mise` manager supports the following [backends](https://mise.jdx.dev
 - [`asdf`](https://mise.jdx.dev/dev-tools/backends/asdf.html)
 - [`aqua`](https://mise.jdx.dev/dev-tools/backends/aqua.html)
 - [`cargo`](https://mise.jdx.dev/dev-tools/backends/cargo.html)
+- [`conda`](https://mise.jdx.dev/dev-tools/backends/conda.html)
 - [`gem`](https://mise.jdx.dev/dev-tools/backends/gem.html)
 - [`github`](https://mise.jdx.dev/dev-tools/backends/github.html)
 - [`gitlab`](https://mise.jdx.dev/dev-tools/backends/gitlab.html)
 - [`go`](https://mise.jdx.dev/dev-tools/backends/go.html)
 - [`npm`](https://mise.jdx.dev/dev-tools/backends/npm.html)
 - [`pipx`](https://mise.jdx.dev/dev-tools/backends/pipx.html)
+- [`pypi`](https://mise.jdx.dev/dev-tools/backends/pypi.html)
 - [`spm`](https://mise.jdx.dev/dev-tools/backends/spm.html)
 - [`ubi`](https://mise.jdx.dev/dev-tools/backends/ubi.html)
 - [`vfox`](https://mise.jdx.dev/dev-tools/backends/vfox.html)

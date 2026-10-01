@@ -1133,52 +1133,61 @@ describe('modules/manager/nix/extract', () => {
       });
     });
 
-    it('supports locked nixpkgs input', async () => {
-      const flakeNix = codeBlock`{
-        inputs = {
-          flake-utils.url = "github:NixOS/nixpkgs";
-        };
-      }`;
-      const flakeLock = codeBlock`{
-        "nodes": {
-          "nixpkgs": {
-            "locked": {
-              "lastModified": 1728650607,
-              "narHash": "sha256-0lOnVTzRXzpk5uxbHLm3Ti3tyPAvirAIQDfwEUd8arg=",
-              "owner": "NixOS",
-              "repo": "nixpkgs",
-              "rev": "612ee628421ba2c1abca4c99684862f76cb3b089",
-              "type": "github"
+    it.each`
+      extension
+      ${'xz'}
+      ${'zst'}
+    `(
+      'supports locked nixpkgs input from .tar.$extension URL',
+      async ({ extension }) => {
+        const flakeNix = codeBlock`{
+          inputs = {
+            flake-utils.url = "github:NixOS/nixpkgs";
+          };
+        }`;
+        const flakeLock = codeBlock`{
+          "nodes": {
+            "nixpkgs": {
+              "locked": {
+                "lastModified": 1728650607,
+                "narHash": "sha256-0lOnVTzRXzpk5uxbHLm3Ti3tyPAvirAIQDfwEUd8arg=",
+                "owner": "NixOS",
+                "repo": "nixpkgs",
+                "rev": "612ee628421ba2c1abca4c99684862f76cb3b089",
+                "type": "github"
+              },
+              "original": {
+                "owner": "NixOS",
+                "repo": "nixpkgs",
+                "type": "github"
+              }
             },
-            "original": {
-              "owner": "NixOS",
-              "repo": "nixpkgs",
-              "type": "github"
+            "root": {
+              "inputs": {
+                "nixpkgs": "nixpkgs"
+              }
             }
           },
-          "root": {
-            "inputs": {
-              "nixpkgs": "nixpkgs"
-            }
-          }
-        },
-        "root": "root",
-        "version": 7
-      }`;
-      fs.readLocalFile.mockResolvedValueOnce(flakeLock);
-      await expect(extractPackageFile(flakeNix, 'flake.nix')).resolves.toEqual({
-        deps: [
-          {
-            currentDigest: '612ee628421ba2c1abca4c99684862f76cb3b089',
-            datasource: GitRefsDatasource.id,
-            depName: 'nixpkgs',
-            packageName: 'https://github.com/NixOS/nixpkgs',
-            sourceUrl: 'https://github.com/NixOS/nixpkgs',
-            versioning: 'nixpkgs',
-          },
-        ],
-      });
-    });
+          "root": "root",
+          "version": 7
+        }`;
+        fs.readLocalFile.mockResolvedValueOnce(flakeLock);
+        await expect(
+          extractPackageFile(flakeNix, 'flake.nix'),
+        ).resolves.toEqual({
+          deps: [
+            {
+              currentDigest: '612ee628421ba2c1abca4c99684862f76cb3b089',
+              datasource: GitRefsDatasource.id,
+              depName: 'nixpkgs',
+              packageName: 'https://github.com/NixOS/nixpkgs',
+              sourceUrl: 'https://github.com/NixOS/nixpkgs',
+              versioning: 'nixpkgs',
+            },
+          ],
+        });
+      },
+    );
   });
 
   describe('GitHub Enterprise inputs', () => {

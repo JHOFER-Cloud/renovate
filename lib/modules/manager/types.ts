@@ -36,6 +36,15 @@ export interface ExtractConfig extends CustomExtractConfig {
   repository?: string;
   currentDigest?: string;
   newDigest?: string | null;
+  /**
+   * Whether vulnerability remediation is active for this repository, regardless
+   * of where the vulnerability data comes from.
+   *
+   * Managers may use this to surface dependencies which are useless for routine
+   * updates, but which a vulnerability fix needs to be able to match, e.g.
+   * transitive dependencies which only exist in a lock file.
+   */
+  hasVulnerabilityAlertsRules?: boolean;
 }
 
 /**
@@ -102,7 +111,6 @@ export interface PackageFileContent<
   additionalRegistryUrls?: string[];
   deps: PackageDependency<T>[];
   lockFiles?: string[];
-  npmrc?: string;
   packageFileVersion?: string;
   skipInstalls?: boolean | null;
   matchStrings?: string[];
@@ -113,6 +121,19 @@ export interface PackageFileContent<
 export interface PackageFile<
   T = Record<string, any>,
 > extends PackageFileContent<T> {
+  packageFile: string;
+}
+
+/** the package file content of a manager with `supportsNpmrc`, the only kind carrying an `npmrc` */
+export interface NpmrcPackageFileContent<
+  T = Record<string, any>,
+> extends PackageFileContent<T> {
+  npmrc?: string;
+}
+
+export interface NpmrcPackageFile<
+  T = Record<string, any>,
+> extends NpmrcPackageFileContent<T> {
   packageFile: string;
 }
 
@@ -257,6 +278,10 @@ export interface PackageDependency<
   registryProvidesReleaseTimestamps?: boolean;
   extractedConstraints?: Partial<Record<ConstraintName, string>>;
   /**
+   * Any specific overrides for the versioning for the `AdditionalConstraintName`s, for this dependency alone.
+   */
+  constraintsVersioning?: Partial<Record<AdditionalConstraintName, string>>;
+  /**
    * Whether the package registry has attestation information for the given update.
    *
    * Renovate does NOT validate the attestation, only determine whether the field is present and set to a value.
@@ -334,8 +359,12 @@ export interface UpdateLockFileConfig {
   /** The lock file which the update regenerates. */
   lockFileName: string;
 
-  /** Content of the lock file before the update, null when it did not exist. */
-  existingLockFileContent: string | null;
+  /**
+   * Content of the lock file before the update, null when it did not exist.
+   * Pass a Buffer for lock files which may be binary, the new content is then
+   * compared and returned as bytes as well.
+   */
+  existingLockFileContent: string | Buffer | null;
 
   /** Package file to rewrite before the update runs. */
   packageFile?: { path: string; contents: string };
@@ -398,7 +427,7 @@ export interface DepTypeMetadata {
   description: string;
 }
 
-interface ManagerApiBase extends ModuleApi {
+export interface ManagerApiBase extends ModuleApi {
   defaultConfig: Record<string, unknown>;
 
   categories?: Category[];
@@ -406,6 +435,8 @@ interface ManagerApiBase extends ModuleApi {
   /** Markdown note about dynamically generated depTypes not covered by `knownDepTypes` */
   supportsDynamicDepTypesNote?: string;
   supportsLockFileMaintenance?: boolean;
+  /** Whether the package files carry an `npmrc` resolved from the repository `.npmrc` and the config, see `NpmrcPackageFile` */
+  supportsNpmrc?: boolean;
   /**
    * Whether Renovate delegates to external command(s)/package manager to perform lockFileMaintenance.
    * A `string` value is a Markdown note describing the nuance of the support, e.g. when it's partial
@@ -467,6 +498,33 @@ export type ManagerApi = ManagerApiBase &
     | {
         supportsLockFileMaintenance?: false;
         lockFileMaintenanceIsDelegatedToPackageManager?: boolean | string;
+      }
+  ) &
+  // this ensures at compile time that only a manager with supportsNpmrc=true returns package files carrying an `npmrc`
+  (
+    | {
+        supportsNpmrc: true;
+        extractAllPackageFiles?(
+          config: ExtractConfig,
+          files: string[],
+        ): MaybePromise<NpmrcPackageFile[] | null>;
+        extractPackageFile?(
+          content: string,
+          packageFile?: string,
+          config?: ExtractConfig,
+        ): MaybePromise<NpmrcPackageFileContent | null>;
+      }
+    | {
+        supportsNpmrc?: false;
+        extractAllPackageFiles?(
+          config: ExtractConfig,
+          files: string[],
+        ): MaybePromise<(PackageFile & { npmrc?: never })[] | null>;
+        extractPackageFile?(
+          content: string,
+          packageFile?: string,
+          config?: ExtractConfig,
+        ): MaybePromise<(PackageFileContent & { npmrc?: never }) | null>;
       }
   );
 

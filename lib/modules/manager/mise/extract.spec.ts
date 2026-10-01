@@ -557,6 +557,24 @@ describe('modules/manager/mise/extract', () => {
       });
     });
 
+    it('extracts conda backend tool', async () => {
+      const content = codeBlock`
+      [tools]
+      "conda:ripgrep" = "13.0.0"
+    `;
+      const result = await extractPackageFile(content, miseFilename);
+      expect(result).toMatchObject({
+        deps: [
+          {
+            depName: 'conda:ripgrep',
+            currentValue: '13.0.0',
+            packageName: 'ripgrep',
+            datasource: 'conda',
+          },
+        ],
+      });
+    });
+
     it('extracts dotnet backend tool', async () => {
       const content = codeBlock`
       [tools]
@@ -653,6 +671,38 @@ describe('modules/manager/mise/extract', () => {
           },
           {
             depName: 'pipx:git+https://github.com/psf/black.git',
+            currentValue: '24.4.1',
+            packageName: 'psf/black',
+            datasource: 'github-tags',
+          },
+        ],
+      });
+    });
+
+    it('extracts pypi backend tools', async () => {
+      const content = codeBlock`
+      [tools]
+      "pypi:yamllint" = "1.35.0"
+      "pypi:psf/black" = "24.4.1"
+      "pypi:git+https://github.com/psf/black.git" = "24.4.1"
+    `;
+      const result = await extractPackageFile(content, miseFilename);
+      expect(result).toMatchObject({
+        deps: [
+          {
+            depName: 'pypi:yamllint',
+            currentValue: '1.35.0',
+            packageName: 'yamllint',
+            datasource: 'pypi',
+          },
+          {
+            depName: 'pypi:psf/black',
+            currentValue: '24.4.1',
+            packageName: 'psf/black',
+            datasource: 'github-tags',
+          },
+          {
+            depName: 'pypi:git+https://github.com/psf/black.git',
             currentValue: '24.4.1',
             packageName: 'psf/black',
             datasource: 'github-tags',
@@ -893,6 +943,52 @@ describe('modules/manager/mise/extract', () => {
       });
     });
 
+    it('extracts the primary version from an array of inline tables', async () => {
+      const content = codeBlock`
+      [tools]
+      rust = [
+        { version = "1.98.1", targets = "aarch64-unknown-linux-gnu", components = "clippy,rustfmt" },
+        { version = "nightly-2026-07-12", profile = "minimal", components = "rustfmt" },
+      ]
+      "github:cli/cli" = [
+        { version = "v2.64.0", version_prefix = "v" },
+        "v2.63.0",
+      ]
+      "ubi:tamasfe/taplo" = [
+        "0.10.0",
+        { version = "0.9.0", tag_regex = "^\\\\d+\\\\.\\\\d+\\\\.\\\\d+$" },
+      ]
+      python = [{ virtualenv = ".venv" }]
+    `;
+      const result = await extractPackageFile(content, miseFilename);
+      expect(result).toMatchObject({
+        deps: [
+          {
+            depName: 'rust',
+            currentValue: '1.98.1',
+            datasource: 'rust-version',
+          },
+          {
+            depName: 'github:cli/cli',
+            packageName: 'cli/cli',
+            currentValue: 'v2.64.0',
+            datasource: 'github-releases',
+            extractVersion: '^\\x76(?<version>.+)',
+          },
+          {
+            depName: 'ubi:tamasfe/taplo',
+            packageName: 'tamasfe/taplo',
+            currentValue: '0.10.0',
+            datasource: 'github-releases',
+          },
+          {
+            depName: 'python',
+            skipReason: 'unspecified-version',
+          },
+        ],
+      });
+    });
+
     it('complete mise.toml example', async () => {
       const result = await extractPackageFile(mise1toml, miseFilename);
       expect(result).toMatchObject({
@@ -1036,6 +1132,7 @@ describe('modules/manager/mise/extract', () => {
             depName: 'java',
             currentValue: '21.0.2',
             datasource: 'java-version',
+            packageName: 'oracle-graalvm-jdk',
           },
         ],
       });

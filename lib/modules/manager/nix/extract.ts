@@ -17,7 +17,7 @@ const lockableHTTPTarballProtocol = regEx(
 );
 
 const lockableChannelOriginalUrl = regEx(
-  '^https://(?:channels\\.nixos\\.org|nixos\\.org/channels)/(?<channel>[^/]+)/nixexprs\\.tar\\.xz$',
+  '^https://(?:channels\\.nixos\\.org|nixos\\.org/channels)/(?<channel>[^/]+)/nixexprs\\.tar\\.(?:xz|zst)$',
 );
 
 const flakeHubUrl = regEx(
