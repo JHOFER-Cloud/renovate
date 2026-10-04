@@ -277,7 +277,7 @@
   },
   "optionalDependencies": {
     "openpgp": "6.3.2",
-    "re2": "1.26.1"
+    "re2": "1.27.0"
   },
   "devDependencies": {
     "@biomejs/biome": "2.5.14",
@@ -313,7 +313,7 @@
     "@types/mdast": "4.0.4",
     "@types/moo": "0.5.10",
     "@types/ms": "2.1.0",
-    "@types/node": "24.13.6",
+    "@types/node": "24.19.0",
     "@types/parse-link-header": "2.0.3",
     "@types/punycode": "2.1.4",
     "@types/sax": "1.2.7",
@@ -336,7 +336,7 @@
     "graphql": "17.0.2",
     "husky": "9.1.7",
     "jest-extended": "7.0.0",
-    "lint-staged": "17.5.1",
+    "lint-staged": "17.6.0",
     "markdownlint-cli2": "0.23.3",
     "markdownlint-cli2-formatter-template": "0.0.4",
     "memfs": "4.79.0",
@@ -357,7 +357,7 @@
     "vitest-mock-extended": "5.1.1",
     "yazl": "3.3.1"
   },
-  "packageManager": "pnpm@11.27.1",
+  "packageManager": "pnpm@11.28.0",
   "files": [
     "dist",
     "renovate-schema.json"
