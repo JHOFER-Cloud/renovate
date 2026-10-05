@@ -31,6 +31,8 @@ import {
   getDatasourceFor,
   sortAndRemoveDuplicates,
 } from './common.ts';
+import { CustomDatasource } from './custom/index.ts';
+import { Datasource } from './datasource.ts';
 import { addMetaData } from './metadata.ts';
 import { setNpmrc } from './npm/index.ts';
 import { resolveRegistryUrl } from './npm/npmrc.ts';
@@ -41,6 +43,7 @@ import type {
   GetPkgReleasesConfig,
   GetReleasesConfig,
   RegistryUrlsConfig,
+  Release,
   ReleaseResult,
 } from './types.ts';
 
@@ -560,6 +563,76 @@ export async function getPkgReleases(
 export function supportsDigests(datasource: string | undefined): boolean {
   const ds = !!datasource && getDatasourceFor(datasource);
   return !!ds && 'getDigest' in ds;
+}
+
+export function supportsReleaseTimestamps(
+  datasource: string | undefined,
+): boolean {
+  const ds = !!datasource && getDatasourceFor(datasource);
+  return !!ds && ds.releaseTimestampSupport;
+}
+
+/**
+ * Whether a datasource's release list is evidence of what the registry
+ * provides, or whether release timestamps may still arrive by other means.
+ *
+ * `maven`, `crate` and `sbt-package` fetch them one release at a time in
+ * `postprocessRelease()`, so their release list starts out without any.
+ * `custom` builds them from the user's own `transformTemplates`, which the user
+ * can fix - so a missing timestamp there stays worth reporting.
+ */
+function releasesShowRegistryTimestamps(ds: DatasourceApi): boolean {
+  return (
+    ds.id !== CustomDatasource.id &&
+    ds.constructor.prototype.postprocessRelease ===
+      Datasource.prototype.postprocessRelease
+  );
+}
+
+/**
+ * Whether any release carries a timestamp, i.e. whether this dependency's
+ * registry provides them at all.
+ *
+ * `releaseTimestampSupport` is declared per datasource, but availability
+ * usually depends on the registry - `docker`, for example, only has timestamps
+ * on Docker Hub, never on GHCR.
+ */
+export function registryProvidesReleaseTimestamps(
+  datasource: string | undefined,
+  releases: Pick<Release, 'releaseTimestamp'>[],
+): boolean {
+  const ds = !!datasource && getDatasourceFor(datasource);
+  if (!ds) {
+    return false;
+  }
+
+  return (
+    !releasesShowRegistryTimestamps(ds) ||
+    releases.some((release) => release.releaseTimestamp)
+  );
+}
+
+/**
+ * Whether a missing `releaseTimestamp` is a gap worth warning about.
+ *
+ * A missing timestamp is only a gap when a timestamp could have been there: the
+ * datasource must declare support, and the registry must have provided one for
+ * at least one release of this dependency (see
+ * {@link registryProvidesReleaseTimestamps}).
+ *
+ * Otherwise the absence is inherent - `git-refs`, or `docker` on GHCR - and
+ * warning about it on every run is permanent noise the user cannot act on.
+ * A dependency whose registry was never queried (an unversioned tag such as
+ * `latest`, which has no versioned release to age against) yields no evidence
+ * either, and is not warned about.
+ */
+export function isMissingReleaseTimestampReportable(
+  datasource: string | undefined,
+  registryProvidesTimestamps: boolean | undefined,
+): boolean {
+  return (
+    registryProvidesTimestamps === true && supportsReleaseTimestamps(datasource)
+  );
 }
 
 function getDigestConfig(
