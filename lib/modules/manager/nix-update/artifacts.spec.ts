@@ -1134,7 +1134,7 @@ describe('modules/manager/nix-update/artifacts', () => {
 
     const cmd = snapshots[1].cmd;
     expect(cmd).toContain(
-      "--option extra-substituters 'https://nixkit.cachix.org/'",
+      "--option extra-substituters 'https://nixkit.cachix.org/?store=/nix/store'",
     );
     expect(cmd).toContain(
       "--option extra-trusted-public-keys 'nixkit.cachix.org-1:abc='",
@@ -1239,7 +1239,7 @@ describe('modules/manager/nix-update/artifacts', () => {
     });
 
     expect(snapshots[1].cmd).toContain(
-      "--option extra-substituters 'https://attic.xuyh0120.win/lantian'",
+      "--option extra-substituters 'https://attic.xuyh0120.win/lantian?store=/nix/store'",
     );
   });
 
@@ -1265,7 +1265,7 @@ describe('modules/manager/nix-update/artifacts', () => {
     });
 
     expect(snapshots[1].cmd).toContain(
-      "--option extra-substituters 'https://nixkit.cachix.org/'",
+      "--option extra-substituters 'https://nixkit.cachix.org/?store=/nix/store'",
     );
   });
 });
