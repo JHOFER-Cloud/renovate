@@ -11,6 +11,7 @@ export const ReleaseResultZod = z.object({
         sourceUrl: z.string().optional(),
         sourceDirectory: z.string().optional(),
         changelogUrl: z.string().optional(),
+        downloadUrl: z.string().optional(),
         digest: z.string().optional(),
         isStable: z.boolean().optional(),
       })

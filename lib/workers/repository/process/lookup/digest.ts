@@ -5,7 +5,10 @@ import type {
   GetDigestInputConfig,
   ReleaseResult,
 } from '../../../../modules/datasource/index.ts';
-import { getDigest } from '../../../../modules/datasource/index.ts';
+import {
+  getDigest,
+  isMissingReleaseTimestampReportable,
+} from '../../../../modules/datasource/index.ts';
 import type { LookupUpdate } from '../../../../modules/manager/types.ts';
 import { checkMinimumReleaseAge } from '../../../../util/minimum-release-age.ts';
 import type { Timestamp } from '../../../../util/timestamp.ts';
@@ -88,7 +91,13 @@ export async function applyMinimumReleaseAgeToDigestUpdate(
 
   // Mirror filterInternalChecks()'s logging so a held/passed digest update is diagnosable.
   if (ageCheck.minimumReleaseAgeMs && !ageCheck.hasTimestamp) {
-    if (releaseConfig.minimumReleaseAgeBehaviour === 'timestamp-optional') {
+    if (
+      releaseConfig.minimumReleaseAgeBehaviour === 'timestamp-optional' &&
+      isMissingReleaseTimestampReportable(
+        config.datasource,
+        res.registryProvidesReleaseTimestamps,
+      )
+    ) {
       logger.once.warn(missingReleaseTimestampWarning);
     }
 
