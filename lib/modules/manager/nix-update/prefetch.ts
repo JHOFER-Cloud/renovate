@@ -1,5 +1,6 @@
 import { isObject, isString } from '@sindresorhus/is';
 import { logger } from '../../../logger/index.ts';
+import { buildCacheKey } from '../../../util/cache/package/key.ts';
 import { exec } from '../../../util/exec/index.ts';
 import type { ExecOptions } from '../../../util/exec/types.ts';
 import { coerceObject } from '../../../util/object.ts';
@@ -130,7 +131,13 @@ export async function prefetch(opts: PrefetchOptions): Promise<string> {
   } = opts;
 
   const oneLine = collapseExpr(expr);
-  const cacheKey = `${flakeLockFingerprint ?? ''}|${pkgSystem}|${algo}|${oneLine}`;
+  // The expression goes last: it may contain `:`, the parts before it cannot.
+  const cacheKey = buildCacheKey(
+    flakeLockFingerprint,
+    pkgSystem,
+    algo,
+    oneLine,
+  );
   const cached = prefetchCache.get(cacheKey);
   if (cached !== undefined) {
     logger.debug(

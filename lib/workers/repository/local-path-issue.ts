@@ -44,7 +44,9 @@ export function getLocalPathInputs(
   const detected = new Map<string, LocalPathInput>();
   for (const file of coerceArray(packageFiles?.nix)) {
     for (const dep of file.deps) {
-      const localPath = dep.managerData?.localPath;
+      const localPath = is.plainObject(dep.managerData)
+        ? dep.managerData.localPath
+        : undefined;
       if (
         dep.skipReason === 'local-dependency' &&
         is.string(dep.depName) &&

@@ -1,4 +1,5 @@
 import { logger } from '../../../logger/index.ts';
+import { buildCacheKey } from '../../../util/cache/package/key.ts';
 import { withCache } from '../../../util/cache/package/with-cache.ts';
 import { joinUrlParts } from '../../../util/url.ts';
 import { Datasource } from '../datasource.ts';
@@ -31,7 +32,7 @@ export class FlakeHubDatasource extends Datasource {
   getReleases(config: GetReleasesConfig): Promise<ReleaseResult | null> {
     // Include currentValue in cache key since different constraints return different results
     const cacheKey = config.currentValue
-      ? `${config.packageName}:${config.currentValue}`
+      ? buildCacheKey(config.packageName, config.currentValue)
       : config.packageName;
     return withCache(
       {

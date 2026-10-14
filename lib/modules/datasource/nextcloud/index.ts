@@ -1,3 +1,4 @@
+import { buildCacheKey } from '../../../util/cache/package/key.ts';
 import { regEx } from '../../../util/regex.ts';
 import { asTimestamp } from '../../../util/timestamp.ts';
 import * as semver from '../../versioning/semver/index.ts';
@@ -78,7 +79,7 @@ export class NextcloudDatasource extends Datasource {
   getReleases(config: GetReleasesConfig): Promise<ReleaseResult | null> {
     return this.cached(
       {
-        key: `${config.registryUrl}:${config.packageName}`,
+        key: buildCacheKey(config.registryUrl, config.packageName),
         fallback: true,
       },
       () => this.fetchReleases(config),
