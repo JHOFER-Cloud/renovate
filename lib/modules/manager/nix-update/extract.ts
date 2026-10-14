@@ -10,7 +10,7 @@ import {
   parseAssetUrl,
 } from '../../datasource/github-release-asset/index.ts';
 import type { ExtractConfig, PackageFile } from '../types.ts';
-import type { FodInfo, RenovateOverrides } from './types.ts';
+import type { PackageInfo } from './types.ts';
 
 // Nix expression passed to `nix eval .#packages --apply` to introspect all
 // flake packages that have a passthru.updateScript. Returns a flat attrset of
@@ -238,20 +238,6 @@ in
 (builtins.attrNames pkgs)
 `;
 
-interface PackageInfo {
-  system: string;
-  version: string | null;
-  pname: string | null;
-  srcUrl: string | null;
-  srcRev: string | null;
-  /* meta.position from nix eval — `<absPath>:<line>[:<col>]`. Used to derive
-     the package file path Renovate should target for auto-replace. */
-  position: string | null;
-  updateScriptArgs: string[];
-  fods: FodInfo[];
-  renovate: RenovateOverrides | null;
-}
-
 // Parse `meta.position` (`<storePathOrAbs>/<file.nix>:<line>[:<col>]`) into a
 // relative path inside the flake. nix evaluates flakes from the store, so the
 // position prefix is `/nix/store/<hash>-<name>/`; strip that to get the
@@ -423,6 +409,45 @@ export function datasourceFromSrc(
   return null;
 }
 
+// Iterate every system in .#packages, recording which system each package
+// belongs to. Later systems overwrite earlier ones for cross-platform packages
+// (any system works). The recorded system is passed through to updateArtifacts
+// purely as a cache-namespacing key — prefetch itself runs on the runner
+// regardless.
+export async function evalPackageInfos(): Promise<Record<
+  string,
+  PackageInfo
+> | null> {
+  // Collapse to a single line before JSON.stringify — shell passes the
+  // --apply value as-is, so literal \n from JSON escaping would break nix.
+  const singleLineExpr = evalExpr.replace(regEx(/\n\s*/g), ' ').trim();
+  const cmd =
+    `nix --extra-experimental-features 'nix-command flakes' ` +
+    `eval --json .#packages --apply ${JSON.stringify(singleLineExpr)}`;
+
+  const execOptions: ExecOptions = {
+    toolConstraints: [{ toolName: 'nix' }],
+    docker: {},
+  };
+
+  try {
+    const result = await exec(cmd, execOptions);
+    const parsed: unknown = JSON.parse(result.stdout);
+    /* v8 ignore next -- defensive; nix eval always returns an attrset for the expression we run */
+    if (!isObject(parsed) || Array.isArray(parsed)) {
+      logger.debug(
+        { stdout: result.stdout },
+        'nix-update: nix eval returned non-object',
+      );
+      return null;
+    }
+    return parsed as Record<string, PackageInfo>;
+  } catch (err) {
+    logger.debug({ err }, 'nix-update: failed to eval flake packages');
+    return null;
+  }
+}
+
 export async function extractAllPackageFiles(
   _config: ExtractConfig,
   files: string[],
@@ -450,38 +475,8 @@ export async function extractAllPackageFiles(
     return null;
   }
 
-  // Phase 3: iterate every system in .#packages, recording which system each
-  // package belongs to. Later systems overwrite earlier ones for cross-platform
-  // packages (any system works). The recorded system is passed through to
-  // updateArtifacts purely as a cache-namespacing key — prefetch itself runs
-  // on the runner regardless.
-  // Collapse to a single line before JSON.stringify — shell passes the
-  // --apply value as-is, so literal \n from JSON escaping would break nix.
-  const singleLineExpr = evalExpr.replace(regEx(/\n\s*/g), ' ').trim();
-  const cmd =
-    `nix --extra-experimental-features 'nix-command flakes' ` +
-    `eval --json .#packages --apply ${JSON.stringify(singleLineExpr)}`;
-
-  const execOptions: ExecOptions = {
-    toolConstraints: [{ toolName: 'nix' }],
-    docker: {},
-  };
-
-  let packageInfos: Record<string, PackageInfo>;
-  try {
-    const result = await exec(cmd, execOptions);
-    const parsed: unknown = JSON.parse(result.stdout);
-    /* v8 ignore next -- defensive; nix eval always returns an attrset for the expression we run */
-    if (!isObject(parsed) || Array.isArray(parsed)) {
-      logger.debug(
-        { stdout: result.stdout },
-        'nix-update: nix eval returned non-object',
-      );
-      return null;
-    }
-    packageInfos = parsed as Record<string, PackageInfo>;
-  } catch (err) {
-    logger.debug({ err }, 'nix-update: failed to eval flake packages');
+  const packageInfos = await evalPackageInfos();
+  if (!packageInfos) {
     return null;
   }
 

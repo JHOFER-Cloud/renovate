@@ -92,6 +92,20 @@ export interface RenovateOverrides {
   extractVersion: string | null;
 }
 
+export interface PackageInfo {
+  system: string;
+  version: string | null;
+  pname: string | null;
+  srcUrl: string | null;
+  srcRev: string | null;
+  /* meta.position from nix eval — `<absPath>:<line>[:<col>]`. Used to derive
+     the package file path Renovate should target for auto-replace. */
+  position: string | null;
+  updateScriptArgs: string[];
+  fods: FodInfo[];
+  renovate: RenovateOverrides | null;
+}
+
 export interface ClassifiedFod {
   // attrPath inside the package, used by rewrite.ts to locate the hash
   attrPath: string[];

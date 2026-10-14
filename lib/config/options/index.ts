@@ -3071,6 +3071,7 @@ const options: Readonly<RenovateOptions>[] = [
       'goGenerate',
       'helmUpdateSubChartArchives',
       'kustomizeInflateHelmCharts',
+      'nixUpdateVendorHashes',
       'npmDedupe',
       'npmInstallTwice',
       'pnpmDedupe',
