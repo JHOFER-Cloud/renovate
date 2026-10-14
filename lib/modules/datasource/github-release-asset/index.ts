@@ -1,4 +1,5 @@
 import { logger } from '../../../logger/index.ts';
+import { buildCacheKey } from '../../../util/cache/package/key.ts';
 import { withCache } from '../../../util/cache/package/with-cache.ts';
 import { getApiBaseUrl, getSourceUrl } from '../../../util/github/url.ts';
 import { GithubHttp } from '../../../util/http/github.ts';
@@ -118,7 +119,7 @@ export class GithubReleaseAssetDatasource extends Datasource {
     return withCache(
       {
         namespace: `datasource-${GithubReleaseAssetDatasource.id}`,
-        key: `digest:${registryUrl}:${packageName}`,
+        key: buildCacheKey('digest', registryUrl, packageName),
         // github.com serves private repositories over the same host once a
         // token is configured, so no registry check can establish that this
         // release is public. Admins opt in explicitly via cachePrivatePackages.
