@@ -37,6 +37,20 @@ This manager does NOT call out to the upstream `nix-update` CLI. Instead, it com
 3. **Hash recomputation**: for each FOD, the manager constructs a small nix expression that re-instantiates the _same_ nixpkgs fetcher/builder against runner-side `pkgs`, with `outputHash = ""`. `nix-build` is invoked; the actual hash is parsed from the resulting "hash mismatch" error in stderr. Because every FOD's output is platform-deterministic (Go modules, cargo crates, npm packages, GitHub archives are byte-identical regardless of system), the runner's linux build produces the exact hash darwin would have produced.
 4. **File rewriting**: hashes in the .nix file are replaced by attribute context — the manager finds each FOD's binding in the source and updates only that one, even when the same hash appears multiple times.
 
+### Vendor hashes after a nixpkgs update
+
+The steps above only run when a package's own version moves. A vendor FOD's hash also depends on the toolchain nixpkgs builds it with: a nixpkgs bump that moves pnpm to a new major, for example, changes every `pnpmDeps` hash while no package changed. Enable `nixUpdateVendorHashes` to have the `nix` manager's `flake.lock` updates fix those too:
+
+```json title="renovate.json"
+{
+  "postUpdateOptions": ["nixUpdateVendorHashes"]
+}
+```
+
+When a branch updates the `nixpkgs` input (or during lock file maintenance), the manager re-evaluates the flake against the new lock, rebuilds every vendor FOD of every package that has a `nix-update-script`, and commits the hashes that changed alongside `flake.lock`. `src` hashes are left alone, since what a fetcher downloads does not depend on nixpkgs. These rebuilds cannot come from a binary cache — the hash is what is being computed — so a flake with many vendor FODs makes each nixpkgs update noticeably slower.
+
+Like every hash this manager computes, these are built on the runner's platform. A vendor FOD whose output differs between platforms (a nixpkgs bug, for example pnpm leaving an empty `links` directory in its store on darwin only) gets the runner's hash, which the other platform cannot reproduce. Build every platform you ship in CI to catch that before merging.
+
 ### Configuration
 
 Add `nix-update` to your `enabledManagers` list:

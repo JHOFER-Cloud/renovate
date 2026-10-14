@@ -9,11 +9,13 @@ import type {
   RepoGlobalConfig,
 } from '../../../config/types.ts';
 import * as docker from '../../../util/exec/docker/index.ts';
+import { updateVendorHashes } from '../nix-update/rehash.ts';
 import type { UpdateArtifactsConfig } from '../types.ts';
 import { updateArtifacts } from './index.ts';
 
 vi.mock('../../../util/exec/env.ts');
 vi.mock('../../../util/fs/index.ts');
+vi.mock('../nix-update/rehash.ts', () => ({ updateVendorHashes: vi.fn() }));
 
 const adminConfig: RepoGlobalConfig & InternalGlobalConfigOptions = {
   // `join` fixes Windows CI
@@ -467,5 +469,78 @@ describe('modules/manager/nix/artifacts', () => {
         cmd: `docker run --rm --name=renovate_sidecar --label=renovate_child -v "/tmp/github/some/repo":"/tmp/github/some/repo" -v "/tmp/renovate/cache":"/tmp/renovate/cache" -e CI -e CONTAINERBASE_CACHE_DIR -w "/tmp/github/some/repo" ghcr.io/renovatebot/base-image bash -l -c 'install-tool nix 2.10.0 && ${updateInputCmdInDocker}'`,
       },
     ]);
+  });
+
+  describe('nixUpdateVendorHashes', () => {
+    const lockResult = {
+      file: {
+        contents: 'new flake.lock',
+        path: 'flake.lock',
+        type: 'addition',
+      },
+    };
+    const hashResult = {
+      file: {
+        contents: 'rehashed',
+        path: 'packages/foo/default.nix',
+        type: 'addition',
+      },
+    } as const;
+
+    beforeEach(() => {
+      fs.readLocalFile.mockResolvedValueOnce('current flake.lock');
+      mockExecAll();
+      git.getRepoStatus.mockResolvedValue(
+        partial<StatusResult>({ modified: ['flake.lock'] }),
+      );
+      fs.readLocalFile.mockResolvedValueOnce('new flake.lock');
+      vi.mocked(updateVendorHashes).mockResolvedValue([hashResult]);
+    });
+
+    it.each`
+      desc                       | depName      | isLockFileMaintenance
+      ${'nixpkgs is updated'}    | ${'nixpkgs'} | ${false}
+      ${'lock file maintenance'} | ${'other'}   | ${true}
+    `(
+      'appends the vendor hash updates when $desc',
+      async ({ depName, isLockFileMaintenance }) => {
+        const res = await updateArtifacts({
+          packageFileName: 'flake.nix',
+          updatedDeps: [{ depName }],
+          newPackageFileContent: 'some new content',
+          config: {
+            ...config,
+            isLockFileMaintenance,
+            postUpdateOptions: ['nixUpdateVendorHashes'],
+          },
+        });
+
+        expect(res).toEqual([lockResult, hashResult]);
+      },
+    );
+
+    it('skips them when only another input is updated', async () => {
+      const res = await updateArtifacts({
+        packageFileName: 'flake.nix',
+        updatedDeps: [{ depName: 'flake-parts' }],
+        newPackageFileContent: 'some new content',
+        config: { ...config, postUpdateOptions: ['nixUpdateVendorHashes'] },
+      });
+
+      expect(res).toEqual([lockResult]);
+      expect(updateVendorHashes).not.toHaveBeenCalled();
+    });
+
+    it('skips them when the option is not set', async () => {
+      const res = await updateArtifacts({
+        packageFileName: 'flake.nix',
+        updatedDeps: [{ depName: 'nixpkgs' }],
+        newPackageFileContent: 'some new content',
+        config,
+      });
+
+      expect(res).toEqual([lockResult]);
+      expect(updateVendorHashes).not.toHaveBeenCalled();
+    });
   });
 });

@@ -4278,6 +4278,12 @@ Update subchart archives in the `/charts` folder.
 
 Inflate updated helm charts referenced in the kustomization.
 
+### `nixUpdateVendorHashes`
+
+After a `nixpkgs` update in `flake.lock`, recompute the vendor hashes (`pnpmDeps`, `goModules`, `cargoDeps`, ...) of every package the `nix-update` manager tracks, and commit the ones that changed.
+A new `nixpkgs` can ship different toolchains, for example a new pnpm major, which changes the hash even though the package did not change.
+Every vendor hash is rebuilt from scratch on each such update, so this can take a while for flakes with many packages.
+
 ### `npmDedupe`
 
 Run `npm install` with `--prefer-dedupe` for npm >= 7 or `npm dedupe` after `package-lock.json` update for npm <= 6.

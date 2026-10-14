@@ -487,7 +487,7 @@ function urlBaseName(url: string): string {
   return url.slice(url.lastIndexOf('/') + 1);
 }
 
-function pickSrcExprFor(
+export function pickSrcExprFor(
   allFods: FodInfo[],
   srcHashes: Map<string, string>,
   flakePath: string,
@@ -514,7 +514,7 @@ function pickSrcExprFor(
 // Nix store URIs carry settings as query parameters — `?trusted=true` disables
 // signature checking outright — so repo-provided values are restricted to plain
 // https URLs. Paths fetched here land in a store shared with every other repo.
-function usableSubstituters(configured: string[] | undefined): string[] {
+export function usableSubstituters(configured: string[] | undefined): string[] {
   const ok: string[] = [];
   const rejected: string[] = [];
   for (const entry of coerceArray(configured)) {
@@ -544,7 +544,7 @@ function usableSubstituters(configured: string[] | undefined): string[] {
 
 // Build the env we pass to every nix-build invocation. Token names follow
 // what nix's built-in fetchers honor: GITHUB_TOKEN, GITLAB_TOKEN, etc.
-function buildExtraEnv(): Record<string, string | undefined> {
+export function buildExtraEnv(): Record<string, string | undefined> {
   const env: Record<string, string | undefined> = {
     ...getGitEnvironmentVariables({}),
   };

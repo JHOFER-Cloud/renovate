@@ -14,8 +14,29 @@ import { getGitEnvironmentVariables } from '../../../util/git/auth.ts';
 import { getRepoStatus } from '../../../util/git/index.ts';
 import * as hostRules from '../../../util/host-rules.ts';
 import { parseUrl } from '../../../util/url.ts';
-import type { UpdateArtifact, UpdateArtifactsResult } from '../types.ts';
+import { updateVendorHashes } from '../nix-update/rehash.ts';
+import type {
+  UpdateArtifact,
+  UpdateArtifactsConfig,
+  UpdateArtifactsResult,
+  Upgrade,
+} from '../types.ts';
 import { resolveToolConstraint } from '../util.ts';
+
+// Only the nixpkgs input decides which toolchains produce vendor FODs, so
+// other inputs moving cannot change their hashes.
+function shouldUpdateVendorHashes(
+  config: UpdateArtifactsConfig,
+  updatedDeps: Upgrade[],
+): boolean {
+  if (!config.postUpdateOptions?.includes('nixUpdateVendorHashes')) {
+    return false;
+  }
+  return (
+    !!config.isLockFileMaintenance ||
+    updatedDeps.some((dep) => dep.depName === 'nixpkgs')
+  );
+}
 
 export async function updateArtifacts({
   packageFileName,
@@ -107,7 +128,7 @@ export async function updateArtifacts({
       return null;
     }
     logger.debug('Returning updated flake.lock');
-    return [
+    const results: UpdateArtifactsResult[] = [
       {
         file: {
           type: 'addition',
@@ -116,6 +137,10 @@ export async function updateArtifacts({
         },
       },
     ];
+    if (shouldUpdateVendorHashes(config, updatedDeps)) {
+      results.push(...(await updateVendorHashes(config)));
+    }
+    return results;
   } catch (err) {
     logger.warn({ err }, 'Error updating flake.lock');
     return [
