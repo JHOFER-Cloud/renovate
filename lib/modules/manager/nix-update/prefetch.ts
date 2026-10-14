@@ -108,7 +108,7 @@ export async function assertSubstitutableStore(
     throw new Error(
       `nix store dir is '${storeDir}', but binary caches only serve '${CANONICAL_STORE_DIR}', ` +
         `so every prefetch would build the full stdenv from source. This is what containerbase's ` +
-        `nix wrapper does when it is not patched (it exports NIX_STORE_DIR into its ` +
+        `nix wrapper does unless the image pins the store (it exports NIX_STORE_DIR into its ` +
         `cache dir) — the image must provide a nix whose store is ${CANONICAL_STORE_DIR}.`,
     );
   }
@@ -228,7 +228,14 @@ function substituterArgs(
   if (!substituters?.length) {
     return '';
   }
-  let args = `--option extra-substituters ${shellQuote(substituters.join(' '))} `;
+  // A substituter takes its store dir from NIX_STORE_DIR, not from the local
+  // store, and containerbase's nix wrapper exports that into its cache dir — so
+  // nix would reject every cache as "for Nix stores with prefix '/nix/store'".
+  // assertSubstitutableStore has already pinned the local store to
+  // CANONICAL_STORE_DIR; pin each cache to match. usableSubstituters only lets
+  // through URLs without a query, so appending one is safe.
+  const urls = substituters.map((url) => `${url}?store=${CANONICAL_STORE_DIR}`);
+  let args = `--option extra-substituters ${shellQuote(urls.join(' '))} `;
   if (trustedPublicKeys?.length) {
     args += `--option extra-trusted-public-keys ${shellQuote(trustedPublicKeys.join(' '))} `;
   }

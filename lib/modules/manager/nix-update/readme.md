@@ -12,7 +12,7 @@ containerbase's nix tool wraps nix with an unconditional `export NIX_STORE_DIR=<
 warning: binary cache 'https://cache.nixos.org' is for Nix stores with prefix '/nix/store', not '/tmp/containerbase/cache/nix/store'
 ```
 
-Such a nix substitutes nothing, so every hash prefetch rebuilds the full stdenv from source and exceeds the exec timeout. The fix belongs in containerbase; this fork's image patches `tools/v2/nix.sh` to point the wrapper at the canonical store, so an installed nix and the image's nix are interchangeable. Setting `NIX_STORE_DIR` in the environment does not help — the unpatched wrapper overrides it.
+Such a nix substitutes nothing, so every hash prefetch rebuilds the full stdenv from source and exceeds the exec timeout. The fix belongs in containerbase. Setting `NIX_STORE_DIR` in the environment does not help — the wrapper overrides it, and it generates the wrapper at install time, so there is nothing to patch in the image. Instead this fork's image loads `/etc/nix/nix.conf` through `NIX_USER_CONF_FILES`, which the wrapper leaves alone, and pins both the local store and `cache.nixos.org` to `/nix/store` with a `store=/nix/store` parameter. Each substituter reads its store dir from `NIX_STORE_DIR` rather than from the local store, so the manager pins the repository's `nixSubstituters` the same way.
 
 The manager probes `builtins.storeDir` once per package and reports an `artifactError` naming the store dir if this invariant is broken, rather than spending the exec timeout on a doomed source build.
 
