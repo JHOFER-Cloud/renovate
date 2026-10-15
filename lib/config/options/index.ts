@@ -81,6 +81,7 @@ function installToolProperties(): Record<string, unknown> {
 const options: Readonly<RenovateOptions>[] = [
   {
     name: 'mode',
+    scopes: sharedScopes,
     description: 'Mode of operation.',
     type: 'string',
     default: 'full',
@@ -532,6 +533,7 @@ const options: Readonly<RenovateOptions>[] = [
   },
   {
     name: 'minimumGroupSize',
+    scopes: sharedScopes,
     description:
       'The minimum number of updates which must be in a group for branches to be created.',
     type: 'integer',
@@ -803,7 +805,7 @@ const options: Readonly<RenovateOptions>[] = [
     description:
       'Change this value to override the default Renovate sidecar image.',
     type: 'string',
-    default: 'ghcr.io/renovatebot/base-image:13.121.2',
+    default: 'ghcr.io/renovatebot/base-image:13.130.1',
     globalOnly: true,
     deprecationMsg:
       'The usage of `binarySource=docker` is deprecated, and will be removed in the future',
@@ -820,6 +822,7 @@ const options: Readonly<RenovateOptions>[] = [
   },
   {
     name: 'composerIgnorePlatformReqs',
+    scopes: sharedScopes,
     description:
       'Configure use of `--ignore-platform-reqs` or `--ignore-platform-req` for the Composer package manager.',
     type: 'array',
@@ -828,6 +831,7 @@ const options: Readonly<RenovateOptions>[] = [
   },
   {
     name: 'goGetDirs',
+    scopes: sharedScopes,
     description: 'Directory pattern to run `go get` on.',
     type: 'array',
     subType: 'string',
@@ -1141,12 +1145,14 @@ const options: Readonly<RenovateOptions>[] = [
   // Scheduling
   {
     name: 'timezone',
+    scopes: sharedScopes,
     description:
       'Must conform to [IANA Time Zone](https://en.wikipedia.org/wiki/List_of_tz_database_time_zones) format.',
     type: 'string',
   },
   {
     name: 'schedule',
+    scopes: sharedScopes,
     description: 'Limit branch creation to these times of day or week.',
     type: 'array',
     subType: 'string',
@@ -1157,6 +1163,7 @@ const options: Readonly<RenovateOptions>[] = [
   },
   {
     name: 'automergeSchedule',
+    scopes: sharedScopes,
     description: 'Limit automerge to these times of day or week.',
     type: 'array',
     subType: 'string',
@@ -1167,6 +1174,7 @@ const options: Readonly<RenovateOptions>[] = [
   },
   {
     name: 'updateNotScheduled',
+    scopes: sharedScopes,
     description:
       'Whether to update branches when not scheduled. Renovate will not create branches outside of the schedule.',
     stage: 'branch',
@@ -1225,6 +1233,7 @@ const options: Readonly<RenovateOptions>[] = [
   },
   {
     name: 'ignorePlugins',
+    scopes: sharedScopes,
     description:
       'Set this to `true` if `allowPlugins=true` but you wish to skip running plugins when updating lock files.',
     type: 'boolean',
@@ -1232,6 +1241,7 @@ const options: Readonly<RenovateOptions>[] = [
   },
   {
     name: 'ignoreScripts',
+    scopes: sharedScopes,
     description:
       'Set this to `false` if `allowScripts=true` and you wish to run scripts when updating lock files.',
     type: 'boolean',
@@ -1327,6 +1337,7 @@ const options: Readonly<RenovateOptions>[] = [
   },
   {
     name: 'skipArtifactsUpdate',
+    scopes: sharedScopes,
     description: "Skip Renovate's automatic artifact updating.",
     type: 'boolean',
     default: false,
@@ -1471,6 +1482,7 @@ const options: Readonly<RenovateOptions>[] = [
   },
   {
     name: 'enabledManagers',
+    scopes: ['repo'],
     description:
       'A list of package managers to enable. Only managers on the list are enabled.',
     type: 'array',
@@ -1480,6 +1492,7 @@ const options: Readonly<RenovateOptions>[] = [
   },
   {
     name: 'includePaths',
+    scopes: ['repo', 'manager'],
     description: 'Include package files only within these defined paths.',
     type: 'array',
     subType: 'string',
@@ -1489,6 +1502,7 @@ const options: Readonly<RenovateOptions>[] = [
   },
   {
     name: 'ignorePaths',
+    scopes: ['repo', 'manager'],
     description:
       'Skip any package file whose path matches one of these. Can be a string or glob pattern.',
     type: 'array',
@@ -1500,6 +1514,7 @@ const options: Readonly<RenovateOptions>[] = [
   },
   {
     name: 'excludeCommitPaths',
+    scopes: sharedScopes,
     description:
       'A file matching any of these glob patterns will not be committed, even if the file has been updated.',
     type: 'array',
@@ -1631,6 +1646,7 @@ const options: Readonly<RenovateOptions>[] = [
   },
   {
     name: 'azureWorkItemType',
+    scopes: ['repo'],
     description:
       'The work item type Renovate uses for its issues (e.g. the Dependency Dashboard) on Azure DevOps.',
     type: 'string',
@@ -1876,6 +1892,7 @@ const options: Readonly<RenovateOptions>[] = [
   },
   {
     name: 'autoReplaceGlobalMatch',
+    scopes: sharedScopes,
     description:
       'Control whether replacement regular expressions are global matches or only the first match.',
     type: 'boolean',
@@ -2155,6 +2172,7 @@ const options: Readonly<RenovateOptions>[] = [
   },
   {
     name: 'bumpVersion',
+    scopes: sharedScopes,
     description: 'Bump the version in the package file being updated.',
     type: 'string',
     allowedValues: ['major', 'minor', 'patch', 'prerelease'],
@@ -2412,6 +2430,7 @@ const options: Readonly<RenovateOptions>[] = [
   },
   {
     name: 'internalChecksAsSuccess',
+    scopes: sharedScopes,
     description:
       'Whether to consider passing internal checks such as `minimumReleaseAge` when determining branch status.',
     type: 'boolean',
@@ -2464,12 +2483,14 @@ const options: Readonly<RenovateOptions>[] = [
   },
   {
     name: 'commitHourlyLimit',
+    scopes: sharedScopes,
     description: 'Rate limit commits to maximum x per hour. 0 means no limit.',
     type: 'integer',
     default: 0,
   },
   {
     name: 'prHourlyLimit',
+    scopes: sharedScopes,
     description:
       'Rate limit PRs to maximum x created per hour. 0 means no limit.',
     type: 'integer',
@@ -2477,6 +2498,7 @@ const options: Readonly<RenovateOptions>[] = [
   },
   {
     name: 'prConcurrentLimit',
+    scopes: sharedScopes,
     description:
       'Limit to a maximum of x concurrent branches/PRs. 0 means no limit.',
     type: 'integer',
@@ -2484,6 +2506,7 @@ const options: Readonly<RenovateOptions>[] = [
   },
   {
     name: 'branchConcurrentLimit',
+    scopes: sharedScopes,
     description:
       'Limit to a maximum of x concurrent branches. 0 means no limit, `null` (default) inherits value from `prConcurrentLimit`.',
     type: 'integer',
@@ -2561,6 +2584,7 @@ const options: Readonly<RenovateOptions>[] = [
   // Automatic merging
   {
     name: 'automerge',
+    scopes: sharedScopes,
     description:
       'Whether to automerge branches/PRs automatically, without human intervention.',
     type: 'boolean',
@@ -2568,6 +2592,7 @@ const options: Readonly<RenovateOptions>[] = [
   },
   {
     name: 'automergeType',
+    scopes: sharedScopes,
     description: 'How to automerge, if enabled.',
     type: 'string',
     allowedValues: ['branch', 'pr', 'pr-comment'],
@@ -2575,6 +2600,7 @@ const options: Readonly<RenovateOptions>[] = [
   },
   {
     name: 'automergeStrategy',
+    scopes: sharedScopes,
     description:
       'The merge strategy to use when automerging PRs. Used only if `automergeType=pr`.',
     type: 'string',
@@ -2591,6 +2617,7 @@ const options: Readonly<RenovateOptions>[] = [
   },
   {
     name: 'automergeComment',
+    scopes: sharedScopes,
     description:
       'PR comment to add to trigger automerge. Only used if `automergeType=pr-comment`.',
     type: 'string',
@@ -2598,6 +2625,7 @@ const options: Readonly<RenovateOptions>[] = [
   },
   {
     name: 'ignoreTests',
+    scopes: sharedScopes,
     description: 'Set to `true` to enable automerging without tests.',
     type: 'boolean',
     default: false,
@@ -2875,6 +2903,7 @@ const options: Readonly<RenovateOptions>[] = [
   // Dependency Groups
   {
     name: 'groupName',
+    scopes: sharedScopes,
     description: 'Human understandable name for the dependency group.',
     type: 'string',
     default: null,
@@ -2882,6 +2911,7 @@ const options: Readonly<RenovateOptions>[] = [
   },
   {
     name: 'groupSlug',
+    scopes: sharedScopes,
     description:
       'Slug to use for group (e.g. in branch name). Slug is calculated from `groupName` if `null`.',
     type: 'string',
@@ -2905,6 +2935,7 @@ const options: Readonly<RenovateOptions>[] = [
   },
   {
     name: 'groupSingleUpdates',
+    scopes: sharedScopes,
     description:
       'Apply group settings even when the group contains only one update.',
     type: 'boolean',
@@ -3012,6 +3043,7 @@ const options: Readonly<RenovateOptions>[] = [
   },
   {
     name: 'confidential',
+    scopes: ['repo'],
     description:
       'If enabled, issues created by Renovate are set as confidential.',
     type: 'boolean',
@@ -3050,6 +3082,7 @@ const options: Readonly<RenovateOptions>[] = [
   },
   {
     name: 'postUpdateOptions',
+    scopes: sharedScopes,
     description:
       'Enable post-update options to be run after package/artifact updating.',
     type: 'array',
@@ -3087,7 +3120,7 @@ const options: Readonly<RenovateOptions>[] = [
     description:
       'Configuration object to define language or manager version constraints.',
     type: 'object',
-    default: { ghActionsLock: 'v0.1.6' },
+    default: { ghActionsLock: 'v0.2.0' },
     mergeable: true,
     cli: false,
     supportedManagers: [
