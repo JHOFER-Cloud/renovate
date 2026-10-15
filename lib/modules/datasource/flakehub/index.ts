@@ -68,16 +68,8 @@ export class FlakeHubDatasource extends Datasource {
       );
       const { body: result } = await this.http.getJson(url, FlakeHubRelease);
 
-      if (result) {
-        releasesMap.set(result.version, result);
-        /* v8 ignore next -- single result per query, already-set branch unreachable */
-        sourceUrl ??= result.repo_url;
-      }
-
-      /* v8 ignore next -- getJson either throws or returns a valid body, so releasesMap is never empty */
-      if (releasesMap.size === 0) {
-        return null;
-      }
+      releasesMap.set(result.version, result);
+      sourceUrl = result.repo_url;
 
       // Transform releases to ReleaseResult
       const releases = Array.from(releasesMap.values()).map((rel) => {

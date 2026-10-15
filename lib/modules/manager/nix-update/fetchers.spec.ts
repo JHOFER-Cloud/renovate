@@ -129,6 +129,41 @@ describe('modules/manager/nix-update/fetchers', () => {
       const expr = c.buildExpr(FLAKE, '');
       expect(expr).toContain('sha512-');
     });
+    it('falls back to fetchurl when the src has no url', () => {
+      const c = classifyFod(makeFod(['src'], { outputHash: '' }), 'foo', '1');
+      expect(c.fetcherName).toBe('fetchurl');
+      expect(c.currentHash).toBeNull();
+      expect(c.buildExpr(FLAKE, '')).not.toContain('url =');
+    });
+
+    it('passes leaveDotGit through to forge fetchers', () => {
+      const fod = makeFod(['src'], {
+        url: 'https://github.com/owner/repo/archive/v1.2.3.tar.gz',
+        outputHashMode: 'recursive',
+        leaveDotGit: true,
+      });
+      const expr = classifyFod(fod, 'foo', '1').buildExpr(FLAKE, '');
+      expect(expr).toContain('leaveDotGit = true');
+    });
+
+    it('omits rev for fetchgit without one', () => {
+      const fod = makeFod(['src'], {
+        url: 'https://example.com/repo.git',
+        outputHashMode: 'recursive',
+      });
+      const expr = classifyFod(fod, 'foo', '1').buildExpr(FLAKE, '');
+      expect(expr).toContain('runnerPkgs.fetchgit');
+      expect(expr).not.toContain('rev =');
+    });
+
+    it.each([
+      ['fetchCrate', 'https://crates.io/api/v1/crates/foo'],
+      ['fetchgem', 'https://rubygems.org/gems/foo'],
+    ])('throws when a %s url cannot be parsed', (fetcher, url) => {
+      expect(() => classifyFod(makeFod(['src'], { url }), 'foo', '1')).toThrow(
+        `Could not parse ${fetcher} URL: ${url}`,
+      );
+    });
   });
 
   describe('classifyFod — vendor FODs', () => {
@@ -142,6 +177,16 @@ describe('modules/manager/nix-update/fetchers', () => {
       expect(expr).toContain('<srcExpr>');
       expect(expr).toContain('vendorHash');
       expect(expr).toContain('.goModules');
+    });
+
+    it('defaults pname and version for vendor FODs', () => {
+      const expr = classifyFod(
+        makeFod(['goModules'], {}),
+        null,
+        null,
+      ).buildExpr(FLAKE, '<src>');
+      expect(expr).toContain('pname = "goModules"');
+      expect(expr).toContain('version = "0"');
     });
 
     it('forwards the goModules go toolchain to the rebuild', () => {

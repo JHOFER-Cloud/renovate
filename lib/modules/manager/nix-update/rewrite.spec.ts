@@ -75,6 +75,20 @@ describe('modules/manager/nix-update/rewrite', () => {
     expect(out).not.toContain('lib.fakeHash');
   });
 
+  it('does not guess between several lib.fakeHash placeholders', () => {
+    const content = `
+      a = { vendorHash = lib.fakeHash; };
+      b = { vendorHash = lib.fakeHash; };
+    `;
+    expect(() =>
+      rewriteHash(content, {
+        attrPath: ['vendorHash'],
+        oldHash: null,
+        newHash,
+      }),
+    ).toThrow(/Could not locate hash/);
+  });
+
   it('throws when neither contextual nor literal lookup finds the hash', () => {
     const content = `{ unrelated = "no hash here"; }`;
     expect(() =>
@@ -332,6 +346,12 @@ describe('modules/manager/nix-update/rewrite', () => {
       rewriteUrl(content, { attrPath: ['src'], oldUrl, newUrl }),
     ).toThrow(/Could not locate url/);
   });
+
+  it('throws when the src block has no url binding', () => {
+    expect(() =>
+      rewriteUrl('{ src = ./.; }', { attrPath: ['src'], oldUrl, newUrl }),
+    ).toThrow(/Could not locate url/);
+  });
 });
 
 describe('modules/manager/nix-update/rewrite', () => {
@@ -421,6 +441,12 @@ describe('modules/manager/nix-update/rewrite', () => {
     const content = `{ other = "x"; }`;
     expect(() =>
       rewriteRev(content, { attrPath: ['src'], oldRev, newRev }),
+    ).toThrow(/Could not locate rev/);
+  });
+
+  it('throws when the src block has no rev binding', () => {
+    expect(() =>
+      rewriteRev('{ src = ./.; }', { attrPath: ['src'], oldRev, newRev }),
     ).toThrow(/Could not locate rev/);
   });
 });

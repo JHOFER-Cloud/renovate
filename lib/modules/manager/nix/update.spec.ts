@@ -199,6 +199,26 @@ describe('modules/manager/nix/update', () => {
         expect(result).not.toContain('ref=refs/heads/release-1.0');
       });
 
+      it('returns null when ref does not contain current value', () => {
+        const fileContent = codeBlock`
+          {
+            inputs = {
+              mypackage.url = "git+ssh://git@example.com/org/repo?ref=main";
+            };
+          }
+        `;
+        const result = updateDependency({
+          packageFile: 'flake.nix',
+          fileContent,
+          upgrade: {
+            depName: 'mypackage',
+            currentValue: '1.0',
+            newValue: '2.0',
+          },
+        });
+        expect(result).toBeNull();
+      });
+
       it('updates branch ref without refs/heads/ prefix', () => {
         const fileContent = codeBlock`
           {
@@ -516,6 +536,28 @@ describe('modules/manager/nix/update', () => {
           };
         }
       `);
+    });
+
+    it('returns unchanged content for FlakeHub digest-only update', () => {
+      const fileContent = codeBlock`
+        {
+          inputs = {
+            nixpkgs.url = "https://flakehub.com/f/NixOS/nixpkgs/0.1";
+          };
+        }
+      `;
+      const result = updateDependency({
+        packageFile: 'flake.nix',
+        fileContent,
+        upgrade: {
+          depName: 'nixpkgs',
+          currentValue: '0.1',
+          newValue: '0.1',
+          currentDigest: 'abc123',
+          newDigest: 'def456',
+        },
+      });
+      expect(result).toBe(fileContent);
     });
 
     it('returns null when FlakeHub URL pattern does not match', () => {

@@ -173,42 +173,40 @@ export async function extractPackageFile(
         dep.packageName = `https://${flakeOriginal.host ?? 'git.sr.ht'}/${flakeOriginal.owner}/${flakeOriginal.repo}`;
         break;
 
-      case 'tarball':
+      case 'tarball': {
         // Check for FlakeHub URLs first
-        if (flakeOriginal.url && flakeHubUrl.test(flakeOriginal.url)) {
-          const match = flakeOriginal.url.match(flakeHubUrl);
-          if (match?.groups) {
-            dep.datasource = FlakeHubDatasource.id;
-            dep.packageName = `${match.groups.owner}/${match.groups.repo}`;
-            dep.currentValue = match.groups.version.replace(
-              regEx(/\.tar\.gz$/),
-              '',
-            );
+        const flakeHubGroups = flakeOriginal.url?.match(flakeHubUrl)?.groups;
+        if (flakeHubGroups) {
+          dep.datasource = FlakeHubDatasource.id;
+          dep.packageName = `${flakeHubGroups.owner}/${flakeHubGroups.repo}`;
+          dep.currentValue = flakeHubGroups.version.replace(
+            regEx(/\.tar\.gz$/),
+            '',
+          );
 
-            // Detect if this is a range constraint or a pinned version
-            // Range constraints: "0.1", "0", "*", "%2A" (1-2 version parts)
-            // Pinned versions: "0.2511.5835", "3.13.1" (3+ version parts)
-            const versionParts = dep.currentValue
-              .split('.')
-              .filter((p) => regEx(/^\d+$/).test(p));
-            const isRangeConstraint =
-              versionParts.length <= 2 ||
-              dep.currentValue === '*' ||
-              dep.currentValue === '%2A';
+          // Detect if this is a range constraint or a pinned version
+          // Range constraints: "0.1", "0", "*", "%2A" (1-2 version parts)
+          // Pinned versions: "0.2511.5835", "3.13.1" (3+ version parts)
+          const versionParts = dep.currentValue
+            .split('.')
+            .filter((p) => regEx(/^\d+$/).test(p));
+          const isRangeConstraint =
+            versionParts.length <= 2 ||
+            dep.currentValue === '*' ||
+            dep.currentValue === '%2A';
 
-            if (isRangeConstraint) {
-              // Use cargo versioning for range constraints
-              // where 0.1 means ">=0.1.0 <0.2.0" (unstable/rolling channels)
-              dep.versioning = cargoVersioning;
-            } else {
-              // For pinned versions, remove currentDigest to prevent digest-only updates
-              // The version update will trigger updateArtifacts which runs `nix flake update`
-              // and updates the lock file automatically
-              delete dep.currentDigest;
-            }
-
-            break;
+          if (isRangeConstraint) {
+            // Use cargo versioning for range constraints
+            // where 0.1 means ">=0.1.0 <0.2.0" (unstable/rolling channels)
+            dep.versioning = cargoVersioning;
+          } else {
+            // For pinned versions, remove currentDigest to prevent digest-only updates
+            // The version update will trigger updateArtifacts which runs `nix flake update`
+            // and updates the lock file automatically
+            delete dep.currentDigest;
           }
+
+          break;
         }
 
         // set to nixpkgs if it is a lockable channel URL
@@ -230,6 +228,7 @@ export async function extractPackageFile(
           'https://$<domain>/$<owner>/$<repo>',
         );
         break;
+      }
     }
 
     if (flakeLocked.type !== 'tarball') {

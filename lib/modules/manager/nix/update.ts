@@ -115,15 +115,10 @@ export function updateDependency({
 
     // Convert back to string, preserving the unencoded forward slashes in query params
     if (urlModified) {
-      newUrl = parsedUrl.toString();
-
       // URL constructor encodes forward slashes in query params but Nix URLs expect them unencoded
-      const queryStart = newUrl.indexOf('?');
-      if (queryStart !== -1) {
-        newUrl =
-          newUrl.substring(0, queryStart) +
-          newUrl.substring(queryStart).replace(regEx(/%2F/g), '/');
-      }
+      newUrl = parsedUrl
+        .toString()
+        .replace(regEx(/\?.*$/), (query) => query.replace(regEx(/%2F/g), '/'));
     }
   }
 
