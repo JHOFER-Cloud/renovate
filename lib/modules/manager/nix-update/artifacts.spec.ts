@@ -1,6 +1,6 @@
 import { codeBlock } from 'common-tags';
 import type { StatusResult } from 'simple-git';
-import { mockExecSequence } from '~test/exec-util.ts';
+import { exec, mockExecSequence } from '~test/exec-util.ts';
 import { env, fs, git, partial } from '~test/util.ts';
 import { GlobalConfig } from '../../../config/global.ts';
 import type {
@@ -1267,5 +1267,104 @@ describe('modules/manager/nix-update/artifacts', () => {
     expect(snapshots[1].cmd).toContain(
       "--option extra-substituters 'https://nixkit.cachix.org/?store=/nix/store'",
     );
+  });
+
+  it('reports a non-Error store failure', async () => {
+    exec.mockRejectedValueOnce('store probe died');
+    const url = 'https://example.com/foo-1.0.1.tar.gz';
+
+    const result = await updateArtifacts({
+      packageFileName: 'packages/foo/default.nix',
+      updatedDeps: [
+        {
+          depName: 'foo',
+          newVersion: '1.0.1',
+          downloadUrl: url,
+          managerData: {
+            attrName: 'foo',
+            system: 'x86_64-linux',
+            pname: 'foo',
+            fods: [
+              makeFod(['goModules'], {}),
+              makeFod(['src'], { url, outputHashMode: 'flat' }),
+            ],
+          },
+        },
+      ],
+      newPackageFileContent: `src = fetchurl { url = "${url}"; };`,
+      config,
+    });
+
+    expect(result?.[0].artifactError?.stderr).toBe('store probe died');
+  });
+
+  it('skips the src url rewrite when the src FOD has no url', async () => {
+    exec.mockRejectedValueOnce(new Error('store probe died'));
+
+    const result = await updateArtifacts({
+      packageFileName: 'packages/foo/default.nix',
+      updatedDeps: [
+        {
+          depName: 'foo',
+          downloadUrl: 'https://example.com/foo.tar.gz',
+          managerData: {
+            attrName: 'foo',
+            system: 'x86_64-linux',
+            pname: 'foo',
+            fods: [makeFod(['src'], {})],
+          },
+        },
+      ],
+      newPackageFileContent: '...',
+      config,
+    });
+
+    expect(result?.[0].artifactError?.stderr).toBe('store probe died');
+  });
+
+  it('keeps the unstable date when a branch-tracked package has no src FOD or commit date', async () => {
+    exec.mockRejectedValueOnce(new Error('store probe died'));
+    const { getPkgReleases } = await import('../../datasource/index.ts');
+    vi.mocked(getPkgReleases).mockResolvedValue({ releases: [] });
+    const fileContent = 'version = "0-unstable-2025-11-17";';
+
+    const result = await updateArtifacts({
+      packageFileName: 'packages/foo/default.nix',
+      updatedDeps: [
+        {
+          depName: 'foo',
+          datasource: 'github-digest',
+          packageName: 'owner/foo',
+          currentValue: 'main',
+          newValue: 'main',
+          currentDigest: 'oldcommitsha1',
+          newDigest: 'newcommitsha2',
+          managerData: {
+            attrName: 'foo',
+            system: 'x86_64-linux',
+            pname: 'foo',
+            isBranchTracked: true,
+            fods: [makeFod(['cargoDeps'], {})],
+          },
+        },
+      ],
+      newPackageFileContent: fileContent,
+      config,
+    });
+
+    expect(getPkgReleases).toHaveBeenCalledOnce();
+    expect(result?.[0].artifactError?.stderr).toBe('store probe died');
+  });
+
+  it('reports a non-Error prefetch failure', async () => {
+    mockExecSequence([STORE_DIR_PROBE]);
+    exec.mockRejectedValueOnce('exec died');
+
+    const result = await updateArtifacts({
+      ...srcOnlyUpgrade(),
+      config,
+    });
+
+    expect(result?.[0].artifactError?.stderr).toMatch(/\(src\): exec died$/);
   });
 });

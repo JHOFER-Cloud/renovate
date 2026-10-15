@@ -1,5 +1,5 @@
 import { codeBlock } from 'common-tags';
-import { mockExecSequence } from '~test/exec-util.ts';
+import { exec, mockExecSequence } from '~test/exec-util.ts';
 import { env, fs } from '~test/util.ts';
 import { GlobalConfig } from '../../../config/global.ts';
 import type { UpdateArtifactsConfig } from '../types.ts';
@@ -165,8 +165,8 @@ describe('modules/manager/nix-update/rehash', () => {
       }),
       STORE_DIR_PROBE,
       mismatch(NEW_DEPS),
-      new Error('exec died'),
     ]);
+    exec.mockRejectedValueOnce('exec died');
 
     const res = await updateVendorHashes(config);
 
@@ -219,6 +219,19 @@ describe('modules/manager/nix-update/rehash', () => {
             "nix store dir is '/tmp/containerbase/nix/store'",
           ),
         },
+      },
+    ]);
+  });
+
+  it('reports a non-Error store failure', async () => {
+    mockExecSequence([evalResult({ 'mcp-remote': makePackage(POSITION) })]);
+    exec.mockRejectedValueOnce('store probe died');
+
+    const res = await updateVendorHashes(config);
+
+    expect(res).toEqual([
+      {
+        artifactError: { fileName: 'flake.lock', stderr: 'store probe died' },
       },
     ]);
   });

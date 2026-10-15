@@ -1186,6 +1186,48 @@ describe('modules/platform/github/index', () => {
           expect(githubRule('https://github.com/org3/')).toBeUndefined();
         });
 
+        it('logs when current owner is not in any trust group', async () => {
+          await setupWithTrustGroups(
+            [
+              { id: 1, account: { login: 'org1', type: 'Organization' } },
+              { id: 2, account: { login: 'org2', type: 'Organization' } },
+            ],
+            [
+              { token: 'ghs_org1', expiresAt: futureExpiry },
+              { token: 'ghs_org2', expiresAt: futureExpiry },
+            ],
+            [['org2', 'org3']],
+          );
+
+          const scope = httpMock.scope(githubApiHost);
+          initRepoMock(scope, 'org1/repo');
+          await github.initRepo({ repository: 'org1/repo' });
+
+          expect(githubRule('https://github.com/org2/')).toBeUndefined();
+          expect(logger.logger.debug).toHaveBeenCalledWith(
+            { currentOwner: 'org1', trustGroups: [['org2', 'org3']] },
+            'githubAppCrossOrgTrustGroups: current owner not found in any group; no cross-org rules registered',
+          );
+        });
+
+        it('logs when a trusted org has no installation token', async () => {
+          await setupWithTrustGroups(
+            [{ id: 1, account: { login: 'org1', type: 'Organization' } }],
+            [{ token: 'ghs_org1', expiresAt: futureExpiry }],
+            [['org1', 'org2']],
+          );
+
+          const scope = httpMock.scope(githubApiHost);
+          initRepoMock(scope, 'org1/repo');
+          await github.initRepo({ repository: 'org1/repo' });
+
+          expect(githubRule('https://github.com/org2/')).toBeUndefined();
+          expect(logger.logger.debug).toHaveBeenCalledWith(
+            { owner: 'org2' },
+            'Trusted org has no GitHub App installation token; cross-org dependency lookups for this org may fail',
+          );
+        });
+
         it('matches trust group members case-insensitively', async () => {
           await setupWithTrustGroups(
             [

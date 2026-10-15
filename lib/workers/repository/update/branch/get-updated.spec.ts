@@ -10,6 +10,7 @@ import * as _gomod from '../../../../modules/manager/gomod/index.ts';
 import * as _helmv3 from '../../../../modules/manager/helmv3/index.ts';
 import * as _mise from '../../../../modules/manager/mise/index.ts';
 import * as _nix from '../../../../modules/manager/nix/index.ts';
+import * as _nixUpdate from '../../../../modules/manager/nix-update/index.ts';
 import * as _npm from '../../../../modules/manager/npm/index.ts';
 import * as _pep621 from '../../../../modules/manager/pep621/index.ts';
 import * as _pipCompile from '../../../../modules/manager/pip-compile/index.ts';
@@ -31,6 +32,7 @@ const gomod = vi.mocked(_gomod);
 const helmv3 = vi.mocked(_helmv3);
 const mise = vi.mocked(_mise);
 const nix = vi.mocked(_nix);
+const nixUpdate = vi.mocked(_nixUpdate);
 const npm = vi.mocked(_npm);
 const batectWrapper = vi.mocked(_batectWrapper);
 const autoReplace = vi.mocked(_autoReplace);
@@ -46,6 +48,7 @@ vi.mock('../../../../modules/manager/npm/index.ts');
 vi.mock('../../../../modules/manager/git-submodules/index.ts');
 vi.mock('../../../../modules/manager/gomod/index.ts', () => mockDeep());
 vi.mock('../../../../modules/manager/nix/index.ts');
+vi.mock('../../../../modules/manager/nix-update/index.ts');
 vi.mock('../../../../modules/manager/batect-wrapper/index.ts');
 vi.mock('../../../../modules/manager/pep621/index.ts');
 vi.mock('../../../../modules/manager/pip-compile/index.ts');
@@ -812,6 +815,40 @@ describe('workers/repository/update/branch/get-updated', () => {
           type: 'addition',
           path: 'flake.lock',
           contents: 'updated lock file content',
+        },
+      ]);
+    });
+
+    it('runs nix-update artifacts even when package file content is unchanged', async () => {
+      const fileContent = 'existing content';
+      config.upgrades.push({
+        packageFile: 'pkgs/foo.nix',
+        manager: 'nix-update',
+        branchName: 'renovate/foo',
+        depName: 'foo',
+        currentValue: 'main',
+        newValue: 'main',
+        updateType: 'digest',
+      } satisfies BranchUpgradeConfig);
+      nixUpdate.updateDependency.mockResolvedValueOnce(fileContent);
+      nixUpdate.updateArtifacts.mockResolvedValueOnce([
+        {
+          file: {
+            type: 'addition',
+            path: 'pkgs/foo.nix',
+            contents: 'rehashed content',
+          },
+        },
+      ]);
+
+      const res = await getUpdatedPackageFiles(config);
+
+      expect(nixUpdate.updateArtifacts).toHaveBeenCalledOnce();
+      expect(res.updatedArtifacts).toEqual([
+        {
+          type: 'addition',
+          path: 'pkgs/foo.nix',
+          contents: 'rehashed content',
         },
       ]);
     });

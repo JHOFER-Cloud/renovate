@@ -1,7 +1,8 @@
-import { mockExecSequence } from '~test/exec-util.ts';
-import { env } from '~test/util.ts';
+import { exec, mockExecSequence } from '~test/exec-util.ts';
+import { env, partial } from '~test/util.ts';
 import { GlobalConfig } from '../../../config/global.ts';
 import { logger } from '../../../logger/index.ts';
+import type { ExecResult } from '../../../util/exec/types.ts';
 import {
   _resetPrefetchCacheForTesting,
   assertSubstitutableStore,
@@ -211,6 +212,28 @@ describe('modules/manager/nix-update/prefetch', () => {
           algo: 'sha256',
         }),
       ).rejects.toThrow(/exec died/);
+    });
+
+    it('rethrows a non-object rejection unchanged', async () => {
+      exec.mockRejectedValueOnce('exec died');
+      await expect(
+        prefetch({
+          expr: 'x',
+          pkgSystem: 'x86_64-linux',
+          algo: 'sha256',
+        }),
+      ).rejects.toBe('exec died');
+    });
+
+    it('throws when nix-build succeeds without any stderr', async () => {
+      mockExecSequence([partial<ExecResult>({ stdout: '' })]);
+      await expect(
+        prefetch({
+          expr: 'x',
+          pkgSystem: 'x86_64-linux',
+          algo: 'sha256',
+        }),
+      ).rejects.toThrow(/unexpectedly succeeded/);
     });
 
     it('caches resolved hashes — second call with same expr does not exec again', async () => {

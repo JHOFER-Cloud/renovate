@@ -844,6 +844,12 @@ describe('modules/manager/nix-update/extract', () => {
         ),
       ).toEqual({ datasource: 'pypi', packageName: 'requests' });
     });
+
+    it('falls back to an empty package name without pname', () => {
+      expect(
+        datasourceFromSrc('mirror://pypi/r/requests/x.tar.gz', null, []),
+      ).toEqual({ datasource: 'pypi', packageName: '' });
+    });
   });
 
   describe('RubyGems', () => {
@@ -855,6 +861,16 @@ describe('modules/manager/nix-update/extract', () => {
           [],
         ),
       ).toEqual({ datasource: 'rubygems', packageName: 'rails' });
+    });
+
+    it('falls back to an empty package name without pname', () => {
+      expect(
+        datasourceFromSrc(
+          'https://rubygems.org/gems/rails-7.0.0.gem',
+          null,
+          [],
+        ),
+      ).toEqual({ datasource: 'rubygems', packageName: '' });
     });
   });
 
@@ -1040,6 +1056,15 @@ describe('modules/manager/nix-update/extract', () => {
             },
           },
         ],
+      });
+
+      expect(result).toBeNull();
+    });
+
+    it('skips when there is no src url despite a datasource override', async () => {
+      const result = await extractSkip({
+        srcUrl: null,
+        renovate: { datasource: 'github-release-asset' },
       });
 
       expect(result).toBeNull();

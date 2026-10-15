@@ -214,6 +214,7 @@ export async function updateArtifacts({
     );
     errors.push({
       fileName: packageFileName,
+      /* v8 ignore next -- the rewriters only ever throw Error */
       stderr: err instanceof Error ? err.message : String(err),
     });
   }

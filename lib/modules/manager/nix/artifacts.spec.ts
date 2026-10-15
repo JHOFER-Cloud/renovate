@@ -230,6 +230,17 @@ describe('modules/manager/nix/artifacts', () => {
       matchHost: 'https://github.com/TrustedOrg/',
       token: 'x-access-token:trusted-token',
     });
+    // ignored: not a URL, not an org-scoped path, and no token
+    hostRules.add({ hostType: 'github', matchHost: 'ghe', token: 'ignored' });
+    hostRules.add({
+      hostType: 'github',
+      matchHost: 'https://github.com/a/b/',
+      token: 'ignored',
+    });
+    hostRules.add({
+      hostType: 'github',
+      matchHost: 'https://github.com/NoTokenOrg/',
+    });
 
     const res = await updateArtifacts({
       packageFileName: 'flake.nix',

@@ -214,7 +214,7 @@ function pnpmVendorArgs(fod: FodInfo): Partial<VendorInputs> {
 }
 
 const githubArchiveRegex = regEx(
-  /^https?:\/\/github\.com\/[^/]+\/[^/]+\/archive\/[^/]+\.(?:tar\.gz|zip)$/,
+  /^https?:\/\/github\.com\/(?<owner>[^/]+)\/(?<repo>[^/]+)\/archive\/(?<rev>[^/]+)\.(?:tar\.gz|zip)$/,
 );
 // GitLab archive URLs come in two flavours: the browser-facing
 // /-/archive/<rev>/<repo>-<rev>.tar.gz and the API
@@ -223,13 +223,13 @@ const gitlabArchiveRegex = regEx(
   /^https?:\/\/gitlab\.com\/(?:[^/]+\/[^/]+\/-\/archive\/|api\/v4\/projects\/[^/]+\/repository\/archive)/,
 );
 const giteaArchiveRegex = regEx(
-  /^https?:\/\/[^/]*gitea[^/]*\/[^/]+\/[^/]+\/archive\/[^/]+\.(?:tar\.gz|zip)$/,
+  /^https?:\/\/[^/]*gitea[^/]*\/(?<owner>[^/]+)\/(?<repo>[^/]+)\/archive\/(?<rev>[^/]+)\.(?:tar\.gz|zip)$/,
 );
 const bitbucketArchiveRegex = regEx(
-  /^https?:\/\/bitbucket\.org\/[^/]+\/[^/]+\/get\/[^/]+\.(?:tar\.gz|zip)$/,
+  /^https?:\/\/bitbucket\.org\/(?<owner>[^/]+)\/(?<repo>[^/]+)\/get\/(?<rev>[^/]+)\.(?:tar\.gz|zip)$/,
 );
 const sourcehutArchiveRegex = regEx(
-  /^https?:\/\/git\.sr\.ht\/~[^/]+\/[^/]+\/archive\/[^/]+\.(?:tar\.gz|zip)$/,
+  /^https?:\/\/git\.sr\.ht\/(?<owner>~[^/]+)\/(?<repo>[^/]+)\/archive\/(?<rev>[^/]+)\.(?:tar\.gz|zip)$/,
 );
 const pypiUrlRegex = regEx(/(?:files\.pythonhosted\.org|pypi\.io|pypi\.org)/);
 const cratesUrlRegex = regEx(/crates\.io\/api\/v1\/crates\//);
@@ -241,7 +241,6 @@ function classifySrcFetcher(fod: FodInfo): string {
   if (!url) {
     // Defensive: extract.ts only emits FodInfo with url=null for vendor FODs
     // (goModules/cargoDeps/etc.), and those don't reach this function.
-    /* v8 ignore next -- defensive: vendor FODs with url=null never reach here */
     return 'fetchurl';
   }
 
@@ -312,7 +311,7 @@ function buildSrcInputs(fetcher: string, fod: FodInfo): FetcherInputs {
     case 'fetchFromSourcehut':
     case 'fetchFromRepoOrCz': {
       // Parse owner/repo/rev from the archive URL.
-      const parsed = parseArchiveUrl(url ?? '', fetcher);
+      const parsed = parseArchiveUrl(url!, fetcher);
       if (!parsed) {
         throw new Error(`Could not parse ${fetcher} URL: ${url}`);
       }
@@ -329,7 +328,7 @@ function buildSrcInputs(fetcher: string, fod: FodInfo): FetcherInputs {
     case 'fetchsvn':
     case 'fetchfossil':
       return {
-        url: url ?? undefined,
+        url: url!,
         rev: rev ?? undefined,
         ...(fetchSubmodules !== null && { fetchSubmodules: !!fetchSubmodules }),
         ...(leaveDotGit !== null && { leaveDotGit: !!leaveDotGit }),
@@ -340,7 +339,7 @@ function buildSrcInputs(fetcher: string, fod: FodInfo): FetcherInputs {
     case 'fetchCrate':
     case 'fetchgem': {
       // Parse pname/version from the URL.
-      const parsed = parseRegistryUrl(url ?? '', fetcher);
+      const parsed = parseRegistryUrl(url!, fetcher);
       if (!parsed) {
         throw new Error(`Could not parse ${fetcher} URL: ${url}`);
       }
@@ -363,34 +362,29 @@ interface ParsedArchive {
   rev: string;
 }
 
-function parseArchiveUrl(url: string, fetcher: string): ParsedArchive | null {
+type ArchiveFetcher =
+  | 'fetchFromGitHub'
+  | 'fetchFromGitLab'
+  | 'fetchFromGitea'
+  | 'fetchFromBitbucket'
+  | 'fetchFromSourcehut'
+  | 'fetchFromRepoOrCz';
+
+function parseArchiveUrl(
+  url: string,
+  fetcher: ArchiveFetcher,
+): ParsedArchive | null {
   switch (fetcher) {
-    case 'fetchFromGitHub': {
-      const m = regEx(
-        /^https?:\/\/github\.com\/(?<owner>[^/]+)\/(?<repo>[^/]+)\/archive\/(?<ref>[^/]+)\.(?:tar\.gz|zip)$/,
-      ).exec(url);
-      return m ? { owner: m[1], repo: m[2], rev: m[3] } : null;
-    }
-    case 'fetchFromGitea': {
-      const m = regEx(
-        /^https?:\/\/[^/]+\/(?<owner>[^/]+)\/(?<repo>[^/]+)\/archive\/(?<ref>[^/]+)\.(?:tar\.gz|zip)$/,
-      ).exec(url);
-      return m ? { owner: m[1], repo: m[2], rev: m[3] } : null;
-    }
-    case 'fetchFromBitbucket': {
-      const m = regEx(
-        /^https?:\/\/bitbucket\.org\/(?<owner>[^/]+)\/(?<repo>[^/]+)\/get\/(?<ref>[^/]+)\.(?:tar\.gz|zip)$/,
-      ).exec(url);
-      return m ? { owner: m[1], repo: m[2], rev: m[3] } : null;
-    }
-    case 'fetchFromSourcehut': {
-      const m = regEx(
-        /^https?:\/\/git\.sr\.ht\/(?<owner>~[^/]+)\/(?<repo>[^/]+)\/archive\/(?<ref>[^/]+)\.(?:tar\.gz|zip)$/,
-      ).exec(url);
-      return m ? { owner: m[1], repo: m[2], rev: m[3] } : null;
-    }
+    case 'fetchFromGitHub':
+      return archiveParts(githubArchiveRegex, url);
+    case 'fetchFromGitea':
+      return archiveParts(giteaArchiveRegex, url);
+    case 'fetchFromBitbucket':
+      return archiveParts(bitbucketArchiveRegex, url);
+    case 'fetchFromSourcehut':
+      return archiveParts(sourcehutArchiveRegex, url);
     case 'fetchFromGitLab':
-    default:
+    case 'fetchFromRepoOrCz':
       // GitLab archive URLs encode owner/repo/rev in query params; without
       // those passthrough attrs we can't reliably reconstruct. Caller can
       // still fall back to fetchzip on the raw URL.
@@ -398,7 +392,17 @@ function parseArchiveUrl(url: string, fetcher: string): ParsedArchive | null {
   }
 }
 
-function parseRegistryUrl(url: string, fetcher: string): FetcherInputs | null {
+// classifySrcFetcher only picks a forge fetcher after its regex matched the
+// url, so matching it again here always succeeds.
+function archiveParts(regex: RegExp, url: string): ParsedArchive {
+  const { owner, repo, rev } = regex.exec(url)!.groups!;
+  return { owner, repo, rev };
+}
+
+function parseRegistryUrl(
+  url: string,
+  fetcher: 'fetchPypi' | 'fetchCrate' | 'fetchgem',
+): FetcherInputs | null {
   switch (fetcher) {
     case 'fetchPypi': {
       // https://files.pythonhosted.org/packages/source/<x>/<pname>/<pname>-<version>.tar.gz
@@ -418,10 +422,6 @@ function parseRegistryUrl(url: string, fetcher: string): FetcherInputs | null {
       const m = regEx(/\/(?<name>[^/]+)-(?<version>[^/]+)\.gem$/).exec(url);
       return m ? { pname: m[1], version: m[2] } : null;
     }
-    default:
-      // defensive; only registry fetchers reach this dispatch
-      /* v8 ignore next -- defensive: only registry fetchers reach this dispatch */
-      return null;
   }
 }
 
