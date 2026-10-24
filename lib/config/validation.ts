@@ -1213,7 +1213,7 @@ async function validateGlobalConfig(
       if (isArray(val) && key !== 'repositories') {
         validateStringArray(key, val, currentPath, errors);
         for (const [subIndex, subval] of val.entries()) {
-          if (isObject(subval)) {
+          if (isObject(subval) && !isArray(subval)) {
             const subValidation = await validateConfig(
               'global',
               subval,
