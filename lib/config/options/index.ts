@@ -870,6 +870,7 @@ const options: Readonly<RenovateOptions>[] = [
   },
   {
     name: 'nixSubstituters',
+    scopes: sharedScopes,
     description:
       'Binary caches to use when computing Nix hashes. Their signing keys must be trusted via `nixTrustedPublicKeys`.',
     type: 'array',
