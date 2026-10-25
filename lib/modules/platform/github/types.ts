@@ -107,12 +107,24 @@ export interface GithubEnterpriseServerHost extends GithubHostBase {
 export type GithubHost =
   GithubComHost | GithubEnterpriseCloudHost | GithubEnterpriseServerHost;
 
+export interface OwnerTokenInfo {
+  token: string;
+  expiresAt: Date;
+  installationId: number;
+  login: string; // original case from GitHub API
+}
+
 export interface PlatformConfig {
   host: GithubHost;
   isGHApp?: boolean;
   existingRepos?: string[];
   userDetails?: UserDetails;
   userEmail?: EmailAddress | null;
+  // GitHub App multi-installation support
+  ownerTokens?: Record<string, OwnerTokenInfo>;
+  githubAppId?: string;
+  githubAppKey?: string;
+  githubAppCrossOrgTrustGroups?: string[][];
 }
 
 export interface LocalRepoConfig {
@@ -187,4 +199,14 @@ export interface ApiPageItem {
 export interface ApiPageCache<T extends ApiPageItem = ApiPageItem> {
   items: Record<number, T>;
   lastModified?: string;
+}
+
+export interface GhAppInstallation {
+  id: number;
+  account: { login: string; type: string };
+}
+
+export interface InstallationToken {
+  token: string;
+  expiresAt: Date;
 }

@@ -3,6 +3,8 @@
   "ignoreDependencies": [
     // referenced by name as a vitest coverage reporter
     "@containerbase/istanbul-reports-html",
+    // kept in this fork for custom usage outside the scanned sources
+    "@types/auth-header",
     // used for types via `declare module 'commander'` in lib/commander.d.ts
     "@commander-js/extra-typings",
     // semantic-release `preset: conventionalcommits` in .releaserc.json

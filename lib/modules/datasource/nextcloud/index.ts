@@ -17,6 +17,8 @@ export class NextcloudDatasource extends Datasource {
 
   override readonly defaultVersioning = semver.id;
 
+  override readonly releaseTimestampSupport = true;
+
   constructor() {
     super(NextcloudDatasource.id);
   }
