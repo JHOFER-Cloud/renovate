@@ -1,4 +1,5 @@
 import { mockExecAll } from '~test/exec-util.ts';
+import * as httpMock from '~test/http-mock.ts';
 import { fs } from '~test/util.ts';
 import {
   datasourceFromSrc,
@@ -10,6 +11,8 @@ import {
 
 vi.mock('../../../util/fs/index.ts');
 vi.mock('../../../util/exec/index.ts');
+
+const githubApi = 'https://api.github.com';
 
 describe('modules/manager/nix-update/extract', () => {
   it('returns null if no file contains nix-update-script', async () => {
@@ -203,6 +206,10 @@ describe('modules/manager/nix-update/extract', () => {
   });
 
   it('returns deps with real datasource and version from nix eval', async () => {
+    httpMock
+      .scope(githubApi)
+      .get('/repos/owner/opsops')
+      .reply(200, { default_branch: 'main' });
     fs.readLocalFile
       .mockResolvedValueOnce('passthru.updateScript = nix-update-script {};')
       .mockResolvedValueOnce('{ outputs = ...; }');
@@ -332,7 +339,93 @@ describe('modules/manager/nix-update/extract', () => {
     });
   });
 
-  it('defaults currentValue to main when --version=branch has no explicit name', async () => {
+  it('reads nix-update syntax --version=branch=<name> without an API call', async () => {
+    fs.readLocalFile
+      .mockResolvedValueOnce('passthru.updateScript = nix-update-script {};')
+      .mockResolvedValueOnce('{ outputs = ...; }');
+
+    const { exec } = await import('../../../util/exec/index.ts');
+    vi.mocked(exec).mockResolvedValueOnce({
+      stdout: JSON.stringify({
+        opsops: {
+          system: 'aarch64-darwin',
+          version: 'unstable-2024-01-15',
+          pname: 'opsops',
+          srcUrl: 'https://github.com/owner/opsops',
+          srcRev: 'deadbeefcafe01',
+          updateScriptArgs: ['--version=branch=chore/x'],
+        },
+      }),
+      stderr: '',
+    });
+
+    const result = await extractAllPackageFiles({}, [
+      'packages/opsops/default.nix',
+    ]);
+
+    expect(result?.[0].deps[0]).toMatchObject({ currentValue: 'chore/x' });
+  });
+
+  it('skips a bare --version=branch package whose repository is gone', async () => {
+    httpMock.scope(githubApi).get('/repos/owner/opsops').reply(404);
+    fs.readLocalFile
+      .mockResolvedValueOnce('passthru.updateScript = nix-update-script {};')
+      .mockResolvedValueOnce('{ outputs = ...; }');
+
+    const { exec } = await import('../../../util/exec/index.ts');
+    vi.mocked(exec).mockResolvedValueOnce({
+      stdout: JSON.stringify({
+        opsops: {
+          system: 'aarch64-darwin',
+          version: null,
+          pname: 'opsops',
+          srcUrl: 'https://github.com/owner/opsops',
+          srcRev: 'deadbeefcafe01',
+          updateScriptArgs: ['--version=branch'],
+        },
+      }),
+      stderr: '',
+    });
+
+    const result = await extractAllPackageFiles({}, [
+      'packages/opsops/default.nix',
+    ]);
+
+    expect(result).toBeNull();
+  });
+
+  it('keeps the main guess for a bare --version=branch on a non-github datasource', async () => {
+    fs.readLocalFile
+      .mockResolvedValueOnce('passthru.updateScript = nix-update-script {};')
+      .mockResolvedValueOnce('{ outputs = ...; }');
+
+    const { exec } = await import('../../../util/exec/index.ts');
+    vi.mocked(exec).mockResolvedValueOnce({
+      stdout: JSON.stringify({
+        opsops: {
+          system: 'aarch64-darwin',
+          version: null,
+          pname: 'opsops',
+          srcUrl: 'https://gitlab.com/owner/opsops',
+          srcRev: 'deadbeefcafe01',
+          updateScriptArgs: ['--version=branch'],
+        },
+      }),
+      stderr: '',
+    });
+
+    const result = await extractAllPackageFiles({}, [
+      'packages/opsops/default.nix',
+    ]);
+
+    expect(result?.[0].deps[0]).toMatchObject({ currentValue: 'main' });
+  });
+
+  it('uses the repository default branch when --version=branch has no explicit name', async () => {
+    httpMock
+      .scope(githubApi)
+      .get('/repos/owner/opsops')
+      .reply(200, { default_branch: 'master' });
     fs.readLocalFile
       .mockResolvedValueOnce('passthru.updateScript = nix-update-script {};')
       .mockResolvedValueOnce('{ outputs = ...; }');
@@ -357,7 +450,7 @@ describe('modules/manager/nix-update/extract', () => {
     ]);
 
     expect(result?.[0].deps[0]).toMatchObject({
-      currentValue: 'main',
+      currentValue: 'master',
       currentDigest: 'deadbeefcafe01',
     });
   });
