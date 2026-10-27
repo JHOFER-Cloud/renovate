@@ -386,5 +386,13 @@ describe('modules/manager/nix-update/expr', () => {
     it('collapses whitespace to single space', () => {
       expect(collapseExpr('  a\n  b\n   c  ')).toBe('a b c');
     });
+    it('leaves string literals untouched, including escaped quotes', () => {
+      // missing-hashes.json is copied into the yarn berry offline cache, so
+      // squashing its indentation would change the hash
+      const lit = nixVal('{\n  "a":  "x\\"y"\n}');
+      expect(collapseExpr(`  f {\n  x =   ${lit};\n  }  `)).toBe(
+        `f { x = ${lit}; }`,
+      );
+    });
   });
 });

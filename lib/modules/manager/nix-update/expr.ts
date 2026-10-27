@@ -509,7 +509,33 @@ export function exprForZigDeps(
 }
 
 // Collapse the multi-line nix expression to a single line so it survives
-// shell quoting cleanly. nix is whitespace-insensitive between tokens.
+// shell quoting cleanly. nix is whitespace-insensitive between tokens, but not
+// inside string literals: those are copied through untouched, because some
+// end up byte-for-byte in the fetched output (yarn berry's missing-hashes.json
+// is copied into its offline cache, so squashed indentation moves the hash).
+// nixVal escapes newlines, so every literal here is a single-line "...".
 export function collapseExpr(expr: string): string {
-  return expr.replace(regEx(/\s+/g), ' ').trim();
+  let out = '';
+  let inString = false;
+  for (let i = 0; i < expr.length; i++) {
+    const ch = expr[i];
+    if (inString) {
+      out += ch;
+      if (ch === '\\') {
+        out += expr[++i];
+      } else if (ch === '"') {
+        inString = false;
+      }
+    } else if (ch === '"') {
+      inString = true;
+      out += ch;
+    } else if (ch.trim() === '') {
+      if (!out.endsWith(' ')) {
+        out += ' ';
+      }
+    } else {
+      out += ch;
+    }
+  }
+  return out.trim();
 }
