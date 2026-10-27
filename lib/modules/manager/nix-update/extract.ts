@@ -5,11 +5,13 @@ import { exec } from '../../../util/exec/index.ts';
 import type { ExecOptions } from '../../../util/exec/types.ts';
 import { readLocalFile } from '../../../util/fs/index.ts';
 import { regEx } from '../../../util/regex.ts';
+import { GithubDigestDatasource } from '../../datasource/github-digest/index.ts';
 import {
   GithubReleaseAssetDatasource,
   parseAssetUrl,
 } from '../../datasource/github-release-asset/index.ts';
 import type { ExtractConfig, PackageFile } from '../types.ts';
+import { explicitBranch, getDefaultBranch } from './default-branch.ts';
 import type { PackageInfo } from './types.ts';
 
 // Nix expression passed to `nix eval .#packages --apply` to introspect all
@@ -595,12 +597,20 @@ export async function extractAllPackageFiles(
         );
         continue;
       }
-      // Parse explicit branch name from --version=branch:<name>; fall back to
-      // 'main' (GitHub's modern default) when only --version=branch is given.
-      const branchName =
-        info.updateScriptArgs
-          .map((a) => regEx(/^--version=branch:(?<branch>.+)$/).exec(a)?.[1])
-          .find(Boolean) ?? 'main';
+      // A bare --version=branch follows the default branch. That can only be
+      // looked up for github-digest; other datasources keep the 'main' guess.
+      let branchName = explicitBranch(info.updateScriptArgs);
+      if (!branchName && ds.datasource === GithubDigestDatasource.id) {
+        branchName = await getDefaultBranch(ds.packageName);
+        if (!branchName) {
+          logger.warn(
+            { attrName, repo: ds.packageName },
+            'nix-update: skipping branch-tracked — repository not found',
+          );
+          continue;
+        }
+      }
+      branchName ??= 'main';
       pushDep(file, {
         depName: attrName,
         datasource: ds.datasource, // 'github-digest'
