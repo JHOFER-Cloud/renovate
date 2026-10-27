@@ -254,6 +254,47 @@ describe('modules/manager/nix-update/fetchers', () => {
       expect(expr).toContain('runnerPkgs.fetchYarnDeps');
     });
 
+    it('classifies offlineCache with berryVersion as fetchYarnBerryDeps', () => {
+      const fod = makeFod(['offlineCache'], {
+        berryVersion: 4,
+        missingHashes: '{"@esbuild/linux-x64@npm:0.25.12":"abc"}',
+        hasYarnLock: false,
+      });
+      const c = classifyFod(fod, 'foo', '1');
+      expect(c.fetcherName).toBe('offlineCache');
+      const expr = c.buildExpr(FLAKE, '<src>');
+      expect(expr).toContain('runnerPkgs.yarn-berry_4.fetchYarnBerryDeps');
+      expect(expr).toContain('builtins.toFile "missing-hashes.json"');
+      expect(expr).not.toContain('fetchYarnDeps ');
+    });
+
+    it('fetchYarnBerryDeps without missingHashes passes none', () => {
+      // packages with no platform-specific optional deps don't need the file
+      const fod = makeFod(['offlineCache'], {
+        berryVersion: 4,
+        missingHashes: null,
+        hasYarnLock: false,
+      });
+      const expr = classifyFod(fod, 'foo', '1').buildExpr(FLAKE, '<src>');
+      expect(expr).toContain('runnerPkgs.yarn-berry_4.fetchYarnBerryDeps');
+      expect(expr).not.toContain('missingHashes');
+    });
+
+    it('offlineCache without berryVersion stays on fetchYarnDeps', () => {
+      // also what a cache entry extracted before berry support looks like
+      const fod = makeFod(['offlineCache'], { hasYarnLock: true });
+      const expr = classifyFod(fod, 'foo', '1').buildExpr(FLAKE, '<src>');
+      expect(expr).toContain('runnerPkgs.fetchYarnDeps');
+    });
+
+    it('refuses fetchYarnBerryDeps with its own yarnLock', () => {
+      const fod = makeFod(['offlineCache'], {
+        berryVersion: 4,
+        hasYarnLock: true,
+      });
+      expect(() => classifyFod(fod, 'foo', '1')).toThrow(/own yarnLock/);
+    });
+
     it('classifies composerVendor', () => {
       const fod = makeFod(['composerVendor'], {});
       const c = classifyFod(fod, 'foo', '1');

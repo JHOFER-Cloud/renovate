@@ -5,6 +5,7 @@ import {
   exprForComposerVendor,
   exprForGoModules,
   exprForMixFodDeps,
+  exprForYarnBerryDeps,
   exprForZigDeps,
 } from './expr.ts';
 
@@ -182,6 +183,28 @@ describe.skipIf(!enabled)('modules/manager/nix-update/expr nix eval', () => {
       exprForComposerVendor(FLAKE, VEND, 'sha256', 'composerRepository'),
     );
     expect(v1.err).toBe('');
+  }, 600_000);
+
+  it('yarn berry: each generation has a fetcher, and the pin moves the derivation', async () => {
+    const missingHashes = '{"@esbuild/linux-x64@npm:0.25.12": "abc"}';
+    const v4 = await evalDrv(
+      exprForYarnBerryDeps(
+        FLAKE,
+        { ...VEND, berryVersion: 4, missingHashes },
+        'sha256',
+      ),
+    );
+    const v3 = await evalDrv(
+      exprForYarnBerryDeps(
+        FLAKE,
+        { ...VEND, berryVersion: 3, missingHashes },
+        'sha256',
+      ),
+    );
+    expect(v4.err).toBe('');
+    expect(v3.err).toBe('');
+    expect(v4.out).toContain('offline.drv');
+    expect(v4.out).not.toBe(v3.out);
   }, 600_000);
 
   it('mix: an elixir the runner cannot pair with its erlang aborts cleanly', async () => {

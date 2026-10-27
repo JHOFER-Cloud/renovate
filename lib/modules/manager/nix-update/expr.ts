@@ -364,6 +364,26 @@ export function exprForYarnDeps(
     }`;
 }
 
+// Yarn berry (v2+): fetchYarnBerryDeps reads yarn.lock from src. Each
+// yarn-berry_N carries its own fetcher, and the berry generation changes the
+// cache it writes, so pin to the one the package used — with no fallback, as
+// for pnpm. missingHashes goes back in as a file built from its content.
+export function exprForYarnBerryDeps(
+  flakePath: string,
+  v: VendorInputs,
+  algo: HashAlgo,
+): string {
+  const missingHashes = v.missingHashes
+    ? `missingHashes = builtins.toFile "missing-hashes.json" ${nixVal(v.missingHashes)};`
+    : '';
+  return `${preamble(flakePath)}
+    runnerPkgs.yarn-berry_${v.berryVersion}.fetchYarnBerryDeps {
+      src = ${v.srcExpr};
+      ${missingHashes}
+      ${hashPlaceholderAttr(algo)}
+    }`;
+}
+
 // PHP composer: buildComposerProject's vendor.
 export function exprForComposerVendor(
   flakePath: string,

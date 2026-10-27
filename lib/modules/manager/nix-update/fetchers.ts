@@ -1,3 +1,4 @@
+import { isNumber } from '@sindresorhus/is';
 import { regEx } from '../../../util/regex.ts';
 import {
   exprForCargoDeps,
@@ -9,6 +10,7 @@ import {
   exprForNuGetDeps,
   exprForPnpmDeps,
   exprForSrcFetcher,
+  exprForYarnBerryDeps,
   exprForYarnDeps,
   exprForZigDeps,
 } from './expr.ts';
@@ -86,7 +88,36 @@ export function classifyFod(
         };
       }
       case 'yarnOfflineCache':
-      case 'offlineCache':
+      case 'offlineCache': {
+        const { berryVersion, missingHashes, hasYarnLock } = fod.inputs;
+        if (isNumber(berryVersion)) {
+          // A yarn.lock passed to the fetcher instead of read from src lives
+          // outside what we rebuild; dropping it would vendor src's lockfile
+          // under a hash that then gets written back as if it were right.
+          if (hasYarnLock) {
+            throw new Error(
+              `nix-update: ${attr} is fetchYarnBerryDeps with its own yarnLock, which can't be rebuilt from src`,
+            );
+          }
+          return {
+            attrPath: fod.attrPath,
+            currentHash,
+            algo,
+            isSrc: false,
+            fetcherName: attr,
+            buildExpr: (flakePath, srcExpr) =>
+              exprForYarnBerryDeps(
+                flakePath,
+                {
+                  ...v,
+                  berryVersion,
+                  missingHashes: missingHashes ?? undefined,
+                  srcExpr,
+                },
+                algo,
+              ),
+          };
+        }
         return {
           attrPath: fod.attrPath,
           currentHash,
@@ -96,6 +127,7 @@ export function classifyFod(
           buildExpr: (flakePath, srcExpr) =>
             exprForYarnDeps(flakePath, { ...v, srcExpr }, algo),
         };
+      }
       case 'composerVendor':
       case 'composerRepository':
         return {

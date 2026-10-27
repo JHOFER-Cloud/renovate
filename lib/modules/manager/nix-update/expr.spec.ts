@@ -9,6 +9,7 @@ import {
   exprForNuGetDeps,
   exprForPnpmDeps,
   exprForSrcFetcher,
+  exprForYarnBerryDeps,
   exprForYarnDeps,
   exprForZigDeps,
   nixVal,
@@ -252,6 +253,26 @@ describe('modules/manager/nix-update/expr', () => {
       const e = exprForYarnDeps(FLAKE, VEND, 'sha256');
       expect(e).toContain('fetchYarnDeps');
       expect(e).toContain('yarn.lock');
+    });
+    it('yarn berry: pins the berry generation and inlines missingHashes', () => {
+      const e = exprForYarnBerryDeps(
+        FLAKE,
+        { ...VEND, berryVersion: 3, missingHashes: '{"a@npm:1": "${x}"}' },
+        'sha256',
+      );
+      expect(e).toContain('runnerPkgs.yarn-berry_3.fetchYarnBerryDeps');
+      expect(e).toContain('src = <src>;');
+      expect(e).toContain(
+        'missingHashes = builtins.toFile "missing-hashes.json" "{\\"a@npm:1\\": \\"\\${x}\\"}";',
+      );
+    });
+    it('yarn berry: omits missingHashes when the package has none', () => {
+      const e = exprForYarnBerryDeps(
+        FLAKE,
+        { ...VEND, berryVersion: 4 },
+        'sha256',
+      );
+      expect(e).not.toContain('missingHashes');
     });
     it('composer: php.buildComposerProject with vendorHash', () => {
       const e = exprForComposerVendor(FLAKE, VEND, 'sha256');
