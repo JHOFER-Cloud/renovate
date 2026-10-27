@@ -87,6 +87,16 @@ builtins.foldl'
       pnpmWorkspaces = maybeStrList "pnpmWorkspaces";
       pnpmInstallFlags = maybeStrList "pnpmInstallFlags";
       prePnpmInstall = maybe "prePnpmInstall";
+      /* fetchYarnBerryDeps args. berryVersion comes from its passthru and is
+         absent on yarn v1's fetchYarnDeps, which is also named "offline".
+         missingHashes is a path into the flake source: inline the content so
+         the runner-side rebuild doesn't depend on that store path. */
+      berryVersion = maybeInt "berryVersion";
+      missingHashes =
+        if drv ? missingHashes && drv.missingHashes != null
+        then discardCtx (builtins.readFile drv.missingHashes)
+        else null;
+      hasYarnLock = drv ? yarnLock;
       /* zig.fetchDeps arg: fetches every dependency rather than only those
          reachable from the default target. Changes what lands in the store,
          so it has to be mirrored like the pnpm args above. */

@@ -46,6 +46,9 @@ export interface VendorInputs {
   pnpmWorkspaces?: string[];
   pnpmInstallFlags?: string[];
   prePnpmInstall?: string;
+  // fetchYarnBerryDeps args, read off the package's own offlineCache derivation
+  berryVersion?: number;
+  missingHashes?: string;
 }
 
 export interface FodInputs {
@@ -67,6 +70,13 @@ export interface FodInputs {
   pnpmWorkspaces?: string[] | null;
   pnpmInstallFlags?: string[] | null;
   prePnpmInstall?: string | null;
+  // fetchYarnBerryDeps args. berryVersion is set only on yarn berry's FOD, so
+  // it is what tells it apart from yarn v1's fetchYarnDeps (both are named
+  // "offline"). missingHashes is the file's content, not its path.
+  berryVersion?: number | null;
+  missingHashes?: string | null;
+  // Whether the FOD was given its own yarn.lock instead of the one in src.
+  hasYarnLock?: boolean | null;
   // zig.fetchDeps arg, read off the package's own zigDeps derivation.
   fetchAll?: boolean | null;
   // Toolchains found in the FOD's nativeBuildInputs, e.g.

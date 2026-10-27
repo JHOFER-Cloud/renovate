@@ -9,6 +9,7 @@ import {
   exprForNuGetDeps,
   exprForPnpmDeps,
   exprForSrcFetcher,
+  exprForYarnBerryDeps,
   exprForYarnDeps,
   exprForZigDeps,
   nixVal,
@@ -253,6 +254,26 @@ describe('modules/manager/nix-update/expr', () => {
       expect(e).toContain('fetchYarnDeps');
       expect(e).toContain('yarn.lock');
     });
+    it('yarn berry: pins the berry generation and inlines missingHashes', () => {
+      const e = exprForYarnBerryDeps(
+        FLAKE,
+        { ...VEND, berryVersion: 3, missingHashes: '{"a@npm:1": "${x}"}' },
+        'sha256',
+      );
+      expect(e).toContain('runnerPkgs.yarn-berry_3.fetchYarnBerryDeps');
+      expect(e).toContain('src = <src>;');
+      expect(e).toContain(
+        'missingHashes = builtins.toFile "missing-hashes.json" "{\\"a@npm:1\\": \\"\\${x}\\"}";',
+      );
+    });
+    it('yarn berry: omits missingHashes when the package has none', () => {
+      const e = exprForYarnBerryDeps(
+        FLAKE,
+        { ...VEND, berryVersion: 4 },
+        'sha256',
+      );
+      expect(e).not.toContain('missingHashes');
+    });
     it('composer: php.buildComposerProject with vendorHash', () => {
       const e = exprForComposerVendor(FLAKE, VEND, 'sha256');
       expect(e).toContain('php.buildComposerProject');
@@ -385,6 +406,14 @@ describe('modules/manager/nix-update/expr', () => {
   describe('collapseExpr', () => {
     it('collapses whitespace to single space', () => {
       expect(collapseExpr('  a\n  b\n   c  ')).toBe('a b c');
+    });
+    it('leaves string literals untouched, including escaped quotes', () => {
+      // missing-hashes.json is copied into the yarn berry offline cache, so
+      // squashing its indentation would change the hash
+      const lit = nixVal('{\n  "a":  "x\\"y"\n}');
+      expect(collapseExpr(`  f {\n  x =   ${lit};\n  }  `)).toBe(
+        `f { x = ${lit}; }`,
+      );
     });
   });
 });
