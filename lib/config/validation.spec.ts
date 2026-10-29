@@ -4241,6 +4241,11 @@ describe('config/validation', () => {
               matchStrings: [],
               bumpType: 'not-a-bump-type',
             },
+            {
+              filePatterns: [],
+              matchStrings: [],
+              bumpType: 'prerelease',
+            },
           ],
         };
         const { warnings, errors } = await configValidation.validateConfig(
@@ -4252,7 +4257,7 @@ describe('config/validation', () => {
         expect(errors).toMatchObject([
           {
             message:
-              'Invalid bumpVersions[1].bumpType: bumpType had a value `"not-a-bump-type"` which was not part of the allowedValues: ["major","minor","patch","sync"]',
+              'Invalid bumpVersions[1].bumpType: bumpType had a value `"not-a-bump-type"` which was not part of the allowedValues: ["major","minor","patch","prerelease","sync"]',
             topic: 'Configuration Error',
           },
           {
