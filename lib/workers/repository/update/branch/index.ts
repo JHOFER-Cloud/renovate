@@ -22,6 +22,7 @@ import {
 import { logger, removeMeta } from '../../../../logger/index.ts';
 import { isMissingReleaseTimestampReportable } from '../../../../modules/datasource/index.ts';
 import { updateActionsLockfile } from '../../../../modules/manager/github-actions/artifacts.ts';
+import { enforcesMinimumReleaseAge } from '../../../../modules/manager/index.ts';
 import { getAdditionalFiles } from '../../../../modules/manager/npm/post-update/index.ts';
 import {
   ensureComment,
@@ -47,6 +48,7 @@ import { getCount, isLimitReached } from '../../../global/limits.ts';
 import type {
   BranchConfig,
   BranchResult,
+  BranchUpgradeConfig,
   PrBlockedBy,
 } from '../../../types.ts';
 import { embedChangelogs } from '../../changelog/index.ts';
@@ -115,6 +117,26 @@ async function deleteBranchSilently(branchName: string): Promise<void> {
     /* v8 ignore next -- needs test */
     logger.debug({ branchName, err }, 'Branch auto-remove failed');
   }
+}
+
+/**
+ * The minimum release age which Renovate has to check for `upgrade`, which is
+ * `0` for lock file maintenance if the package manager enforces it itself.
+ */
+async function getMinimumReleaseAgeMsToCheck(
+  upgrade: BranchUpgradeConfig,
+): Promise<number> {
+  const minimumReleaseAgeMs = calculateMinimumReleaseAgeMs(upgrade);
+  if (!minimumReleaseAgeMs || !upgrade.isLockFileMaintenance) {
+    return minimumReleaseAgeMs;
+  }
+  if (!(await enforcesMinimumReleaseAge(upgrade.manager, upgrade))) {
+    return minimumReleaseAgeMs;
+  }
+  logger.debug(
+    `Lock file maintenance of ${upgrade.packageFile}: the package manager enforces the minimum release age`,
+  );
+  return 0;
 }
 
 function userChangedTargetBranch(pr: Pr): boolean {
@@ -440,6 +462,7 @@ export async function processBranch(
       config.upgrades.some(
         (upgrade) =>
           isNonEmptyString(upgrade.minimumReleaseAge) ||
+          isNonEmptyString(upgrade.minimumReleaseAgeExtracted) ||
           isActiveConfidenceLevel(upgrade.minimumConfidence!),
       )
     ) {
@@ -462,7 +485,8 @@ export async function processBranch(
       config.stabilityStatus = 'green';
       // Default to 'success' but set 'pending' if any update is pending
       for (const upgrade of config.upgrades) {
-        const minimumReleaseAgeMs = calculateMinimumReleaseAgeMs(upgrade);
+        const minimumReleaseAgeMs =
+          await getMinimumReleaseAgeMsToCheck(upgrade);
 
         if (minimumReleaseAgeMs) {
           const minimumReleaseAgeBehaviour: MinimumReleaseAgeBehaviour =
