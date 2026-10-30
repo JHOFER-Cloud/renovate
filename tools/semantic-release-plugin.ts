@@ -91,10 +91,7 @@ export async function publish(
     if (!digest) {
       throw commandError(`Missing image digest for ${target}`);
     }
-    images.push(
-      `ghcr.io/renovatebot/renovate@${digest}`,
-      `renovate/renovate@${digest}`,
-    );
+    images.push(`ghcr.io/jhofer-cloud/renovate@${digest}`);
   }
 }
 

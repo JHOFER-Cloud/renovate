@@ -17,6 +17,8 @@ export class Unity3dPackagesDatasource extends Datasource {
 
   override readonly defaultVersioning = Unity3dPackagesVersioning.id;
 
+  override readonly releaseTimestampSupport = true;
+
   constructor() {
     super(Unity3dPackagesDatasource.id);
   }
