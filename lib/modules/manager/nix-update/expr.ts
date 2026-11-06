@@ -9,6 +9,7 @@ import {
   isString,
 } from '@sindresorhus/is';
 import { regEx } from '../../../util/regex.ts';
+import { api as looseVersioning } from '../../versioning/loose/index.ts';
 import type {
   FetcherInputs,
   FodTool,
@@ -234,10 +235,20 @@ function pinnedToolOrAbort(
   );
 }
 
+// null unless the version spells out both a major and a minor (1.27.1 -> [1, 27])
+function majorMinor(version: string | null): [number, number] | null {
+  if (!version) {
+    return null;
+  }
+  const major = looseVersioning.getMajor(version);
+  const minor = looseVersioning.getMinor(version);
+  return major !== null && minor !== null ? [major, minor] : null;
+}
+
 // Canonical nixpkgs spelling for versioned compiler attrs (go_1_27, zig_0_16).
 function versionedAttr(prefix: string, version: string | null): string | null {
-  const m = regEx(/^(?<major>\d+)\.(?<minor>\d+)/).exec(version ?? '');
-  return m ? `${prefix}_${m[1]}_${m[2]}` : null;
+  const mm = majorMinor(version);
+  return mm ? `${prefix}_${mm[0]}_${mm[1]}` : null;
 }
 
 function goBuilder(tools: FodTool[] | undefined): string {
@@ -407,12 +418,12 @@ export function exprForComposerVendor(
   // version, so a different php can select different package versions. Pin
   // exactly or abort.
   const version = toolVersion(v.tools, 'php-with-extensions');
-  const m = regEx(/^(?<major>\d+)\.(?<minor>\d+)/).exec(version ?? '');
+  const mm = majorMinor(version);
   const php =
-    m && version
+    mm && version
       ? pinnedToolOrAbort(
           'runnerPkgs',
-          `php${m[1]}${m[2]}`,
+          `php${mm[0]}${mm[1]}`,
           'php-with-extensions',
           version,
           'composer',

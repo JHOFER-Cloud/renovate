@@ -278,10 +278,8 @@ export async function updateArtifacts({
       //      branch content, not main, so `currentHash` from extract no
       //      longer matches what's in the file. Detecting via
       //      `content.includes(newHash)` covers both.
-      if (
-        (fod.currentHash && newHash === fod.currentHash) ||
-        content.includes(newHash)
-      ) {
+      const hashUnchanged = !!fod.currentHash && newHash === fod.currentHash;
+      if (hashUnchanged || content.includes(newHash)) {
         logger.trace(
           { attrPath: fod.attrPath, hash: newHash },
           'nix-update: file already has the target hash, skipping rewrite',
@@ -435,9 +433,8 @@ function bumpFodToNewVersion(
   }
 
   function stripV(s: string): string {
-    return s.length > 1 &&
-      (s.startsWith('v') || s.startsWith('V')) &&
-      regEx(/\d/).test(s[1])
+    const hasVPrefix = s.startsWith('v') || s.startsWith('V');
+    return s.length > 1 && hasVPrefix && regEx(/\d/).test(s[1])
       ? s.slice(1)
       : s;
   }

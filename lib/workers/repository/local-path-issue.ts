@@ -147,7 +147,8 @@ export async function ensureLocalPathInputIssues(
   // close open issues for inputs that are fixed/removed, or when suppressed
   for (const issue of issues) {
     const depName = issueTitleRegex.exec(issue.title!)!.groups!.depName;
-    if (isOpen(issue) && (suppressed || !detected.has(depName))) {
+    const shouldClose = suppressed || !detected.has(depName);
+    if (isOpen(issue) && shouldClose) {
       logger.debug(
         { depName, suppressed },
         'Closing local path warning issue with fixed marker',
