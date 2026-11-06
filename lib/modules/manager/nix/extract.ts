@@ -99,10 +99,11 @@ export async function extractPackageFile(
     // machine-local inputs (`git+file://` URLs or absolute `path:` inputs)
     // can only be fetched on the machine that locked them. Emit a skipped dep
     // so the local-path warning issue can notify the user about them.
+    const localUrl = [flakeOriginal.url, flakeLocked.url].find(
+      (u) => u && localFileUrl.test(u),
+    );
     const localPath =
-      [flakeOriginal.url, flakeLocked.url].find(
-        (u) => u && localFileUrl.test(u),
-      ) ??
+      localUrl ??
       [flakeOriginal.path, flakeLocked.path].find((p) => p?.startsWith('/'));
     if (localPath) {
       logger.debug(
@@ -248,10 +249,6 @@ export async function extractPackageFile(
     }
 
     deps.push(dep);
-  }
-
-  if (deps.length === 0) {
-    return null;
   }
 
   return { deps };

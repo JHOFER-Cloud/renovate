@@ -123,7 +123,7 @@ export class GithubReleaseAssetDatasource extends Datasource {
         // github.com serves private repositories over the same host once a
         // token is configured, so no registry check can establish that this
         // release is public. Admins opt in explicitly via cachePrivatePackages.
-        cacheable: false,
+        public: false,
       },
       () => this._getDigest(parsed, registryUrl),
     );

@@ -86,10 +86,10 @@ export async function publish(
   });
 
   images = [];
-  for (const target of ['push-slim', 'push-full'] as const) {
-    const digest = meta[target]?.['containerimage.digest'];
+  for (const variant of ['slim', 'full'] as const) {
+    const digest = meta[`push-${variant}`]?.['containerimage.digest'];
     if (!digest) {
-      throw commandError(`Missing image digest for ${target}`);
+      throw commandError(`Missing image digest for push-${variant}`);
     }
     images.push(`ghcr.io/jhofer-cloud/renovate@${digest}`);
   }

@@ -38,7 +38,7 @@ export class FlakeHubDatasource extends Datasource {
       {
         namespace: `datasource-${FlakeHubDatasource.id}`,
         key: cacheKey,
-        cacheable: config.registryUrl === FlakeHubDatasource.publicApiUrl,
+        public: config.registryUrl === FlakeHubDatasource.publicApiUrl,
         fallback: true,
       },
       () => this._getReleases(config),
