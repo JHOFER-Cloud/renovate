@@ -82,6 +82,7 @@ export interface UpdateArtifactsConfig extends ToolConstraintsConfig {
   isLockFileMaintenance?: boolean;
   composerIgnorePlatformReqs?: string[];
   goGetDirs?: string[];
+  nixSubstituters?: string[];
   currentValue?: string;
   postUpdateOptions?: string[];
   ignorePlugins?: boolean;
@@ -288,6 +289,12 @@ export interface PackageDependency<
 
   mostRecentTimestamp?: Timestamp;
   isAbandoned?: boolean;
+  /**
+   * Set by the lookup when the registry returned a release timestamp for at least one release of this dependency, i.e. when a missing timestamp is a real gap rather than a registry which never provides them.
+   *
+   * @see registryProvidesReleaseTimestamps
+   */
+  registryProvidesReleaseTimestamps?: boolean;
   extractedConstraints?: Partial<Record<ConstraintName, string>>;
   /**
    * Any specific overrides for the versioning for the `AdditionalConstraintName`s, for this dependency alone.
@@ -309,6 +316,7 @@ export interface Upgrade<
   isLockfileUpdate?: boolean;
   currentRawValue?: any;
   depGroup?: string;
+  downloadUrl?: string;
   lockFiles?: string[];
   manager?: string;
   name?: string;
