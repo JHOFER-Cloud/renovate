@@ -836,7 +836,7 @@ const options: Readonly<RenovateOptions>[] = [
     description:
       'Change this value to override the default Renovate sidecar image.',
     type: 'string',
-    default: 'ghcr.io/renovatebot/base-image:13.161.4',
+    default: 'ghcr.io/renovatebot/base-image:13.163.1',
     globalOnly: true,
     deprecationMsg:
       'The usage of `binarySource=docker` is deprecated, and will be removed in the future',
@@ -2683,7 +2683,7 @@ const options: Readonly<RenovateOptions>[] = [
     scopes: sharedScopes,
     description: 'How to automerge, if enabled.',
     type: 'string',
-    allowedValues: ['branch', 'pr', 'pr-comment'],
+    allowedValues: ['branch', 'pr', 'pr-comment', 'label'],
     default: 'pr',
   },
   {
@@ -2710,6 +2710,14 @@ const options: Readonly<RenovateOptions>[] = [
       'PR comment to add to trigger automerge. Only used if `automergeType=pr-comment`.',
     type: 'string',
     default: 'automergeComment',
+  },
+  {
+    name: 'automergeLabel',
+    scopes: sharedScopes,
+    description:
+      'Label to add to the PR to trigger automerge. Only used if `automergeType=label`.',
+    type: 'string',
+    default: 'automerge',
   },
   {
     name: 'ignoreTests',

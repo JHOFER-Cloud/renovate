@@ -123,8 +123,8 @@ importers:
         specifier: 6.3.1
         version: 6.3.1(@opentelemetry/api@1.10.0)
       '@renovatebot/base-image':
-        specifier: 13.161.4
-        version: 13.161.4(zod@4.6.7)
+        specifier: 13.163.1
+        version: 13.163.1(zod@4.6.7)
       '@renovatebot/detect-tools':
         specifier: 5.0.0
         version: 5.0.0
@@ -222,8 +222,8 @@ importers:
         specifier: 17.0.0
         version: 17.0.0
       execa:
-        specifier: 10.1.1
-        version: 10.1.1
+        specifier: 10.2.1
+        version: 10.2.1
       find-packages:
         specifier: 10.0.4
         version: 10.0.4
@@ -378,8 +378,8 @@ importers:
         specifier: 3.0.8
         version: 3.0.8
       url-join:
-        specifier: 5.0.0
-        version: 5.0.0
+        specifier: 5.2.0
+        version: 5.2.0
       validate-npm-package-name:
         specifier: 7.0.2
         version: 7.0.2
@@ -403,8 +403,8 @@ importers:
         specifier: 15.0.0
         version: 15.0.0(commander@15.0.0)
       '@containerbase/istanbul-reports-html':
-        specifier: 2.0.23
-        version: 2.0.23
+        specifier: 2.0.24
+        version: 2.0.24
       '@hyrious/marshal':
         specifier: 0.3.4
         version: 0.3.4
@@ -899,6 +899,15 @@ packages:
     peerDependencies:
       commander: ~15.0.0
 
+  '@containerbase/base@14.66.14':
+    resolution: {integrity: sha512-ukyoTYn0rNoNBqKS8A70uCJBukfgtkvUqjIT2qs9ncZja9tZThFy6m023YfLJtqU/QzCOd+PrFEPB52DuIkpBw==}
+    engines: {node: '>=24.10.0'}
+    peerDependencies:
+      zod: ^4.0.0
+    peerDependenciesMeta:
+      zod:
+        optional: true
+
   '@containerbase/base@14.66.9':
     resolution: {integrity: sha512-UMNAd848w3X4r3cb2kjPHIJ6Ccsk45yN/5645yo+/0Pwa5iKwihOb2Mc/Y0aXxLkRdzv0Q+Xq+ughLPMb3mB/w==}
     engines: {node: '>=24.10.0'}
@@ -908,8 +917,8 @@ packages:
       zod:
         optional: true
 
-  '@containerbase/istanbul-reports-html@2.0.23':
-    resolution: {integrity: sha512-praMugrE0F6eSYteJMFXshagQ7n3kY+GGCqrOViNwQTR33LNaQe9hQE2RIsiplucVjHyOLt3rPOizcrsqVnNdA==}
+  '@containerbase/istanbul-reports-html@2.0.24':
+    resolution: {integrity: sha512-UfeTUcZgBM58EYdvMiH8rpVU4YFI++0C2NGb26l0C+Zm1DAeoxUxfIn9F9WXZYEA/RsiuMs3Q21hWq0Y6jl8LQ==}
     engines: {node: ^22.11.0 || >=24.0.0, pnpm: '>=10.0.0'}
 
   '@emnapi/core@1.11.2':
@@ -2026,8 +2035,8 @@ packages:
       '@opentelemetry/api':
         optional: true
 
-  '@renovatebot/base-image@13.161.4':
-    resolution: {integrity: sha512-E0rP4ShVWBAAl4CbjhpJB4rZYAQR1FoIP9l0RFTLZ3A/WZehEMpbSN65bC1pgkVJte2xmTbMBgfAtYaCNK9KRg==}
+  '@renovatebot/base-image@13.163.1':
+    resolution: {integrity: sha512-lZf2+mnCkzDF2vuCnFuNt4BxpbA8womcJpBbXoh5xJLLeXrlxHOgmMPSHYEFi56g25cW91J80Q9Ak52ovEs/Bw==}
     engines: {node: '>=24.10.0'}
     peerDependencies:
       zod: ^4.0.0
@@ -3399,8 +3408,8 @@ packages:
   eventemitter3@5.0.4:
     resolution: {integrity: sha512-mlsTRyGaPBjPedk6Bvw+aqbsXDtoAyAzm5MO7JgU+yVRyMQ5O8bD4Kcci7BS85f93veegeCPkL8R4GLClnjLFw==}
 
-  execa@10.1.1:
-    resolution: {integrity: sha512-yJAC9ulsE6fU0K6wzJBIH+wI+KAtMeu6Ck8rs23OVzvEhqXjGADdI6K+YNIDAjcQQ6AwXTD96cKExJo6xFJXyg==}
+  execa@10.2.1:
+    resolution: {integrity: sha512-/Bofl3ZBh2Q4/PG0W63qFzP5vDAypi8Zc90UWTBzaDNIYiX7apPOd0N6L8hG8CojUdq4V51adu8BObP+iVsSTw==}
     engines: {node: '>=22'}
 
   execa@8.0.1:
@@ -5762,8 +5771,8 @@ packages:
     peerDependencies:
       browserslist: '>= 4.21.0'
 
-  url-join@5.0.0:
-    resolution: {integrity: sha512-n2huDr9h9yzd6exQVnH/jU5mr+Pfx08LRXXZhkLLetAMESRj+anQsTAh940iMrIetKAmry9coFuZQ2jY8/p3WA==}
+  url-join@5.2.0:
+    resolution: {integrity: sha512-/tMVQdp/2eE90fGb6npbd2nLHH8jamzLLeZhLEKTz4Rc38wO5AeEuIhoWroWWfQJS50ZzL4Xod9JER/pJWTTEQ==}
     engines: {node: ^12.20.0 || ^14.13.1 || >=16.0.0}
 
   util-deprecate@1.0.2:
@@ -6505,13 +6514,19 @@ snapshots:
     dependencies:
       commander: 15.0.0
 
+  '@containerbase/base@14.66.14(zod@4.6.7)':
+    dependencies:
+      semver: 7.8.5
+    optionalDependencies:
+      zod: 4.6.7
+
   '@containerbase/base@14.66.9(zod@4.6.7)':
     dependencies:
       semver: 7.8.5
     optionalDependencies:
       zod: 4.6.7
 
-  '@containerbase/istanbul-reports-html@2.0.23':
+  '@containerbase/istanbul-reports-html@2.0.24':
     dependencies:
       istanbul-reports: 3.2.0
 
@@ -7400,9 +7415,9 @@ snapshots:
     optionalDependencies:
       '@opentelemetry/api': 1.10.0
 
-  '@renovatebot/base-image@13.161.4(zod@4.6.7)':
+  '@renovatebot/base-image@13.163.1(zod@4.6.7)':
     dependencies:
-      '@containerbase/base': 14.66.9(zod@4.6.7)
+      '@containerbase/base': 14.66.14(zod@4.6.7)
     optionalDependencies:
       zod: 4.6.7
 
@@ -7530,7 +7545,7 @@ snapshots:
       semantic-release: 25.0.9(supports-color@7.2.0)(typescript@7.0.2)
       tinyglobby: 0.2.17
       undici: 7.30.0
-      url-join: 5.0.0
+      url-join: 5.2.0
     transitivePeerDependencies:
       - kerberos
       - supports-color
@@ -8670,7 +8685,7 @@ snapshots:
 
   eventemitter3@5.0.4: {}
 
-  execa@10.1.1:
+  execa@10.2.1:
     dependencies:
       '@sindresorhus/merge-streams': 4.0.0
       figures: 6.1.0
@@ -11320,7 +11335,7 @@ snapshots:
       escalade: 3.2.0
       picocolors: 1.1.1
 
-  url-join@5.0.0: {}
+  url-join@5.2.0: {}
 
   util-deprecate@1.0.2: {}
 

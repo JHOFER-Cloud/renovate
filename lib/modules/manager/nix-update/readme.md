@@ -14,6 +14,8 @@ warning: binary cache 'https://cache.nixos.org' is for Nix stores with prefix '/
 
 Such a nix substitutes nothing, so every hash prefetch rebuilds the full stdenv from source and exceeds the exec timeout. The fix belongs in containerbase. Setting `NIX_STORE_DIR` in the environment does not help — the wrapper overrides it, and it generates the wrapper at install time, so there is nothing to patch in the image. Instead this fork's image loads `/etc/nix/nix.conf` through `NIX_USER_CONF_FILES`, which the wrapper leaves alone, and pins both the local store and `cache.nixos.org` to `/nix/store` with a `store=/nix/store` parameter. Each substituter reads its store dir from `NIX_STORE_DIR` rather than from the local store, so the manager pins the repository's `nixSubstituters` the same way.
 
+Renovate's `exec` passes only an allowlist of environment variables to child processes, and `NIX_USER_CONF_FILES` is not on it, so the manager forwards it explicitly on every nix call. Without that, the pin only holds while the requested nix version matches the one preinstalled in the image: any other version makes containerbase install its wrapped nix, which then never sees the config.
+
 The manager probes `builtins.storeDir` once per package and reports an `artifactError` naming the store dir if this invariant is broken, rather than spending the exec timeout on a doomed source build.
 
 ### Binary caches

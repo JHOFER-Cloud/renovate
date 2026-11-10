@@ -24,6 +24,12 @@ const builderFailedRegex = regEx(
   /error: (?:Cannot build|builder for) '(?<drvPath>[^']+)'/,
 );
 
+// The image pins the store via NIX_USER_CONF_FILES, which exec's env allowlist
+// drops, letting containerbase's nix wrapper move the store into its cache dir.
+export function nixConfEnv(): Record<string, string | undefined> {
+  return { NIX_USER_CONF_FILES: process.env.NIX_USER_CONF_FILES };
+}
+
 // Parse a hash from nix-build's stderr produced by an empty-hash FOD.
 // Returns SRI-formatted hash. Throws if no parseable hash found.
 export async function parseHashFromStderr(
@@ -50,6 +56,7 @@ export async function parseHashFromStderr(
     const cmd = `nix --extra-experimental-features 'nix-command' hash to-sri --type ${algo} ${raw}`;
     const result = await exec(cmd, {
       toolConstraints: [{ toolName: 'nix', constraint: nixConstraint }],
+      extraEnv: nixConfEnv(),
       docker: {},
     });
     const sri = result.stdout.trim();
@@ -101,6 +108,7 @@ export async function assertSubstitutableStore(
     `nix --extra-experimental-features 'nix-command' eval --impure --raw --expr 'builtins.storeDir'`,
     {
       toolConstraints: [{ toolName: 'nix', constraint: nixConstraint }],
+      extraEnv: nixConfEnv(),
       docker: {},
     },
   );
