@@ -141,6 +141,28 @@ describe('modules/manager/nix-update/prefetch', () => {
       );
     });
 
+    it('forwards NIX_USER_CONF_FILES past the exec env allowlist', async () => {
+      vi.stubEnv('NIX_USER_CONF_FILES', '/etc/nix/nix.conf');
+      const snapshots = mockExecSequence([
+        { stdout: '/nix/store\n', stderr: '' },
+      ]);
+      await expect(assertSubstitutableStore()).toResolve();
+      expect(snapshots[0].options?.env?.NIX_USER_CONF_FILES).toBe(
+        '/etc/nix/nix.conf',
+      );
+    });
+
+    it('sets no NIX_USER_CONF_FILES when the image does not', async () => {
+      vi.stubEnv('NIX_USER_CONF_FILES', undefined);
+      const snapshots = mockExecSequence([
+        { stdout: '/nix/store\n', stderr: '' },
+      ]);
+      await expect(assertSubstitutableStore()).toResolve();
+      expect(snapshots[0].options?.env).not.toHaveProperty(
+        'NIX_USER_CONF_FILES',
+      );
+    });
+
     it('re-probes on every call — another manager can swap nix mid-run', async () => {
       const snapshots = mockExecSequence([
         { stdout: '/nix/store\n', stderr: '' },

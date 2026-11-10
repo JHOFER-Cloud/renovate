@@ -12,6 +12,7 @@ import {
 } from '../../datasource/github-release-asset/index.ts';
 import type { ExtractConfig, PackageFile } from '../types.ts';
 import { explicitBranch, getDefaultBranch } from './default-branch.ts';
+import { nixConfEnv } from './prefetch.ts';
 import type { PackageInfo } from './types.ts';
 
 // Nix expression passed to `nix eval .#packages --apply` to introspect all
@@ -439,6 +440,7 @@ export async function evalPackageInfos(): Promise<Record<
 
   const execOptions: ExecOptions = {
     toolConstraints: [{ toolName: 'nix' }],
+    extraEnv: nixConfEnv(),
     docker: {},
   };
 

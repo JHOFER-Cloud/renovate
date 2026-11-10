@@ -18,7 +18,7 @@ import type {
 } from '../types.ts';
 import { resolveToolConstraint } from '../util.ts';
 import { buildKnownSrcExpr, classifyFod } from './fetchers.ts';
-import { assertSubstitutableStore, prefetch } from './prefetch.ts';
+import { assertSubstitutableStore, nixConfEnv, prefetch } from './prefetch.ts';
 import {
   rewriteHash,
   rewriteRev,
@@ -545,6 +545,7 @@ export function usableSubstituters(configured: string[] | undefined): string[] {
 export function buildExtraEnv(): Record<string, string | undefined> {
   const env: Record<string, string | undefined> = {
     ...getGitEnvironmentVariables({}),
+    ...nixConfEnv(),
   };
   const ghToken = findGithubToken(
     hostRules.find({
