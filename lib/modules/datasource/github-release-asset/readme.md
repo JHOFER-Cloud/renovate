@@ -33,7 +33,7 @@ repo/tag/asset fields.
 
 ## How it works
 
-This is modelled exactly like a Docker `:latest` pin — the value is frozen and
+This is modeled exactly like a Docker `:latest` pin — the value is frozen and
 the **digest** moves:
 
 - `getReleases` reports the pinned tag as the only version. Combined with

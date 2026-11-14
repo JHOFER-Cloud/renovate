@@ -47,7 +47,7 @@ export function parseAssetUrl(url: string): ParsedAssetUrl | null {
  * *stable* release tag changed — the `tip`/`nightly` pattern, where a release
  * is re-published on every upstream commit.
  *
- * Modelled exactly like a Docker `:latest` pin: the value (the tag) is frozen
+ * Modeled exactly like a Docker `:latest` pin: the value (the tag) is frozen
  * and the digest moves. `getReleases` therefore reports the tag itself as the
  * only version — `exact` versioning guarantees no version update is ever
  * proposed — and `getDigest` resolves the asset's current digest, so updates

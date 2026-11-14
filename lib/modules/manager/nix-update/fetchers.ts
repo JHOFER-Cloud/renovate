@@ -248,7 +248,7 @@ function pnpmVendorArgs(fod: FodInfo): Partial<VendorInputs> {
 const githubArchiveRegex = regEx(
   /^https?:\/\/github\.com\/(?<owner>[^/]+)\/(?<repo>[^/]+)\/archive\/(?<rev>[^/]+)\.(?:tar\.gz|zip)$/,
 );
-// GitLab archive URLs come in two flavours: the browser-facing
+// GitLab archive URLs come in two flavors: the browser-facing
 // /-/archive/<rev>/<repo>-<rev>.tar.gz and the API
 // /api/v4/projects/<id>/repository/archive.<ext>?sha=<rev>.
 const gitlabArchiveRegex = regEx(
