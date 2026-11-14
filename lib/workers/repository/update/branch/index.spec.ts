@@ -476,6 +476,27 @@ describe('workers/repository/update/branch/index', () => {
         });
         expect(managers.enforcesMinimumReleaseAge).not.toHaveBeenCalled();
       });
+
+      it('does not skip security updates without minimumReleaseAge', async () => {
+        schedule.isScheduledNow.mockReturnValueOnce(true);
+        config.prCreation = 'not-pending';
+        config.upgrades = partial<BranchUpgradeConfig>([
+          {
+            isVulnerabilityAlert: true,
+            releaseTimestamp: undefined,
+            minimumReleaseAge: null,
+            minimumReleaseAgeExtracted: '3 days',
+            minimumReleaseAgeBehaviour: 'timestamp-required',
+          },
+        ]);
+        scm.isBranchModified.mockResolvedValueOnce(false);
+
+        await branchWorker.processBranch(config);
+
+        expect(
+          reuse.shouldReuseExistingBranch.mock.calls[0][0].stabilityStatus,
+        ).toBeUndefined();
+      });
     });
 
     describe('lock file maintenance with minimumReleaseAge set', () => {
@@ -489,6 +510,7 @@ describe('workers/repository/update/branch/index', () => {
           updateType: 'lockFileMaintenance',
           minimumReleaseAge: '3 days',
           minimumReleaseAgeBehaviour: 'timestamp-required',
+          minimumReleaseAgePackageManagerSync: true,
         });
         config.upgrades = [upgrade];
         managers.enforcesMinimumReleaseAge.mockResolvedValueOnce(true);
@@ -513,6 +535,7 @@ describe('workers/repository/update/branch/index', () => {
             updateType: 'lockFileMaintenance',
             minimumReleaseAge: '3 days',
             minimumReleaseAgeBehaviour: 'timestamp-required',
+            minimumReleaseAgePackageManagerSync: true,
           },
         ]);
         managers.enforcesMinimumReleaseAge.mockResolvedValueOnce(false);

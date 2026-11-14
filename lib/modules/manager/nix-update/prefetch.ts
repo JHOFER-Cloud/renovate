@@ -124,7 +124,7 @@ export async function assertSubstitutableStore(
 }
 
 // Run `nix build --expr <expr>` and parse the hash from stderr.
-// On success, the FOD output is also realised in the runner's nix store
+// On success, the FOD output is also realized in the runner's nix store
 // as a side effect (so subsequent vendor builds can reference it).
 export async function prefetch(opts: PrefetchOptions): Promise<string> {
   const {

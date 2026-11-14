@@ -48,5 +48,8 @@ test/datasource/nuget/_fixtures/obj
 /.claude/settings.local.json
 /.claude/worktrees
 
+# Vale grammars downloaded by `vale sync`
+/.vale/styles/config/
+
 # nix
 .direnv
