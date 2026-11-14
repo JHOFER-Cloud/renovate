@@ -5,6 +5,7 @@ import type {
 } from '../../../../config/types.ts';
 import { logger } from '../../../../logger/index.ts';
 import type { Release } from '../../../../modules/datasource/index.ts';
+import { isMissingReleaseTimestampReportable } from '../../../../modules/datasource/index.ts';
 import { postprocessRelease } from '../../../../modules/datasource/postprocess-release.ts';
 import type { VersioningApi } from '../../../../modules/versioning/index.ts';
 import {
@@ -235,7 +236,14 @@ export async function filterInternalChecks(
     }
 
     if (candidateVersionsWithoutReleaseTimestamp['timestamp-optional'].length) {
-      logger.once.warn(missingReleaseTimestampWarning);
+      if (
+        isMissingReleaseTimestampReportable(
+          config.datasource,
+          config.registryProvidesReleaseTimestamps,
+        )
+      ) {
+        logger.once.warn(missingReleaseTimestampWarning);
+      }
       logger.once.debug(
         {
           depName,

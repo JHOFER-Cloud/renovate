@@ -19,6 +19,8 @@ export class CustomDatasource extends Datasource {
     return true;
   }
 
+  override readonly releaseTimestampSupport = true;
+
   constructor() {
     super(CustomDatasource.id);
   }
