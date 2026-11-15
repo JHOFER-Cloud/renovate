@@ -537,7 +537,7 @@ export async function extractAllPackageFiles(
 
     // `--version=skip` pins a rolling artifact: the version attribute never
     // changes (e.g. `version = "tip"`), only the bytes behind a fixed URL do.
-    // Modelled exactly like a Docker `:latest` pin — the value (the tag) is
+    // Modeled exactly like a Docker `:latest` pin — the value (the tag) is
     // frozen and the *digest* moves — so the update flows through Renovate's
     // digest path. Tracking it as a version instead cannot work: `exact`
     // versioning hardwires `isGreaterThan` to false, so `filterVersions` would

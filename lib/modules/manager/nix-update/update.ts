@@ -15,7 +15,7 @@ export function updateDependency({
   upgrade,
 }: UpdateDependencyConfig): string | null {
   const { currentValue } = upgrade;
-  // Prefer newValue (datasource-normalised, no `v` prefix) over newVersion
+  // Prefer newValue (datasource-normalized, no `v` prefix) over newVersion
   // (raw tag — may include the prefix and produce `version = "v1.2.3"`).
   const newValue = upgrade.newValue ?? upgrade.newVersion;
   if (!currentValue || !newValue || currentValue === newValue) {

@@ -268,7 +268,7 @@ function goBuilder(tools: FodTool[] | undefined): string {
   // `vendor/modules.txt` is written by the toolchain, and go 1.24 changed which
   // dependencies get vendored. So a package deliberately held on an *older* go
   // than the runner's default could still vendor differently and yield a wrong
-  // hash if the pin misses. That is the pre-existing behaviour and it is narrow;
+  // hash if the pin misses. That is the pre-existing behavior and it is narrow;
   // aborting instead would fail every go package whose exact patch release the
   // runner's nixpkgs doesn't carry.
   const go = pinnedTool('runnerPkgs', attr, 'go', version, 'null');
@@ -465,7 +465,7 @@ export function exprForMixFodDeps(
   algo: HashAlgo,
 ): string {
   // Elixir lives in the beam package set, and the top-level `elixir_1_18` alias
-  // is deprecated in favour of `beamPackages.elixir_1_18` — so pin from within
+  // is deprecated in favor of `beamPackages.elixir_1_18` — so pin from within
   // the set, which also keeps elixir and its erlang compatible. (Overriding to
   // an elixir the default erlang doesn't support is an eval-time assertion
   // failure, not a wrong hash.)

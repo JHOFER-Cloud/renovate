@@ -117,6 +117,17 @@ export async function updateVendorHashes(
   return results;
 }
 
+async function readContent(
+  contents: Map<string, string>,
+  file: string,
+): Promise<string> {
+  const cached = contents.get(file);
+  if (cached !== undefined) {
+    return cached;
+  }
+  return (await readLocalFile(file, 'utf8')) ?? '';
+}
+
 async function rehashFod(
   ctx: RehashContext,
   info: PackageInfo,
@@ -140,8 +151,7 @@ async function rehashFod(
     return;
   }
 
-  let content = contents.get(file);
-  content ??= (await readLocalFile(file, 'utf8')) ?? '';
+  const content = await readContent(contents, file);
   // Two flake attributes can share one definition (an alias, a variant) and
   // so the same hash — the first one already rewrote it.
   if (content.includes(newHash)) {

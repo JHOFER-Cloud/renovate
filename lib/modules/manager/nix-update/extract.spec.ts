@@ -1121,7 +1121,7 @@ describe('modules/manager/nix-update/extract', () => {
     it('pins the tag and tracks the artifact digest', async () => {
       const result = await extractSkip();
 
-      // Modelled like a Docker `:latest` pin — the tag is the frozen value and
+      // Modeled like a Docker `:latest` pin — the tag is the frozen value and
       // the digest is what moves. Tracking the digest as the *version* instead
       // would never produce an update, because `exact` versioning hardwires
       // isGreaterThan to false.

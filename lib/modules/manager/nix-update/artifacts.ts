@@ -320,7 +320,7 @@ export async function updateArtifacts({
   }
 
   if (errors.length) {
-    // One artifactError summarises all per-FOD failures for this package.
+    // One artifactError summarizes all per-FOD failures for this package.
     return abandon(errors.map((e) => e.stderr).join('\n'));
   }
 
@@ -407,10 +407,10 @@ async function bumpUnstableDate(
 // `archive/v0.0.60.tar.gz` or `rev = "v0.0.60"`); renovate-side string-replace
 // covers ~all real-world cases without re-evaluating the package.
 //
-// We normalise a leading "v" out of currentValue/newVersion before swapping,
+// We normalize a leading "v" out of currentValue/newVersion before swapping,
 // because Renovate's github-tags datasource may report the version as
 // `v0.0.61` (matching the tag) while the package's nix `version` attribute
-// is bare `0.0.60`. Without normalisation a naive replace would yield
+// is bare `0.0.60`. Without normalization a naive replace would yield
 // `vv0.0.61` in URLs and revs.
 //
 // Branch-tracked packages use currentDigest/newDigest instead of version.
@@ -461,7 +461,7 @@ function bumpFodToNewVersion(
 // `bumpFodToNewVersion` swapped the version into both. A downloadUrl replaces
 // the URL wholesale, which leaves that derived name stale. It is not merely
 // cosmetic: a fixed-output path is `<outputHash>-<name>`, so prefetching under
-// the stale name realises the artifact somewhere real evaluation never looks,
+// the stale name realizes the artifact somewhere real evaluation never looks,
 // costing the substituter hit — and the build log then names a file that was
 // never fetched, which is exactly how a prefetch failure reads as the wrong URL.
 //
@@ -517,7 +517,7 @@ export function usableSubstituters(configured: string[] | undefined): string[] {
   const rejected: string[] = [];
   for (const entry of coerceArray(configured)) {
     // Whitespace would split one entry into several substituters, and the
-    // normalised href is what we forward — the raw string can differ.
+    // normalized href is what we forward — the raw string can differ.
     const url = regEx(/\s/).test(entry) ? null : parseUrl(entry);
     if (
       url?.protocol === 'https:' &&

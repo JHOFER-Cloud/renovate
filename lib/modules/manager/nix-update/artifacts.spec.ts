@@ -1259,7 +1259,7 @@ describe('modules/manager/nix-update/artifacts', () => {
 
     await updateArtifacts({
       ...srcOnlyUpgrade(),
-      // nix cannot open a store whose scheme it does not recognise, and the
+      // nix cannot open a store whose scheme it does not recognize, and the
       // parsed protocol is lower-cased while the raw string is not.
       config: { ...config, nixSubstituters: ['HTTPS://NIXKIT.CACHIX.ORG/'] },
     });
