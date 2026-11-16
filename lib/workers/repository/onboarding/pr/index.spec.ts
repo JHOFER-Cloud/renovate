@@ -23,9 +23,9 @@ describe('workers/repository/onboarding/pr/index', () => {
 
     // NOTE that when the test below fails, these will need to be updated
     const ONBOARDING_PR_BODY_HASH_WITH_REBASE =
-      '8b3ef0d627bc051bbee8349df6423acc6e73fcbb15681810a0c464b5cf3cf208';
+      '695f9ecc9dfcce5d531af5f3b69d54d5caae6a40bf64b8f0abe7898378915888';
     const ONBOARDING_PR_BODY_HASH_WITHOUT_REBASE =
-      '64fdbed75ebbbf9f5c0eaafadc9793657a6484940dcf33966fbf3f95a4622023';
+      '0fe1c050462d3240268f515b216f2d7dc4d33361c5d206d0d0f38d2836fe767d';
 
     // NOTE that if you're intentionally changing the onboarding PR's contents, these hashes will change - update them above
     describe('generates a consistent hash of the body', () => {

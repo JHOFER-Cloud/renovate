@@ -6,6 +6,7 @@ import type {
   UpdateType,
 } from '../../../../config/types.ts';
 import { logger } from '../../../../logger/index.ts';
+import { isMissingReleaseTimestampReportable } from '../../../../modules/datasource/index.ts';
 import { enforcesMinimumReleaseAge } from '../../../../modules/manager/index.ts';
 import { platform } from '../../../../modules/platform/index.ts';
 import type { BranchStatusConfig } from '../../../../modules/platform/types.ts';
@@ -260,6 +261,9 @@ export async function computeInternalChecksStatus(
     {
       depName: string;
       updateType: UpdateType;
+      // absent for lockFileMaintenance upgrades, which have no dep to age
+      datasource: string | undefined;
+      registryProvidesReleaseTimestamps?: boolean;
     }[]
   > = {
     'timestamp-required': [],
@@ -290,6 +294,7 @@ export async function computeInternalChecksStatus(
         depNamesWithoutReleaseTimestamp['timestamp-required'].push({
           depName: upgrade.depName!,
           updateType: upgrade.updateType!,
+          datasource: upgrade.datasource,
         });
       }
       status.stabilityStatus = 'yellow';
@@ -300,6 +305,9 @@ export async function computeInternalChecksStatus(
       depNamesWithoutReleaseTimestamp['timestamp-optional'].push({
         depName: upgrade.depName!,
         updateType: upgrade.updateType!,
+        datasource: upgrade.datasource,
+        registryProvidesReleaseTimestamps:
+          upgrade.registryProvidesReleaseTimestamps,
       });
     }
     const datasource = upgrade.datasource!;
@@ -338,9 +346,19 @@ export async function computeInternalChecksStatus(
     );
   }
   if (depNamesWithoutReleaseTimestamp['timestamp-optional'].length) {
-    logger.once.warn(
-      "Some upgrade(s) did not have a releaseTimestamp, but as we're running with minimumReleaseAgeBehaviour=timestamp-optional, proceeding. See debug logs for more information",
-    );
+    if (
+      depNamesWithoutReleaseTimestamp['timestamp-optional'].some(
+        ({ datasource, registryProvidesReleaseTimestamps }) =>
+          isMissingReleaseTimestampReportable(
+            datasource,
+            registryProvidesReleaseTimestamps,
+          ),
+      )
+    ) {
+      logger.once.warn(
+        "Some upgrade(s) did not have a releaseTimestamp, but as we're running with minimumReleaseAgeBehaviour=timestamp-optional, proceeding. See debug logs for more information",
+      );
+    }
     logger.once.debug(
       { updates: depNamesWithoutReleaseTimestamp['timestamp-optional'] },
       `${depNamesWithoutReleaseTimestamp['timestamp-optional'].length} upgrade(s) did not have a releaseTimestamp, but as we're running with minimumReleaseAgeBehaviour=timestamp-optional, proceeding`,

@@ -526,6 +526,8 @@ describe('workers/repository/update/branch/status-checks', () => {
           minimumReleaseAge: '1 day',
           minimumReleaseAgeBehaviour: 'timestamp-optional',
           releaseTimestamp: undefined,
+          datasource: 'docker',
+          registryProvidesReleaseTimestamps: true,
         },
       ]);
       await expect(computeInternalChecksStatus(config)).resolves.toEqual({

@@ -1,0 +1,5 @@
+inheritance: true
+reviews:
+  auto_review:
+    ignore_usernames:
+      - 'jhcloud-upstream-sync[bot]'
